@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: pastevault-postgres
+    environment:
+      POSTGRES_DB: pastevault
+      POSTGRES_USER: pastevault
+      POSTGRES_PASSWORD: pastevault_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pastevault -d pastevault"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pastevault-backend
+    ports:
+      - "3001:3001"
+    environment:
+      DATABASE_URL: "postgresql://pastevault:pastevault_dev_password@postgres:5432/pastevault"
+      CORS_ORIGIN: "http://localhost:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: pastevault-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: "http://localhost:3001"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
