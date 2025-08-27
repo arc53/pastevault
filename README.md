@@ -13,39 +13,39 @@ A secure, end-to-end encrypted paste sharing platform with zero-knowledge archit
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                        Frontend                             │
-│  Next.js 14 + TypeScript + shadcn/ui + Tailwind           │
+│  Next.js 14 + TypeScript + shadcn/ui + Tailwind             │
 │                                                             │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │           Client-Side Encryption                    │   │
-│  │  • XChaCha20-Poly1305 encryption                   │   │
-│  │  • PBKDF2 key derivation                           │   │
-│  │  • Monaco editor with Markdown                     │   │
-│  │  • Shiki syntax highlighting                       │   │
-│  └─────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │           Client-Side Encryption                    │    │
+│  │  • XChaCha20-Poly1305 encryption                    │    │
+│  │  • PBKDF2 key derivation                            │    │
+│  │  • Monaco editor with Markdown                      │    │
+│  │  • Shiki syntax highlighting                        │    │
+│  └─────────────────────────────────────────────────────┘    │
 └─────────────────────────┬───────────────────────────────────┘
                           │ HTTPS + Encrypted Payloads
                           │
 ┌─────────────────────────▼───────────────────────────────────┐
 │                        Backend                              │
-│              Fastify + TypeScript + Prisma                 │
+│              Fastify + TypeScript + Prisma                  │
 │                                                             │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │              RESTful API                            │   │
-│  │  • Paste storage (ciphertext only)                 │   │
-│  │  • Metadata management                             │   │
-│  │  • Rate limiting & validation                      │   │
-│  │  • Automatic expiry cleanup                        │   │
-│  └─────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │              RESTful API                            │    │
+│  │  • Paste storage (ciphertext only)                  │    │
+│  │  • Metadata management                              │    │
+│  │  • Rate limiting & validation                       │    │
+│  │  • Automatic expiry cleanup                         │    │
+│  └─────────────────────────────────────────────────────┘    │
 └─────────────────────────┬───────────────────────────────────┘
                           │
 ┌─────────────────────────▼───────────────────────────────────┐
 │                     Database                                │
 │                    PostgreSQL                               │
 │                                                             │
-│  • Encrypted paste content (ciphertext)                    │
-│  • Metadata (expiry, burn status, view counts)             │
-│  • Salt & KDF parameters (password mode)                   │
-│  • No plaintext content ever stored                        │
+│  • Encrypted paste content (ciphertext)                     │
+│  • Metadata (expiry, burn status, view counts)              │
+│  • Salt & KDF parameters (password mode)                    │
+│  • No plaintext content ever stored                         │
 └─────────────────────────────────────────────────────────────┘
 ```
 
