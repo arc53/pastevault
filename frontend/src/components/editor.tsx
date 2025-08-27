@@ -63,7 +63,7 @@ export function Editor({
           },
           quickSuggestions: false,
           parameterHints: { enabled: false },
-          occurrencesHighlight: false,
+          occurrencesHighlight: 'off',
           selectionHighlight: false,
           renderLineHighlight: 'none',
           hideCursorInOverviewRuler: true,
