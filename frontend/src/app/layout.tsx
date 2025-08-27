@@ -54,12 +54,12 @@ export default function RootLayout({
               </a>
               {' '}• Repo:{' '}
               <a
-                href="https://github.com/arc53/DocsGPT"
+                href="https://github.com/arc53/pastevault"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="font-mono hover:text-foreground transition-colors"
               >
-                github.com/arc53/DocsGPT
+                github.com/arc53/pastevault
               </a>
             </footer>
           </div>
