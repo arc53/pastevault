@@ -73,65 +73,134 @@
 
   /* Base highlight.js container */
   .hljs {
-    background: transparent;
-    color: hsl(var(--foreground));
+    background: transparent !important;
   }
 
-  /* Light theme token colors (scoped to :root) */
-  :root .hljs-comment,
-  :root .hljs-quote { color: #6a737d; font-style: italic; }
-  :root .hljs-keyword,
-  :root .hljs-selector-tag,
-  :root .hljs-subst { color: #d73a49; }
-  :root .hljs-literal,
-  :root .hljs-number,
-  :root .hljs-attr,
-  :root .hljs-variable,
-  :root .hljs-template-variable { color: #005cc5; }
-  :root .hljs-string,
-  :root .hljs-doctag,
-  :root .hljs-regexp { color: #032f62; }
-  :root .hljs-title,
-  :root .hljs-section,
-  :root .hljs-selector-id,
-  :root .hljs-selector-class,
-  :root .hljs-type { color: #6f42c1; }
-  :root .hljs-attribute,
-  :root .hljs-name,
-  :root .hljs-built_in { color: #22863a; }
-  :root .hljs-bullet,
-  :root .hljs-symbol,
-  :root .hljs-addition { color: #22863a; }
-  :root .hljs-deletion { color: #b31d28; }
-  :root .hljs-link { color: #032f62; text-decoration: underline; }
+  /* Default text color for light theme */
+  .hljs {
+    color: #24292e !important;
+  }
 
-  /* Dark theme token colors (scoped to .dark) */
+  /* Dark theme base color override */
+  .dark .hljs {
+    color: #e1e4e8 !important;
+  }
+
+  /* Light theme token colors - explicit light theme selectors */
+  html:not(.dark) .hljs-comment,
+  html:not(.dark) .hljs-quote,
+  html.light .hljs-comment,
+  html.light .hljs-quote { color: #6a737d !important; font-style: italic; }
+  
+  html:not(.dark) .hljs-keyword,
+  html:not(.dark) .hljs-selector-tag,
+  html:not(.dark) .hljs-subst,
+  html.light .hljs-keyword,
+  html.light .hljs-selector-tag,
+  html.light .hljs-subst { color: #d73a49 !important; }
+  
+  html:not(.dark) .hljs-literal,
+  html:not(.dark) .hljs-number,
+  html:not(.dark) .hljs-attr,
+  html:not(.dark) .hljs-variable,
+  html:not(.dark) .hljs-template-variable,
+  html.light .hljs-literal,
+  html.light .hljs-number,
+  html.light .hljs-attr,
+  html.light .hljs-variable,
+  html.light .hljs-template-variable { color: #005cc5 !important; }
+  
+  html:not(.dark) .hljs-string,
+  html:not(.dark) .hljs-doctag,
+  html:not(.dark) .hljs-regexp,
+  html.light .hljs-string,
+  html.light .hljs-doctag,
+  html.light .hljs-regexp { color: #032f62 !important; }
+  
+  html:not(.dark) .hljs-title,
+  html:not(.dark) .hljs-section,
+  html:not(.dark) .hljs-selector-id,
+  html:not(.dark) .hljs-selector-class,
+  html:not(.dark) .hljs-type,
+  html.light .hljs-title,
+  html.light .hljs-section,
+  html.light .hljs-selector-id,
+  html.light .hljs-selector-class,
+  html.light .hljs-type { color: #6f42c1 !important; }
+  
+  html:not(.dark) .hljs-attribute,
+  html:not(.dark) .hljs-name,
+  html:not(.dark) .hljs-built_in,
+  html.light .hljs-attribute,
+  html.light .hljs-name,
+  html.light .hljs-built_in { color: #22863a !important; }
+  
+  html:not(.dark) .hljs-bullet,
+  html:not(.dark) .hljs-symbol,
+  html:not(.dark) .hljs-addition,
+  html.light .hljs-bullet,
+  html.light .hljs-symbol,
+  html.light .hljs-addition { color: #22863a !important; }
+  
+  html:not(.dark) .hljs-deletion,
+  html.light .hljs-deletion { color: #b31d28 !important; }
+  
+  html:not(.dark) .hljs-link,
+  html.light .hljs-link { color: #032f62 !important; text-decoration: underline; }
+
+  /* Dark theme token colors (scoped to .dark and html.dark) */
   .dark .hljs-comment,
-  .dark .hljs-quote { color: #8b949e; font-style: italic; }
+  .dark .hljs-quote,
+  html.dark .hljs-comment,
+  html.dark .hljs-quote { color: #8b949e !important; font-style: italic; }
   .dark .hljs-keyword,
   .dark .hljs-selector-tag,
-  .dark .hljs-subst { color: #ff7b72; }
+  .dark .hljs-subst,
+  html.dark .hljs-keyword,
+  html.dark .hljs-selector-tag,
+  html.dark .hljs-subst { color: #ff7b72 !important; }
   .dark .hljs-literal,
   .dark .hljs-number,
   .dark .hljs-attr,
   .dark .hljs-variable,
-  .dark .hljs-template-variable { color: #79c0ff; }
+  .dark .hljs-template-variable,
+  html.dark .hljs-literal,
+  html.dark .hljs-number,
+  html.dark .hljs-attr,
+  html.dark .hljs-variable,
+  html.dark .hljs-template-variable { color: #79c0ff !important; }
   .dark .hljs-string,
   .dark .hljs-doctag,
-  .dark .hljs-regexp { color: #a5d6ff; }
+  .dark .hljs-regexp,
+  html.dark .hljs-string,
+  html.dark .hljs-doctag,
+  html.dark .hljs-regexp { color: #a5d6ff !important; }
   .dark .hljs-title,
   .dark .hljs-section,
   .dark .hljs-selector-id,
   .dark .hljs-selector-class,
-  .dark .hljs-type { color: #d2a8ff; }
+  .dark .hljs-type,
+  html.dark .hljs-title,
+  html.dark .hljs-section,
+  html.dark .hljs-selector-id,
+  html.dark .hljs-selector-class,
+  html.dark .hljs-type { color: #d2a8ff !important; }
   .dark .hljs-attribute,
   .dark .hljs-name,
-  .dark .hljs-built_in { color: #7ee787; }
+  .dark .hljs-built_in,
+  html.dark .hljs-attribute,
+  html.dark .hljs-name,
+  html.dark .hljs-built_in { color: #7ee787 !important; }
   .dark .hljs-bullet,
   .dark .hljs-symbol,
-  .dark .hljs-addition { color: #7ee787; }
-  .dark .hljs-deletion { color: #ffa198; }
-  .dark .hljs-link { color: #a5d6ff; text-decoration: underline; }
+  .dark .hljs-addition,
+  html.dark .hljs-bullet,
+  html.dark .hljs-symbol,
+  html.dark .hljs-addition { color: #7ee787 !important; }
+  .dark .hljs-deletion,
+  html.dark .hljs-deletion { color: #ffa198 !important; }
+  .dark .hljs-link,
+  html.dark .hljs-link { color: #a5d6ff !important; text-decoration: underline; }
 }
 
 /* Mobile-specific fixes */

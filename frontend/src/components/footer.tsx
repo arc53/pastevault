@@ -8,7 +8,7 @@ export function Footer() {
   
   return (
     <footer className="border-t text-xs text-muted-foreground py-2 px-4 sm:px-6 text-center relative">
-      <div>
+      <div className="text-[10px] sm:text-xs pr-16 sm:pr-0">
         {t('projectBy')}{' '}
         <a
           href="https://www.arc53.com/"
