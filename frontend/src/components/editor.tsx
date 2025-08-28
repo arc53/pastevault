@@ -51,7 +51,7 @@ export function Editor({
         options={{
           minimap: { enabled: false },
           scrollBeyondLastLine: false,
-          fontSize: 14,
+          fontSize: typeof window !== 'undefined' && window.innerWidth <= 768 ? 16 : 14,
           lineHeight: 1.5,
           padding: { top: 16, bottom: 16 },
           automaticLayout: true,
@@ -63,6 +63,7 @@ export function Editor({
           },
           quickSuggestions: false,
           parameterHints: { enabled: false },
+          contextmenu: false,
           occurrencesHighlight: 'off',
           selectionHighlight: false,
           renderLineHighlight: 'none',

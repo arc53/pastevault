@@ -133,3 +133,25 @@
   .dark .hljs-deletion { color: #ffa198; }
   .dark .hljs-link { color: #a5d6ff; text-decoration: underline; }
 }
+
+/* Mobile-specific fixes */
+@media screen and (max-width: 768px) {
+  /* Prevent zoom on editor focus */
+  .monaco-editor .inputarea.ime-input,
+  .monaco-editor textarea {
+    font-size: 16px !important;
+    transform: none !important;
+  }
+  
+
+  .monaco-editor .overlayWidgets,
+  .monaco-editor .actions-container {
+    display: none !important;
+  }
+  
+  /* Ensure editor container doesn't cause zoom */
+  .monaco-editor .view-lines,
+  .monaco-editor .view-line {
+    font-size: 16px !important;
+  }
+}

@@ -36,6 +36,13 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+        <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+        <meta name="theme-color" content="#14161a" media="(prefers-color-scheme: dark)" />
+
+
+      </head>
       <body className={inter.className}>
         <Providers>
           <div className="min-h-screen bg-background flex flex-col">
