@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Copy, Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useTranslations } from 'next-intl'
 
 type ButtonProps = React.ComponentProps<typeof Button>
 
@@ -19,15 +20,19 @@ interface CopyButtonProps extends Omit<ButtonProps, 'onClick' | 'children'> {
 export function CopyButton({
   value,
   getValue,
-  label = 'Copy',
-  copiedLabel = 'Copied!',
+  label,
+  copiedLabel,
   successDurationMs = 1500,
   withIcon = true,
   className,
   ...buttonProps
 }: CopyButtonProps) {
+  const t = useTranslations('common')
   const [copied, setCopied] = useState(false)
-  const reserveLabel = label.length >= copiedLabel.length ? label : copiedLabel
+  
+  const defaultLabel = label ?? t('copy')
+  const defaultCopiedLabel = copiedLabel ?? t('copied')
+  const reserveLabel = defaultLabel.length >= defaultCopiedLabel.length ? defaultLabel : defaultCopiedLabel
 
   const handleClick = async () => {
     try {
@@ -46,7 +51,7 @@ export function CopyButton({
       type="button"
       onClick={handleClick}
       aria-live="polite"
-      aria-label={copied ? copiedLabel : label}
+      aria-label={copied ? defaultCopiedLabel : defaultLabel}
       className={cn(
         'transition-colors',
         copied && 'bg-green-600 text-white border-green-600 hover:bg-green-600 animate-pulse',
@@ -63,7 +68,7 @@ export function CopyButton({
       )}
       <span className="relative inline-block whitespace-nowrap">
         <span className="invisible">{reserveLabel}</span>
-        <span className="absolute inset-0">{copied ? copiedLabel : label}</span>
+        <span className="absolute inset-0">{copied ? defaultCopiedLabel : defaultLabel}</span>
       </span>
     </Button>
   )

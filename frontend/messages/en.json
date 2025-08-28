@@ -1,0 +1,111 @@
+{
+  "common": {
+    "pasteVault": "PasteVault",
+    "title": "Title",
+    "password": "Password",
+    "send": "Send",
+    "creating": "Creating...",
+    "options": "Options",
+    "format": "Format",
+    "cancel": "Cancel",
+    "close": "Close",
+    "copy": "Copy",
+    "copied": "Copied!",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success"
+  },
+  "metadata": {
+    "title": "PasteVault - Secure Encrypted Paste Sharing",
+    "description": "Share code, text, and markdown securely with end-to-end encryption. Zero-knowledge paste sharing with expiry and burn-after-read options."
+  },
+  "createPaste": {
+    "burnAfterReading": "Burn after reading",
+    "enterPassword": "Enter password...",
+    "welcomePlaceholder": "# Welcome to PasteVault\n\nStart typing your content here. You can use **Markdown** for formatting!\n\n```javascript\nconsole.log('Code blocks are supported too!')\n```",
+    "plainPlaceholder": "Start typing your content here...",
+    "expiresIn": "Expires In",
+    "draft": {
+      "unsavedDraft": "You have an unsaved draft from {draftAge}",
+      "restore": "Restore"
+    }
+  },
+  "expiration": {
+    "1hour": "1 hour",
+    "6hours": "6 hours",
+    "1day": "1 day",
+    "1week": "1 week",
+    "1month": "1 month"
+  },
+  "formats": {
+    "markdown": "Markdown",
+    "plain": "Plain Text",
+    "javascript": "JavaScript",
+    "typescript": "TypeScript",
+    "python": "Python",
+    "java": "Java",
+    "cpp": "C++",
+    "c": "C",
+    "csharp": "C#",
+    "php": "PHP",
+    "go": "Go",
+    "rust": "Rust",
+    "sql": "SQL",
+    "json": "JSON",
+    "yaml": "YAML",
+    "xml": "XML",
+    "html": "HTML",
+    "css": "CSS",
+    "bash": "Bash"
+  },
+  "shareSuccess": {
+    "title": "Paste Created Successfully!",
+    "description": "Your paste has been encrypted and is ready to share",
+    "shareUrl": "Share URL",
+    "important": "Important:",
+    "passwordProtectedWarning": "This paste is password-protected. The recipient will need the password to decrypt it.",
+    "urlWarning": "The decryption key is in the URL fragment (#k=...). Anyone with this URL can read your paste.",
+    "createAnother": "Create Another Paste",
+    "viewPaste": "View Paste"
+  },
+  "viewPaste": {
+    "loadingPaste": "Loading paste...",
+    "decryptingPaste": "Decrypting paste...",
+    "copyContent": "Copy Content",
+    "copyUrl": "Copy URL",
+    "createNew": "Create New",
+    "passwordProtected": "Password Protected",
+    "passwordPrompt": "This paste is password protected. Enter the password to decrypt and view the content.",
+    "decryptPaste": "Decrypt Paste",
+    "decrypting": "Decrypting...",
+    "views": "views",
+    "zeroKnowledge": "Zero-knowledge",
+    "burnsAfterReading": "Burns after reading",
+    "neverExpires": "Never expires",
+    "expired": "Expired",
+    "daysRemaining": "{days}d {hours}h remaining",
+    "hoursRemaining": "{hours}h {minutes}m remaining",
+    "minutesRemaining": "{minutes}m remaining"
+  },
+  "errors": {
+    "pasteNotFound": "Paste Not Found",
+    "pasteBurned": "Paste Burned",
+    "pasteExpired": "Paste Expired",
+    "decryptionFailed": "Decryption Failed",
+    "pasteNotFoundDesc": "The paste you're looking for doesn't exist or has been deleted.",
+    "pasteBurnedDesc": "This paste was set to burn after reading and has already been viewed.",
+    "pasteExpiredDesc": "This paste has expired and is no longer available.",
+    "invalidFormat": "Invalid paste format or missing decryption key",
+    "decryptionError": "Failed to decrypt paste. Invalid key or corrupted data.",
+    "incorrectPassword": "Incorrect password or corrupted data",
+    "createNewPaste": "Create New Paste"
+  },
+  "footer": {
+    "projectBy": "Project by",
+    "repo": "Repo:"
+  },
+  "accessibility": {
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu"
+  }
+}

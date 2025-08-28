@@ -1,0 +1,111 @@
+{
+  "common": {
+    "pasteVault": "PasteVault",
+    "title": "Заголовок",
+    "password": "Пароль",
+    "send": "Отправить",
+    "creating": "Создание...",
+    "options": "Опции",
+    "format": "Формат",
+    "cancel": "Отмена",
+    "close": "Закрыть",
+    "copy": "Копировать",
+    "copied": "Скопировано!",
+    "loading": "Загрузка...",
+    "error": "Ошибка",
+    "success": "Успешно"
+  },
+  "metadata": {
+    "title": "PasteVault - Безопасная зашифрованная вставка текста",
+    "description": "Безопасно делитесь кодом, текстом и Markdown с помощью сквозного шифрования. Обмен вставками с нулевым знанием с опциями истечения срока и самоуничтожения."
+  },
+  "createPaste": {
+    "burnAfterReading": "Уничтожить после прочтения",
+    "enterPassword": "Введите пароль...",
+    "welcomePlaceholder": "# Добро пожаловать в PasteVault\\n\\nНачните вводить содержимое здесь. Вы можете использовать **Markdown** для форматирования!\\n\\n```javascript\\nconsole.log('Блоки кода тоже поддерживаются!')\\n```",
+    "plainPlaceholder": "Начните вводить содержимое здесь...",
+    "expiresIn": "Истекает через",
+    "draft": {
+      "unsavedDraft": "У вас есть несохранённый черновик от {draftAge}",
+      "restore": "Восстановить"
+    }
+  },
+  "expiration": {
+    "1hour": "1 час",
+    "6hours": "6 часов",
+    "1day": "1 день",
+    "1week": "1 неделя",
+    "1month": "1 месяц"
+  },
+  "formats": {
+    "markdown": "Markdown",
+    "plain": "Обычный текст",
+    "javascript": "JavaScript",
+    "typescript": "TypeScript",
+    "python": "Python",
+    "java": "Java",
+    "cpp": "C++",
+    "c": "C",
+    "csharp": "C#",
+    "php": "PHP",
+    "go": "Go",
+    "rust": "Rust",
+    "sql": "SQL",
+    "json": "JSON",
+    "yaml": "YAML",
+    "xml": "XML",
+    "html": "HTML",
+    "css": "CSS",
+    "bash": "Bash"
+  },
+  "shareSuccess": {
+    "title": "Вставка успешно создана!",
+    "description": "Ваша вставка была зашифрована и готова к отправке",
+    "shareUrl": "Ссылка для обмена",
+    "important": "Важно:",
+    "passwordProtectedWarning": "Эта вставка защищена паролем. Получателю потребуется пароль для расшифровки.",
+    "urlWarning": "Ключ расшифровки находится во фрагменте URL (#k=...). Любой, у кого есть эта ссылка, может прочитать вашу вставку.",
+    "createAnother": "Создать ещё одну вставку",
+    "viewPaste": "Просмотреть вставку"
+  },
+  "viewPaste": {
+    "loadingPaste": "Загрузка вставки...",
+    "decryptingPaste": "Расшифровка вставки...",
+    "copyContent": "Копировать содержимое",
+    "copyUrl": "Копировать ссылку",
+    "createNew": "Создать новую",
+    "passwordProtected": "Защищено паролем",
+    "passwordPrompt": "Эта вставка защищена паролем. Введите пароль для расшифровки и просмотра содержимого.",
+    "decryptPaste": "Расшифровать вставку",
+    "decrypting": "Расшифровка...",
+    "views": "просмотров",
+    "zeroKnowledge": "Нулевое знание",
+    "burnsAfterReading": "Сгорает после прочтения",
+    "neverExpires": "Никогда не истекает",
+    "expired": "Истёк",
+    "daysRemaining": "осталось {days}д {hours}ч",
+    "hoursRemaining": "осталось {hours}ч {minutes}м",
+    "minutesRemaining": "осталось {minutes}м"
+  },
+  "errors": {
+    "pasteNotFound": "Вставка не найдена",
+    "pasteBurned": "Вставка сожжена",
+    "pasteExpired": "Срок действия вставки истёк",
+    "decryptionFailed": "Ошибка расшифровки",
+    "pasteNotFoundDesc": "Вставка, которую вы ищете, не существует или была удалена.",
+    "pasteBurnedDesc": "Эта вставка была настроена на самоуничтожение после прочтения и уже была просмотрена.",
+    "pasteExpiredDesc": "Срок действия этой вставки истёк и она больше недоступна.",
+    "invalidFormat": "Неверный формат вставки или отсутствует ключ расшифровки",
+    "decryptionError": "Не удалось расшифровать вставку. Неверный ключ или повреждённые данные.",
+    "incorrectPassword": "Неверный пароль или повреждённые данные",
+    "createNewPaste": "Создать новую вставку"
+  },
+  "footer": {
+    "projectBy": "Проект от",
+    "repo": "Репозиторий:"
+  },
+  "accessibility": {
+    "openMenu": "Открыть меню",
+    "closeMenu": "Закрыть меню"
+  }
+}

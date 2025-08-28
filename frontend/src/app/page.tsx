@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useTranslations } from 'next-intl'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -18,6 +19,13 @@ import { Lock, Save, Share, Flame, AlertCircle, Menu, X } from 'lucide-react'
 import { nanoid } from 'nanoid'
 
 export default function CreatePastePage() {
+  const t = useTranslations('common')
+  const tCreate = useTranslations('createPaste')
+  const tExpiration = useTranslations('expiration')
+  const tFormats = useTranslations('formats')
+  const tShare = useTranslations('shareSuccess')
+  const tAccessibility = useTranslations('accessibility')
+  
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [format, setFormat] = useState('markdown')
@@ -154,15 +162,15 @@ export default function CreatePastePage() {
           <CardHeader className="text-center">
             <CardTitle className="flex items-center gap-2 justify-center">
               <Share className="h-5 w-5" />
-              Paste Created Successfully!
+              {tShare('title')}
             </CardTitle>
             <CardDescription>
-              Your paste has been encrypted and is ready to share
+              {tShare('description')}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Share URL</Label>
+              <Label>{tShare('shareUrl')}</Label>
               <div className="flex gap-2">
                 <Input
                   value={shareUrl}
@@ -177,11 +185,11 @@ export default function CreatePastePage() {
               <div className="flex items-start gap-2">
                 <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5" />
                 <div className="text-sm">
-                  <p className="font-medium">Important:</p>
+                  <p className="font-medium">{tShare('important')}</p>
                   <p className="text-muted-foreground mt-1">
                     {passwordProtected 
-                      ? 'This paste is password-protected. The recipient will need the password to decrypt it.'
-                      : 'The decryption key is in the URL fragment (#k=...). Anyone with this URL can read your paste.'
+                      ? tShare('passwordProtectedWarning')
+                      : tShare('urlWarning')
                     }
                   </p>
                 </div>
@@ -190,10 +198,10 @@ export default function CreatePastePage() {
 
             <div className="flex gap-2">
               <Button onClick={createNew} className="flex-1">
-                Create Another Paste
+                {tShare('createAnother')}
               </Button>
               <Button onClick={() => router.push(shareUrl)} variant="outline">
-                View Paste
+                {tShare('viewPaste')}
               </Button>
             </div>
           </CardContent>
@@ -208,7 +216,7 @@ export default function CreatePastePage() {
       <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between h-16">
-            <h1 className="text-xl font-semibold">PasteVault</h1>
+            <h1 className="text-xl font-semibold">{t('pasteVault')}</h1>
             
             <div className="flex items-center gap-2">
               <div className="hidden md:flex items-center gap-4">
@@ -218,11 +226,11 @@ export default function CreatePastePage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="1">1 hour</SelectItem>
-                  <SelectItem value="6">6 hours</SelectItem>
-                  <SelectItem value="24">1 day</SelectItem>
-                  <SelectItem value="168">1 week</SelectItem>
-                  <SelectItem value="720">1 month</SelectItem>
+                  <SelectItem value="1">{tExpiration('1hour')}</SelectItem>
+                  <SelectItem value="6">{tExpiration('6hours')}</SelectItem>
+                  <SelectItem value="24">{tExpiration('1day')}</SelectItem>
+                  <SelectItem value="168">{tExpiration('1week')}</SelectItem>
+                  <SelectItem value="720">{tExpiration('1month')}</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -235,7 +243,7 @@ export default function CreatePastePage() {
                   className="rounded"
                 />
                 <Flame className="h-4 w-4" />
-                Burn after reading
+                {tCreate('burnAfterReading')}
               </label>
 
               {/* Password protection */}
@@ -248,14 +256,14 @@ export default function CreatePastePage() {
                     className="rounded"
                   />
                   <Lock className="h-4 w-4" />
-                  Password
+                  {t('password')}
                 </label>
                 {passwordProtected && (
                   <Input
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter password..."
+                    placeholder={tCreate('enterPassword')}
                     className="w-32 h-9"
                   />
                 )}
@@ -265,7 +273,7 @@ export default function CreatePastePage() {
               <Input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Title"
+                placeholder={t('title')}
                 className="w-32 h-9"
                 onBlur={saveCurrentDraft}
               />
@@ -276,25 +284,25 @@ export default function CreatePastePage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="markdown">Markdown</SelectItem>
-                  <SelectItem value="plain">Plain Text</SelectItem>
-                  <SelectItem value="javascript">JavaScript</SelectItem>
-                  <SelectItem value="typescript">TypeScript</SelectItem>
-                  <SelectItem value="python">Python</SelectItem>
-                  <SelectItem value="java">Java</SelectItem>
-                  <SelectItem value="cpp">C++</SelectItem>
-                  <SelectItem value="c">C</SelectItem>
-                  <SelectItem value="csharp">C#</SelectItem>
-                  <SelectItem value="php">PHP</SelectItem>
-                  <SelectItem value="go">Go</SelectItem>
-                  <SelectItem value="rust">Rust</SelectItem>
-                  <SelectItem value="sql">SQL</SelectItem>
-                  <SelectItem value="json">JSON</SelectItem>
-                  <SelectItem value="yaml">YAML</SelectItem>
-                  <SelectItem value="xml">XML</SelectItem>
-                  <SelectItem value="html">HTML</SelectItem>
-                  <SelectItem value="css">CSS</SelectItem>
-                  <SelectItem value="bash">Bash</SelectItem>
+                  <SelectItem value="markdown">{tFormats('markdown')}</SelectItem>
+                  <SelectItem value="plain">{tFormats('plain')}</SelectItem>
+                  <SelectItem value="javascript">{tFormats('javascript')}</SelectItem>
+                  <SelectItem value="typescript">{tFormats('typescript')}</SelectItem>
+                  <SelectItem value="python">{tFormats('python')}</SelectItem>
+                  <SelectItem value="java">{tFormats('java')}</SelectItem>
+                  <SelectItem value="cpp">{tFormats('cpp')}</SelectItem>
+                  <SelectItem value="c">{tFormats('c')}</SelectItem>
+                  <SelectItem value="csharp">{tFormats('csharp')}</SelectItem>
+                  <SelectItem value="php">{tFormats('php')}</SelectItem>
+                  <SelectItem value="go">{tFormats('go')}</SelectItem>
+                  <SelectItem value="rust">{tFormats('rust')}</SelectItem>
+                  <SelectItem value="sql">{tFormats('sql')}</SelectItem>
+                  <SelectItem value="json">{tFormats('json')}</SelectItem>
+                  <SelectItem value="yaml">{tFormats('yaml')}</SelectItem>
+                  <SelectItem value="xml">{tFormats('xml')}</SelectItem>
+                  <SelectItem value="html">{tFormats('html')}</SelectItem>
+                  <SelectItem value="css">{tFormats('css')}</SelectItem>
+                  <SelectItem value="bash">{tFormats('bash')}</SelectItem>
                 </SelectContent>
               </Select>
               </div>
@@ -302,7 +310,7 @@ export default function CreatePastePage() {
                 className="md:hidden inline-flex items-center justify-center rounded-md p-2 hover:bg-muted"
                 aria-controls="mobile-menu"
                 aria-expanded={mobileMenuOpen}
-                aria-label="Open menu"
+                aria-label={tAccessibility('openMenu')}
                 onClick={() => setMobileMenuOpen(true)}
               >
                 <Menu className="h-6 w-6" />
@@ -323,10 +331,10 @@ export default function CreatePastePage() {
             id="mobile-menu"
           >
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">Options</h2>
+              <h2 className="text-lg font-semibold">{t('options')}</h2>
               <button
                 className="inline-flex items-center justify-center rounded-md p-2 hover:bg-muted"
-                aria-label="Close menu"
+                aria-label={tAccessibility('closeMenu')}
                 onClick={() => setMobileMenuOpen(false)}
               >
                 <X className="h-6 w-6" />
@@ -334,17 +342,17 @@ export default function CreatePastePage() {
             </div>
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label>Expires In</Label>
+                <Label>{tCreate('expiresIn')}</Label>
                 <Select value={expiresInHours.toString()} onValueChange={(value) => setExpiresInHours(Number(value))}>
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="1">1 hour</SelectItem>
-                    <SelectItem value="6">6 hours</SelectItem>
-                    <SelectItem value="24">1 day</SelectItem>
-                    <SelectItem value="168">1 week</SelectItem>
-                    <SelectItem value="720">1 month</SelectItem>
+                    <SelectItem value="1">{tExpiration('1hour')}</SelectItem>
+                    <SelectItem value="6">{tExpiration('6hours')}</SelectItem>
+                    <SelectItem value="24">{tExpiration('1day')}</SelectItem>
+                    <SelectItem value="168">{tExpiration('1week')}</SelectItem>
+                    <SelectItem value="720">{tExpiration('1month')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -357,7 +365,7 @@ export default function CreatePastePage() {
                   className="rounded"
                 />
                 <Flame className="h-4 w-4" />
-                Burn after reading
+                {tCreate('burnAfterReading')}
               </label>
 
               <div className="space-y-2">
@@ -369,56 +377,56 @@ export default function CreatePastePage() {
                     className="rounded"
                   />
                   <Lock className="h-4 w-4" />
-                  Password
+                  {t('password')}
                 </label>
                 {passwordProtected && (
                   <Input
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter password..."
+                    placeholder={tCreate('enterPassword')}
                     className="w-full h-9"
                   />
                 )}
               </div>
 
               <div className="space-y-2">
-                <Label>Title</Label>
+                <Label>{t('title')}</Label>
                 <Input
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Title"
+                  placeholder={t('title')}
                   className="w-full h-9"
                   onBlur={saveCurrentDraft}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label>Format</Label>
+                <Label>{t('format')}</Label>
                 <Select value={format} onValueChange={setFormat}>
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="markdown">Markdown</SelectItem>
-                    <SelectItem value="plain">Plain Text</SelectItem>
-                    <SelectItem value="javascript">JavaScript</SelectItem>
-                    <SelectItem value="typescript">TypeScript</SelectItem>
-                    <SelectItem value="python">Python</SelectItem>
-                    <SelectItem value="java">Java</SelectItem>
-                    <SelectItem value="cpp">C++</SelectItem>
-                    <SelectItem value="c">C</SelectItem>
-                    <SelectItem value="csharp">C#</SelectItem>
-                    <SelectItem value="php">PHP</SelectItem>
-                    <SelectItem value="go">Go</SelectItem>
-                    <SelectItem value="rust">Rust</SelectItem>
-                    <SelectItem value="sql">SQL</SelectItem>
-                    <SelectItem value="json">JSON</SelectItem>
-                    <SelectItem value="yaml">YAML</SelectItem>
-                    <SelectItem value="xml">XML</SelectItem>
-                    <SelectItem value="html">HTML</SelectItem>
-                    <SelectItem value="css">CSS</SelectItem>
-                    <SelectItem value="bash">Bash</SelectItem>
+                    <SelectItem value="markdown">{tFormats('markdown')}</SelectItem>
+                    <SelectItem value="plain">{tFormats('plain')}</SelectItem>
+                    <SelectItem value="javascript">{tFormats('javascript')}</SelectItem>
+                    <SelectItem value="typescript">{tFormats('typescript')}</SelectItem>
+                    <SelectItem value="python">{tFormats('python')}</SelectItem>
+                    <SelectItem value="java">{tFormats('java')}</SelectItem>
+                    <SelectItem value="cpp">{tFormats('cpp')}</SelectItem>
+                    <SelectItem value="c">{tFormats('c')}</SelectItem>
+                    <SelectItem value="csharp">{tFormats('csharp')}</SelectItem>
+                    <SelectItem value="php">{tFormats('php')}</SelectItem>
+                    <SelectItem value="go">{tFormats('go')}</SelectItem>
+                    <SelectItem value="rust">{tFormats('rust')}</SelectItem>
+                    <SelectItem value="sql">{tFormats('sql')}</SelectItem>
+                    <SelectItem value="json">{tFormats('json')}</SelectItem>
+                    <SelectItem value="yaml">{tFormats('yaml')}</SelectItem>
+                    <SelectItem value="xml">{tFormats('xml')}</SelectItem>
+                    <SelectItem value="html">{tFormats('html')}</SelectItem>
+                    <SelectItem value="css">{tFormats('css')}</SelectItem>
+                    <SelectItem value="bash">{tFormats('bash')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -434,11 +442,11 @@ export default function CreatePastePage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm">
                 <Save className="h-4 w-4" />
-                <span>You have an unsaved draft from {draftAge}</span>
+                <span>{tCreate('draft.unsavedDraft', {draftAge})}</span>
               </div>
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" onClick={loadFromDraft}>
-                  Restore
+                  {tCreate('draft.restore')}
                 </Button>
                 <Button size="sm" variant="ghost" onClick={() => setHasDraft(false)}>
                   ×
@@ -458,8 +466,8 @@ export default function CreatePastePage() {
             language={format}
             height="calc(100vh - 200px)"
             placeholder={format === 'markdown' 
-              ? "# Welcome to PasteVault\n\nStart typing your content here. You can use **Markdown** for formatting!\n\n```javascript\nconsole.log('Code blocks are supported too!')\n```"
-              : "Start typing your content here..."
+              ? tCreate('welcomePlaceholder')
+              : tCreate('plainPlaceholder')
             }
           />
           
@@ -469,7 +477,7 @@ export default function CreatePastePage() {
               disabled={!body.trim() || isCreating || (passwordProtected && !password)}
               size="lg"
             >
-              {isCreating ? 'Creating...' : 'Send'}
+              {isCreating ? t('creating') : t('send')}
             </Button>
           </div>
         </div>

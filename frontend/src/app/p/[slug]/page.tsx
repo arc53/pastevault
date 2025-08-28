@@ -26,8 +26,13 @@ import {
   X 
 } from 'lucide-react'
 import Link from 'next/link'
+import { useTranslations } from 'next-intl'
 
 export default function ViewPastePage() {
+  const t = useTranslations('common')
+  const tView = useTranslations('viewPaste')
+  const tErrors = useTranslations('errors')
+  const tAccessibility = useTranslations('accessibility')
   const params = useParams()
   const router = useRouter()
   const slug = params?.slug as string
@@ -132,21 +137,21 @@ export default function ViewPastePage() {
 
 
   const getTimeRemaining = (expiresAt: string | null) => {
-    if (!expiresAt) return 'Never expires'
+    if (!expiresAt) return tView('neverExpires')
     
     const now = new Date().getTime()
     const expiry = new Date(expiresAt).getTime()
     const diff = expiry - now
     
-    if (diff <= 0) return 'Expired'
+    if (diff <= 0) return tView('expired')
     
     const days = Math.floor(diff / (1000 * 60 * 60 * 24))
     const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
     
-    if (days > 0) return `${days}d ${hours}h remaining`
-    if (hours > 0) return `${hours}h ${minutes}m remaining`
-    return `${minutes}m remaining`
+    if (days > 0) return tView('daysRemaining', { days, hours })
+    if (hours > 0) return tView('hoursRemaining', { hours, minutes })
+    return tView('minutesRemaining', { minutes })
   }
 
   if (isLoading) {
@@ -155,7 +160,7 @@ export default function ViewPastePage() {
         <Card>
           <CardContent className="flex items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin" />
-            <span className="ml-2">Loading paste...</span>
+            <span className="ml-2">{tView('loadingPaste')}</span>
           </CardContent>
         </Card>
       </div>
@@ -174,20 +179,20 @@ export default function ViewPastePage() {
           <CardHeader className="text-center">
             <CardTitle className="flex items-center gap-2 justify-center text-red-600">
               <AlertCircle className="h-5 w-5" />
-              {isNotFound ? 'Paste Not Found' : 
-               isBurned ? 'Paste Burned' : 
-               isExpired ? 'Paste Expired' : 'Error'}
+              {isNotFound ? tErrors('pasteNotFound') : 
+               isBurned ? tErrors('pasteBurned') : 
+               isExpired ? tErrors('pasteExpired') : t('error')}
             </CardTitle>
             <CardDescription>
-              {isNotFound && 'The paste you\'re looking for doesn\'t exist or has been deleted.'}
-              {isBurned && 'This paste was set to burn after reading and has already been viewed.'}
-              {isExpired && 'This paste has expired and is no longer available.'}
+              {isNotFound && tErrors('pasteNotFoundDesc')}
+              {isBurned && tErrors('pasteBurnedDesc')}
+              {isExpired && tErrors('pasteExpiredDesc')}
               {!isNotFound && !isBurned && !isExpired && errorMessage}
             </CardDescription>
           </CardHeader>
           <CardContent className="text-center">
             <Link href="/">
-              <Button>Create New Paste</Button>
+              <Button>{tErrors('createNewPaste')}</Button>
             </Link>
           </CardContent>
         </Card>
@@ -202,21 +207,21 @@ export default function ViewPastePage() {
           <CardHeader className="text-center">
             <CardTitle className="flex items-center gap-2 justify-center">
               <Lock className="h-5 w-5" />
-              Password Protected
+              {tView('passwordProtected')}
             </CardTitle>
             <CardDescription>
-              This paste is password protected. Enter the password to decrypt and view the content.
+              {tView('passwordPrompt')}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">{t('password')}</Label>
               <Input
                 id="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter password..."
+                placeholder={t('password') + '...'}
                 onKeyPress={(e) => {
                   if (e.key === 'Enter' && password) {
                     handlePasswordDecrypt()
@@ -239,10 +244,10 @@ export default function ViewPastePage() {
               {isDecrypting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Decrypting...
+                  {tView('decrypting')}
                 </>
               ) : (
-                'Decrypt Paste'
+                tView('decryptPaste')
               )}
             </Button>
           </CardContent>
@@ -257,7 +262,7 @@ export default function ViewPastePage() {
         <Card>
           <CardContent className="flex items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin" />
-            <span className="ml-2">Decrypting paste...</span>
+            <span className="ml-2">{tView('decryptingPaste')}</span>
           </CardContent>
         </Card>
       </div>
@@ -271,13 +276,13 @@ export default function ViewPastePage() {
           <CardHeader className="text-center">
             <CardTitle className="flex items-center gap-2 justify-center text-red-600">
               <AlertCircle className="h-5 w-5" />
-              Decryption Failed
+              {tErrors('decryptionFailed')}
             </CardTitle>
             <CardDescription>{decryptionError}</CardDescription>
           </CardHeader>
           <CardContent className="text-center">
             <Button onClick={() => router.push('/')}>
-              Create New Paste
+              {tErrors('createNewPaste')}
             </Button>
           </CardContent>
         </Card>
@@ -316,17 +321,17 @@ export default function ViewPastePage() {
                   getValue={() => content?.body ?? ''}
                   variant="outline"
                   size="sm"
-                  label="Copy Content"
+                  label={tView('copyContent')}
                 />
                 <CopyButton
                   getValue={() => window.location.href}
                   variant="outline"
                   size="sm"
-                  label="Copy URL"
+                  label={tView('copyUrl')}
                 />
                 <Link href="/">
                   <Button size="sm">
-                    Create New
+                    {tView('createNew')}
                   </Button>
                 </Link>
               </div>
@@ -334,7 +339,7 @@ export default function ViewPastePage() {
                 className="md:hidden inline-flex items-center justify-center rounded-md p-2 hover:bg-muted"
                 aria-controls="mobile-menu"
                 aria-expanded={mobileMenuOpen}
-                aria-label="Open menu"
+                aria-label={tAccessibility('openMenu')}
                 onClick={() => setMobileMenuOpen(true)}
               >
                 <Menu className="h-6 w-6" />
@@ -357,7 +362,7 @@ export default function ViewPastePage() {
               <h2 className="text-lg font-semibold">Options</h2>
               <button
                 className="inline-flex items-center justify-center rounded-md p-2 hover:bg-muted"
-                aria-label="Close menu"
+                aria-label={tAccessibility('closeMenu')}
                 onClick={() => setMobileMenuOpen(false)}
               >
                 <X className="h-6 w-6" />
@@ -368,17 +373,17 @@ export default function ViewPastePage() {
                 getValue={() => content?.body ?? ''}
                 variant="outline"
                 size="sm"
-                label="Copy Content"
+                label={tView('copyContent')}
               />
               <CopyButton
                 getValue={() => window.location.href}
                 variant="outline"
                 size="sm"
-                label="Copy URL"
+                label={tView('copyUrl')}
               />
               <Link href="/">
                 <Button className="w-full">
-                  Create New
+                  {tView('createNew')}
                 </Button>
               </Link>
             </div>
@@ -415,16 +420,16 @@ export default function ViewPastePage() {
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-2">
                 <Eye className="h-3 w-3" />
-                {paste.metadata.view_count} views
+                {paste.metadata.view_count} {tView('views')}
               </div>
               <div className="flex items-center gap-2">
                 <Lock className="h-3 w-3" />
-                {paste.salt ? 'Password protected' : 'Zero-knowledge'}
+                {paste.salt ? t('password') + ' protected' : tView('zeroKnowledge')}
               </div>
               {paste.metadata.burn_after_read && (
                 <div className="flex items-center gap-2 text-orange-600">
                   <Flame className="h-3 w-3" />
-                  Burns after reading
+                  {tView('burnsAfterReading')}
                 </div>
               )}
             </div>
@@ -432,7 +437,7 @@ export default function ViewPastePage() {
               {paste.metadata.expires_at ? (
                 <span className="text-amber-600">{getTimeRemaining(paste.metadata.expires_at)}</span>
               ) : (
-                'Never expires'
+                tView('neverExpires')
               )}
             </div>
           </div>

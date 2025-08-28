@@ -1,0 +1,111 @@
+{
+  "common": {
+    "pasteVault": "贴文库",
+    "title": "标题",
+    "password": "密码",
+    "send": "发送",
+    "creating": "创建中...",
+    "options": "选项",
+    "format": "格式",
+    "cancel": "取消",
+    "close": "关闭",
+    "copy": "复制",
+    "copied": "已复制！",
+    "loading": "加载中...",
+    "error": "错误",
+    "success": "成功"
+  },
+  "metadata": {
+    "title": "贴文库 - 安全加密贴文分享",
+    "description": "使用端到端加密安全地分享代码、文本和Markdown。零知识贴文分享，支持过期和阅后即焚选项。"
+  },
+  "createPaste": {
+    "burnAfterReading": "阅后即焚",
+    "enterPassword": "输入密码...",
+    "welcomePlaceholder": "# 欢迎使用贴文库\n\n在此开始输入您的内容。您可以使用 **Markdown** 格式！\n\n```javascript\nconsole.log('也支持代码块！')\n```",
+    "plainPlaceholder": "在此开始输入您的内容...",
+    "expiresIn": "过期时间",
+    "draft": {
+      "unsavedDraft": "您有一个 {draftAge} 前的未保存草稿",
+      "restore": "恢复"
+    }
+  },
+  "expiration": {
+    "1hour": "1小时",
+    "6hours": "6小时",
+    "1day": "1天",
+    "1week": "1周",
+    "1month": "1个月"
+  },
+  "formats": {
+    "markdown": "Markdown",
+    "plain": "纯文本",
+    "javascript": "JavaScript",
+    "typescript": "TypeScript",
+    "python": "Python",
+    "java": "Java",
+    "cpp": "C++",
+    "c": "C",
+    "csharp": "C#",
+    "php": "PHP",
+    "go": "Go",
+    "rust": "Rust",
+    "sql": "SQL",
+    "json": "JSON",
+    "yaml": "YAML",
+    "xml": "XML",
+    "html": "HTML",
+    "css": "CSS",
+    "bash": "Bash"
+  },
+  "shareSuccess": {
+    "title": "贴文创建成功！",
+    "description": "您的贴文已加密并准备分享",
+    "shareUrl": "分享链接",
+    "important": "重要提示：",
+    "passwordProtectedWarning": "此贴文受密码保护。接收者需要密码才能解密。",
+    "urlWarning": "解密密钥在URL片段中（#k=...）。任何拥有此URL的人都可以阅读您的贴文。",
+    "createAnother": "创建新贴文",
+    "viewPaste": "查看贴文"
+  },
+  "viewPaste": {
+    "loadingPaste": "加载贴文中...",
+    "decryptingPaste": "解密贴文中...",
+    "copyContent": "复制内容",
+    "copyUrl": "复制链接",
+    "createNew": "新建",
+    "passwordProtected": "密码保护",
+    "passwordPrompt": "此贴文受密码保护。请输入密码以解密并查看内容。",
+    "decryptPaste": "解密贴文",
+    "decrypting": "解密中...",
+    "views": "次查看",
+    "zeroKnowledge": "零知识",
+    "burnsAfterReading": "阅后即焚",
+    "neverExpires": "永不过期",
+    "expired": "已过期",
+    "daysRemaining": "剩余 {days}天 {hours}小时",
+    "hoursRemaining": "剩余 {hours}小时 {minutes}分钟",
+    "minutesRemaining": "剩余 {minutes}分钟"
+  },
+  "errors": {
+    "pasteNotFound": "贴文未找到",
+    "pasteBurned": "贴文已销毁",
+    "pasteExpired": "贴文已过期",
+    "decryptionFailed": "解密失败",
+    "pasteNotFoundDesc": "您查找的贴文不存在或已被删除。",
+    "pasteBurnedDesc": "此贴文设置为阅后即焚，已被查看过。",
+    "pasteExpiredDesc": "此贴文已过期，不再可用。",
+    "invalidFormat": "无效的贴文格式或缺少解密密钥",
+    "decryptionError": "解密贴文失败。密钥无效或数据损坏。",
+    "incorrectPassword": "密码错误或数据损坏",
+    "createNewPaste": "创建新贴文"
+  },
+  "footer": {
+    "projectBy": "项目来自",
+    "repo": "代码库："
+  },
+  "accessibility": {
+    "openMenu": "打开菜单",
+    "closeMenu": "关闭菜单"
+  }
+}

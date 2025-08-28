@@ -1,0 +1,111 @@
+{
+  "common": {
+    "pasteVault": "PasteVault",
+    "title": "タイトル",
+    "password": "パスワード",
+    "send": "送信",
+    "creating": "作成中...",
+    "options": "オプション",
+    "format": "形式",
+    "cancel": "キャンセル",
+    "close": "閉じる",
+    "copy": "コピー",
+    "copied": "コピー完了！",
+    "loading": "読み込み中...",
+    "error": "エラー",
+    "success": "成功"
+  },
+  "metadata": {
+    "title": "PasteVault - 安全な暗号化ペースト共有",
+    "description": "エンドツーエンド暗号化でコード、テキスト、Markdownを安全に共有。有効期限と閲覧後削除オプション付きのゼロナレッジペースト共有。"
+  },
+  "createPaste": {
+    "burnAfterReading": "閲覧後に削除",
+    "enterPassword": "パスワードを入力...",
+    "welcomePlaceholder": "# PasteVaultへようこそ\\n\\nここにコンテンツを入力してください。**Markdown**でフォーマットできます！\\n\\n```javascript\\nconsole.log('コードブロックもサポートされています！')\\n```",
+    "plainPlaceholder": "ここにコンテンツを入力してください...",
+    "expiresIn": "有効期限",
+    "draft": {
+      "unsavedDraft": "{draftAge}前の未保存の下書きがあります",
+      "restore": "復元"
+    }
+  },
+  "expiration": {
+    "1hour": "1時間",
+    "6hours": "6時間",
+    "1day": "1日",
+    "1week": "1週間",
+    "1month": "1ヶ月"
+  },
+  "formats": {
+    "markdown": "Markdown",
+    "plain": "プレーンテキスト",
+    "javascript": "JavaScript",
+    "typescript": "TypeScript",
+    "python": "Python",
+    "java": "Java",
+    "cpp": "C++",
+    "c": "C",
+    "csharp": "C#",
+    "php": "PHP",
+    "go": "Go",
+    "rust": "Rust",
+    "sql": "SQL",
+    "json": "JSON",
+    "yaml": "YAML",
+    "xml": "XML",
+    "html": "HTML",
+    "css": "CSS",
+    "bash": "Bash"
+  },
+  "shareSuccess": {
+    "title": "ペーストの作成が完了しました！",
+    "description": "ペーストが暗号化され、共有準備が完了しました",
+    "shareUrl": "共有URL",
+    "important": "重要：",
+    "passwordProtectedWarning": "このペーストはパスワードで保護されています。受信者は復号化するためにパスワードが必要です。",
+    "urlWarning": "復号化キーはURLフラグメント（#k=...）にあります。このURLを持つ人は誰でもあなたのペーストを読むことができます。",
+    "createAnother": "別のペーストを作成",
+    "viewPaste": "ペーストを表示"
+  },
+  "viewPaste": {
+    "loadingPaste": "ペーストを読み込み中...",
+    "decryptingPaste": "ペーストを復号化中...",
+    "copyContent": "内容をコピー",
+    "copyUrl": "URLをコピー",
+    "createNew": "新規作成",
+    "passwordProtected": "パスワード保護",
+    "passwordPrompt": "このペーストはパスワードで保護されています。内容を復号化して表示するためにパスワードを入力してください。",
+    "decryptPaste": "ペーストを復号化",
+    "decrypting": "復号化中...",
+    "views": "回表示",
+    "zeroKnowledge": "ゼロナレッジ",
+    "burnsAfterReading": "閲覧後削除",
+    "neverExpires": "期限なし",
+    "expired": "期限切れ",
+    "daysRemaining": "残り{days}日{hours}時間",
+    "hoursRemaining": "残り{hours}時間{minutes}分",
+    "minutesRemaining": "残り{minutes}分"
+  },
+  "errors": {
+    "pasteNotFound": "ペーストが見つかりません",
+    "pasteBurned": "ペーストが削除されました",
+    "pasteExpired": "ペーストの期限が切れました",
+    "decryptionFailed": "復号化に失敗しました",
+    "pasteNotFoundDesc": "お探しのペーストは存在しないか、削除されています。",
+    "pasteBurnedDesc": "このペーストは閲覧後削除に設定されており、既に表示されています。",
+    "pasteExpiredDesc": "このペーストは期限切れで、もう利用できません。",
+    "invalidFormat": "無効なペースト形式または復号化キーが見つかりません",
+    "decryptionError": "ペーストの復号化に失敗しました。無効なキーまたはデータが破損しています。",
+    "incorrectPassword": "パスワードが間違っているかデータが破損しています",
+    "createNewPaste": "新しいペーストを作成"
+  },
+  "footer": {
+    "projectBy": "プロジェクト：",
+    "repo": "リポジトリ："
+  },
+  "accessibility": {
+    "openMenu": "メニューを開く",
+    "closeMenu": "メニューを閉じる"
+  }
+}

@@ -1,0 +1,111 @@
+{
+  "common": {
+    "pasteVault": "PasteVault",
+    "title": "Título",
+    "password": "Contraseña",
+    "send": "Enviar",
+    "creating": "Creando...",
+    "options": "Opciones",
+    "format": "Formato",
+    "cancel": "Cancelar",
+    "close": "Cerrar",
+    "copy": "Copiar",
+    "copied": "¡Copiado!",
+    "loading": "Cargando...",
+    "error": "Error",
+    "success": "Éxito"
+  },
+  "metadata": {
+    "title": "PasteVault - Compartir Pastes Cifrados de Forma Segura",
+    "description": "Comparte código, texto y markdown de forma segura con cifrado de extremo a extremo. Compartir pastes con conocimiento cero con opciones de caducidad y quemado tras lectura."
+  },
+  "createPaste": {
+    "burnAfterReading": "Quemar después de leer",
+    "enterPassword": "Introducir contraseña...",
+    "welcomePlaceholder": "# Bienvenido a PasteVault\n\n¡Comienza a escribir tu contenido aquí. Puedes usar **Markdown** para el formato!\n\n```javascript\nconsole.log('¡Los bloques de código también están soportados!')\n```",
+    "plainPlaceholder": "Comienza a escribir tu contenido aquí...",
+    "expiresIn": "Caduca en",
+    "draft": {
+      "unsavedDraft": "Tienes un borrador sin guardar de hace {draftAge}",
+      "restore": "Restaurar"
+    }
+  },
+  "expiration": {
+    "1hour": "1 hora",
+    "6hours": "6 horas",
+    "1day": "1 día",
+    "1week": "1 semana",
+    "1month": "1 mes"
+  },
+  "formats": {
+    "markdown": "Markdown",
+    "plain": "Texto Plano",
+    "javascript": "JavaScript",
+    "typescript": "TypeScript",
+    "python": "Python",
+    "java": "Java",
+    "cpp": "C++",
+    "c": "C",
+    "csharp": "C#",
+    "php": "PHP",
+    "go": "Go",
+    "rust": "Rust",
+    "sql": "SQL",
+    "json": "JSON",
+    "yaml": "YAML",
+    "xml": "XML",
+    "html": "HTML",
+    "css": "CSS",
+    "bash": "Bash"
+  },
+  "shareSuccess": {
+    "title": "¡Paste Creado Exitosamente!",
+    "description": "Tu paste ha sido cifrado y está listo para compartir",
+    "shareUrl": "URL para Compartir",
+    "important": "Importante:",
+    "passwordProtectedWarning": "Este paste está protegido con contraseña. El destinatario necesitará la contraseña para descifrarlo.",
+    "urlWarning": "La clave de descifrado está en el fragmento de URL (#k=...). Cualquiera con esta URL puede leer tu paste.",
+    "createAnother": "Crear Otro Paste",
+    "viewPaste": "Ver Paste"
+  },
+  "viewPaste": {
+    "loadingPaste": "Cargando paste...",
+    "decryptingPaste": "Descifrando paste...",
+    "copyContent": "Copiar Contenido",
+    "copyUrl": "Copiar URL",
+    "createNew": "Crear Nuevo",
+    "passwordProtected": "Protegido con Contraseña",
+    "passwordPrompt": "Este paste está protegido con contraseña. Introduce la contraseña para descifrar y ver el contenido.",
+    "decryptPaste": "Descifrar Paste",
+    "decrypting": "Descifrando...",
+    "views": "vistas",
+    "zeroKnowledge": "Conocimiento cero",
+    "burnsAfterReading": "Se quema después de leer",
+    "neverExpires": "Nunca caduca",
+    "expired": "Caducado",
+    "daysRemaining": "{days}d {hours}h restantes",
+    "hoursRemaining": "{hours}h {minutes}m restantes",
+    "minutesRemaining": "{minutes}m restantes"
+  },
+  "errors": {
+    "pasteNotFound": "Paste No Encontrado",
+    "pasteBurned": "Paste Quemado",
+    "pasteExpired": "Paste Caducado",
+    "decryptionFailed": "Descifrado Fallido",
+    "pasteNotFoundDesc": "El paste que buscas no existe o ha sido eliminado.",
+    "pasteBurnedDesc": "Este paste fue configurado para quemarse después de leer y ya ha sido visto.",
+    "pasteExpiredDesc": "Este paste ha caducado y ya no está disponible.",
+    "invalidFormat": "Formato de paste inválido o clave de descifrado faltante",
+    "decryptionError": "Fallo al descifrar paste. Clave inválida o datos corruptos.",
+    "incorrectPassword": "Contraseña incorrecta o datos corruptos",
+    "createNewPaste": "Crear Nuevo Paste"
+  },
+  "footer": {
+    "projectBy": "Proyecto de",
+    "repo": "Repo:"
+  },
+  "accessibility": {
+    "openMenu": "Abrir menú",
+    "closeMenu": "Cerrar menú"
+  }
+}

@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { Providers } from '@/components/providers'
+import { I18nProvider } from '@/components/i18n-provider'
+import { Footer } from '@/components/footer'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -44,33 +46,16 @@ export default function RootLayout({
 
       </head>
       <body className={inter.className}>
-        <Providers>
-          <div className="min-h-screen bg-background flex flex-col">
-            <main className="flex-1">
-              {children}
-            </main>
-            <footer className="border-t text-xs text-muted-foreground py-2 px-4 sm:px-6 text-center">
-              Project by{' '}
-              <a
-                href="https://www.arc53.com/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-medium hover:text-foreground transition-colors"
-              >
-                Arc53
-              </a>
-              {' '}• Repo:{' '}
-              <a
-                href="https://github.com/arc53/pastevault"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-mono hover:text-foreground transition-colors"
-              >
-                github.com/arc53/pastevault
-              </a>
-            </footer>
-          </div>
-        </Providers>
+        <I18nProvider>
+          <Providers>
+            <div className="min-h-screen bg-background flex flex-col">
+              <main className="flex-1">
+                {children}
+              </main>
+              <Footer />
+            </div>
+          </Providers>
+        </I18nProvider>
       </body>
     </html>
   )
