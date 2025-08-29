@@ -61,7 +61,7 @@ A secure, end-to-end encrypted paste sharing platform with zero-knowledge archit
 5. Fragment never sent to server logs
 
 **Password Mode**:
-1. Derive key: `PBKDF2(password, salt, 100k iterations)`
+1. Derive key: `PBKDF2(password, salt, 600k iterations)`
 2. Store salt on server, key stays client-side
 3. Same encryption, password-based decryption
 
