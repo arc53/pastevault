@@ -109,23 +109,4 @@ export async function pastesRoute(fastify: FastifyInstance) {
     }
   })
 
-  fastify.delete<{
-    Params: { slug: string }
-  }>('/pastes/:slug', async (request, reply) => {
-    const { slug } = getPasteParamsSchema.parse(request.params)
-
-    try {
-      await prisma.paste.delete({
-        where: { slug },
-      })
-
-      return reply.code(200).send({ message: 'Paste deleted successfully' })
-    } catch (error: unknown) {
-      if (error && typeof error === 'object' && 'code' in error && error.code === 'P2025') {
-        return reply.code(404).send({ error: 'Paste not found' })
-      }
-      fastify.log.error({ err: error }, 'Failed to delete paste')
-      return reply.code(500).send({ error: 'Internal server error' })
-    }
-  })
 }
