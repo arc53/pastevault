@@ -7,9 +7,9 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "db:push": "prisma db push",
-    "db:migrate": "prisma migrate dev",
-    "db:generate": "prisma generate",
+    "db:push": "node scripts/prisma-runner.mjs db push",
+    "db:migrate": "node scripts/prisma-runner.mjs migrate dev",
+    "db:generate": "node scripts/prisma-runner.mjs generate",
     "lint": "eslint src --ext .ts",
     "typecheck": "tsc --noEmit"
   },
