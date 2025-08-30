@@ -25,6 +25,7 @@ services:
       - "3001:3001"
     environment:
       DATABASE_URL: "postgresql://pastevault:pastevault_dev_password@postgres:5432/pastevault"
+      DATABASE_PROVIDER: "postgresql"
       CORS_ORIGIN: "http://localhost:3000"
     depends_on:
       postgres:

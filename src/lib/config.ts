@@ -5,6 +5,7 @@ dotenv.config()
 
 const configSchema = z.object({
   DATABASE_URL: z.string(),
+  DATABASE_PROVIDER: z.enum(['postgresql', 'sqlite']).default('postgresql'),
   PORT: z.string().default('3001').transform(Number),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),

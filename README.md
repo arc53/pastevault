@@ -40,7 +40,7 @@ A secure, end-to-end encrypted paste sharing platform with zero-knowledge archit
                           │
 ┌─────────────────────────▼───────────────────────────────────┐
 │                     Database                                │
-│                    PostgreSQL                               │
+│          PostgreSQL (default) or SQLite                   │
 │                                                             │
 │  • Encrypted paste content (ciphertext)                     │
 │  • Metadata (expiry, burn status, view counts)              │
@@ -79,8 +79,8 @@ Prevents:
 
 ### Prerequisites
 - Node.js 18+
-- Docker & Docker Compose
-- PostgreSQL (via Docker)
+- PostgreSQL (via Docker) for production setups
+- Or use SQLite for simple development/testing (no external dependencies)
 
 ### 1. Start the Database
 ```bash
@@ -148,7 +148,14 @@ pastevault/
 
 ### Backend Environment (.env)
 ```env
+# PostgreSQL (default)
 DATABASE_URL="postgresql://pastevault:pastevault_dev_password@localhost:5432/pastevault"
+DATABASE_PROVIDER="postgresql"
+
+# SQLite (uncomment to use SQLite instead)
+# DATABASE_URL="file:./pastevault.db"
+# DATABASE_PROVIDER="sqlite"
+
 PORT=3001
 NODE_ENV=development
 CORS_ORIGIN=http://localhost:3000
