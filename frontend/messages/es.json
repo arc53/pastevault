@@ -56,7 +56,9 @@
     "xml": "XML",
     "html": "HTML",
     "css": "CSS",
-    "bash": "Bash"
+    "bash": "Bash",
+    "bat": "BAT",
+    "powershell": "PowerShell"
   },
   "shareSuccess": {
     "title": "¡Paste Creado Exitosamente!",

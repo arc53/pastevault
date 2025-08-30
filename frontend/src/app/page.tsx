@@ -303,6 +303,8 @@ export default function CreatePastePage() {
                   <SelectItem value="html">{tFormats('html')}</SelectItem>
                   <SelectItem value="css">{tFormats('css')}</SelectItem>
                   <SelectItem value="bash">{tFormats('bash')}</SelectItem>
+                  <SelectItem value="bat">{tFormats('bat')}</SelectItem>
+                  <SelectItem value="powershell">{tFormats('powershell')}</SelectItem>
                 </SelectContent>
               </Select>
               </div>
@@ -427,6 +429,8 @@ export default function CreatePastePage() {
                     <SelectItem value="html">{tFormats('html')}</SelectItem>
                     <SelectItem value="css">{tFormats('css')}</SelectItem>
                     <SelectItem value="bash">{tFormats('bash')}</SelectItem>
+                    <SelectItem value="bat">{tFormats('bat')}</SelectItem>
+                    <SelectItem value="powershell">{tFormats('powershell')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
