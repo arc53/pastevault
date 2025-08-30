@@ -58,6 +58,31 @@
   }
 }
 
+/* Prevent white flash by setting initial theme based on system preference */
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --background: 220 13% 9%;
+    --foreground: 220 9% 92%;
+    --card: 220 13% 9%;
+    --card-foreground: 220 9% 92%;
+    --popover: 220 13% 9%;
+    --popover-foreground: 220 9% 92%;
+    --primary: 142 76% 36%;
+    --primary-foreground: 220 13% 9%;
+    --secondary: 220 13% 14%;
+    --secondary-foreground: 220 9% 92%;
+    --muted: 220 13% 14%;
+    --muted-foreground: 220 9% 65%;
+    --accent: 220 13% 14%;
+    --accent-foreground: 220 9% 92%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 220 13% 18%;
+    --input: 220 13% 18%;
+    --ring: 142 76% 36%;
+  }
+}
+
 @layer base {
   /* Typography prose adjustments for code blocks */
   .prose pre {
