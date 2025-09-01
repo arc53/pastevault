@@ -13,7 +13,7 @@ const program = new Command()
 program
   .name('pastevault')
   .description('Simple paste sharing tool using Node and SQLite')
-  .version('1.0.3')
+  .version('1.0.4')
 
 program
   .command('up')
@@ -100,10 +100,15 @@ PASTEVAULT_MAIN_PORT="${port}"
           if (code === 0) {
             resolve(undefined)
           } else {
+            console.log(chalk.red(`❌ Frontend build failed with exit code ${code}`))
+            console.log(chalk.yellow('💡 This might be due to missing dependencies or TypeScript errors.'))
             reject(new Error(`Frontend build failed with code ${code}`))
           }
         })
-        buildProcess.on('error', reject)
+        buildProcess.on('error', (err) => {
+          console.log(chalk.red(`❌ Frontend build process error: ${err.message}`))
+          reject(err)
+        })
       })
     }
 
