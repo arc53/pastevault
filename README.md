@@ -2,6 +2,30 @@
 
 A secure, end-to-end encrypted paste sharing platform with zero-knowledge architecture. Share code, text, and markdown securely with automatic expiry and burn-after-read options.
 
+## 🚀 Installation
+
+### NPX (Recommended)
+```bash
+# Run directly without installation
+npx pastevault up
+```
+
+### Global Installation
+```bash
+# Install globally for repeated use
+npm install -g pastevault
+pastevault up
+```
+
+### From Source
+```bash
+# Clone and run locally
+git clone https://github.com/arc53/pastevault.git
+cd pastevault
+npm install
+npx pastevault up
+```
+
 ## 🚀 Features
 
 ### Core Security
@@ -77,17 +101,60 @@ Prevents:
 
 ## 🛠️ Quick Start
 
-### Prerequisites
+### One-Command Setup (Recommended)
+No need to clone the repository! Just run:
+
+```bash
+npx pastevault up
+```
+
+That's it! This will:
+- Download and install PasteVault automatically  
+- Install all dependencies
+- Set up SQLite database (no external dependencies)
+- Build and serve the frontend
+- Start the backend API
+- Run everything on `http://localhost:3000`
+
+> **Note**: The first run will take a bit longer as it downloads dependencies and builds the frontend. Subsequent runs will be much faster.
+
+### Advanced Options
+
+The CLI supports several options to customize your setup:
+
+```bash
+# Custom ports
+npx pastevault up --port 8080     # Backend port
+npx pastevault up --frontend-port 3002  # Frontend port
+
+# Disable features
+npx pastevault up --no-frontend  # Backend only
+npx pastevault up --no-open     # Don't auto-open browser
+
+# Example with all options
+npx pastevault up --port 8080 --frontend-port 3002 --no-open
+```
+
+### Development Setup (For Contributors)
+
+Want to contribute or modify PasteVault? Clone the repository for development:
+
+```bash
+git clone https://github.com/arc53/pastevault.git
+cd pastevault
+```
+
+#### Prerequisites
 - Node.js 18+
 - PostgreSQL (via Docker) for production setups
 - Or use SQLite for simple development/testing (no external dependencies)
 
-### 1. Start the Database
+#### 1. Start the Database
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
-### 2. Setup Backend
+#### 2. Setup Backend
 ```bash
 # Install dependencies
 npm install
@@ -100,7 +167,7 @@ npm run dev
 ```
 Backend runs on `http://localhost:3001`
 
-### 3. Setup Frontend  
+#### 3. Setup Frontend  
 ```bash
 cd frontend
 
@@ -112,8 +179,8 @@ npm run dev
 ```
 Frontend runs on `http://localhost:3000`
 
-### 4. Create Your First Paste
-1. Open `http://localhost:3000`
+### Create Your First Paste
+1. Open your PasteVault instance (default: `http://localhost:3000`)
 2. Enter your content (Markdown supported!)
 3. Configure expiry and options
 4. Click "Create Paste"

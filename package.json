@@ -1,39 +1,78 @@
 {
-  "name": "pastevault-backend",
-  "version": "1.0.0",
-  "description": "Secure end-to-end encrypted paste sharing backend",
+  "name": "pastevault-test",
+  "version": "1.0.1",
+  "description": "Secure end-to-end encrypted paste sharing CLI tool with zero-knowledge architecture",
   "main": "dist/index.js",
+  "bin": {
+    "pastevault": "./dist/bin/cli.js"
+  },
+  "files": [
+    "dist/",
+    "frontend/",
+    "prisma/",
+    "scripts/",
+    "README.md"
+  ],
+  "keywords": [
+    "paste",
+    "pastebin",
+    "encrypted",
+    "cli",
+    "sharing",
+    "zero-knowledge",
+    "e2e-encryption"
+  ],
+  "author": "Alex Tushynski",
+  "license": "MIT",
+  "homepage": "https://github.com/arc53/pastevault#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/arc53/pastevault.git"
+  },
+  "bugs": {
+    "url": "https://github.com/arc53/pastevault/issues"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "tsc && mkdir -p dist/bin && cp src/bin/cli.js dist/bin/cli.js && chmod +x dist/bin/cli.js",
+    "prepublishOnly": "npm run build",
     "start": "node dist/index.js",
     "db:push": "node scripts/prisma-runner.mjs db push",
     "db:migrate": "node scripts/prisma-runner.mjs migrate dev",
     "db:generate": "node scripts/prisma-runner.mjs generate",
     "lint": "eslint src --ext .ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:package": "./scripts/test-and-publish.sh test",
+    "version:patch": "./scripts/test-and-publish.sh version patch",
+    "version:minor": "./scripts/test-and-publish.sh version minor",
+    "version:major": "./scripts/test-and-publish.sh version major",
+    "publish:npm": "./scripts/test-and-publish.sh publish",
+    "install:local": "./scripts/test-and-publish.sh local-install"
   },
   "dependencies": {
-    "@fastify/cors": "^8.4.0",
-    "@fastify/rate-limit": "^8.0.3",
-    "@prisma/client": "^5.6.0",
+    "@fastify/cors": "^11.1.0",
+    "@fastify/rate-limit": "^10.3.0",
+    "@prisma/client": "^6.15.0",
+    "chalk": "^4.1.2",
+    "commander": "^14.0.0",
     "dotenv": "^17.2.1",
-    "fastify": "^4.24.3",
-    "nanoid": "^5.0.3",
-    "node-cron": "^3.0.3",
-    "sodium-native": "^4.0.10",
-    "zod": "^3.22.4"
+    "fastify": "^5.5.0",
+    "nanoid": "^5.1.5",
+    "node-cron": "^4.2.1",
+    "open": "^10.2.0",
+    "sodium-native": "^5.0.8",
+    "zod": "^4.1.5"
   },
   "devDependencies": {
-    "@types/node": "^20.8.9",
+    "@types/node": "^24.3.0",
     "@types/node-cron": "^3.0.11",
-    "@typescript-eslint/eslint-plugin": "^6.9.1",
-    "@typescript-eslint/parser": "^6.9.1",
-    "eslint-config-next": "^14.0.3",
-    "eslint": "^8.53.0",
-    "prisma": "^5.6.0",
-    "tsx": "^4.1.4",
-    "typescript": "^5.2.2"
+    "@typescript-eslint/eslint-plugin": "^8.41.0",
+    "@typescript-eslint/parser": "^8.41.0",
+    "eslint-config-next": "^15.5.2",
+    "eslint": "^9.34.0",
+    "prisma": "^6.15.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
   },
   "engines": {
     "node": ">=18"

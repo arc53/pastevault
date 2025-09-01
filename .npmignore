@@ -1,0 +1,69 @@
+# Development files
+*.log
+npm-debug.log*
+.env*
+!.env.example
+
+# Source files (we include dist/ and built CLI)
+src/
+!src/bin/
+frontend/src/
+
+# CLI build (we want built version)
+src/bin/*.js
+
+# Development dependencies
+node_modules/
+frontend/node_modules/
+
+# Build artifacts we don't need in npm
+frontend/.next/
+!frontend/out/
+.vercel/
+
+# Development tools
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Testing
+coverage/
+.nyc_output/
+
+# Docker (not needed for npm package)
+docker-compose*.yml
+Dockerfile*
+
+# CI/CD configs (keep GitHub Actions for reference)
+.travis.yml
+.circleci/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Local database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+logs/
+pids/
+*.pid
+*.seed

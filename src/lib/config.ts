@@ -4,8 +4,8 @@ import dotenv from 'dotenv'
 dotenv.config()
 
 const configSchema = z.object({
-  DATABASE_URL: z.string(),
-  DATABASE_PROVIDER: z.enum(['postgresql', 'sqlite']).default('postgresql'),
+  DATABASE_URL: z.string().default('file:./pastevault.db'),
+  DATABASE_PROVIDER: z.enum(['postgresql', 'sqlite']).default('sqlite'),
   PORT: z.string().default('3001').transform(Number),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   CORS_ORIGIN: z.string().default('http://localhost:3000'),

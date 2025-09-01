@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18, 20, 22]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Run type checking
+        run: npm run typecheck
+
+      - name: Run linting
+        run: npm run lint
+
+      - name: Build backend
+        run: npm run build
+
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Run frontend type checking
+        run: |
+          cd frontend
+          npm run typecheck
+
+      - name: Run frontend linting
+        run: |
+          cd frontend
+          npm run lint
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm run build
+
+      - name: Test CLI builds correctly
+        run: |
+          # Ensure CLI script is executable and works
+          test -x dist/bin/cli.js
+          node dist/bin/cli.js --help
+          
+      - name: Test package structure
+        run: |
+          # Verify all required files exist for NPM package
+          test -f package.json
+          test -f dist/index.js
+          test -f dist/bin/cli.js
+          test -d frontend/
+          test -d prisma/
+          test -d scripts/
+          test -f README.md
