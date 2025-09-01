@@ -13,7 +13,7 @@ const program = new Command()
 program
   .name('pastevault')
   .description('Simple paste sharing tool using Node and SQLite')
-  .version('1.0.1')
+  .version('1.0.2')
 
 program
   .command('up')
@@ -92,7 +92,11 @@ PASTEVAULT_MAIN_PORT="${port}"
       cwd: currentDir,
       stdio: 'inherit',
       shell: true,
-      env: { ...process.env, DATABASE_PROVIDER: provider }
+      env: { 
+        ...process.env, 
+        DATABASE_PROVIDER: provider,
+        PASTEVAULT_PACKAGE_ROOT: projectRoot
+      }
     })
 
     await new Promise((resolve, reject) => {
