@@ -13,7 +13,7 @@ const program = new Command()
 program
   .name('pastevault')
   .description('Simple paste sharing tool using Node and SQLite')
-  .version('1.0.4')
+  .version('1.0.5')
 
 program
   .command('up')
@@ -71,7 +71,7 @@ PASTEVAULT_MAIN_PORT="${port}"
       // Install dependencies if needed
       if (!existsSync(frontendNodeModules)) {
         console.log(chalk.yellow('📦 Installing frontend dependencies...'))
-        const npmInstall = spawn('npm', ['install'], {
+        const npmInstall = spawn('npm', ['install', '--include=dev'], {
           cwd: frontendDir,
           stdio: 'inherit'
         })
