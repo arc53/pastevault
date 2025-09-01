@@ -13,7 +13,7 @@ const program = new Command()
 program
   .name('pastevault')
   .description('Simple paste sharing tool using Node and SQLite')
-  .version('1.0.2')
+  .version('1.0.3')
 
 program
   .command('up')
@@ -63,26 +63,47 @@ PASTEVAULT_MAIN_PORT="${port}"
       writeFileSync(envPath, envContent)
     }
 
-    // Check if we need to install frontend dependencies
+    // Check if we need to install frontend dependencies and build
     const frontendDir = path.join(projectRoot, 'frontend')
     const frontendNodeModules = path.join(frontendDir, 'node_modules')
     
-    if (existsSync(frontendDir) && !existsSync(frontendNodeModules) && !noFrontend) {
-      console.log(chalk.yellow('📦 Installing frontend dependencies...'))
-      const npmInstall = spawn('npm', ['install'], {
+    if (existsSync(frontendDir) && !noFrontend) {
+      // Install dependencies if needed
+      if (!existsSync(frontendNodeModules)) {
+        console.log(chalk.yellow('📦 Installing frontend dependencies...'))
+        const npmInstall = spawn('npm', ['install'], {
+          cwd: frontendDir,
+          stdio: 'inherit'
+        })
+
+        await new Promise((resolve, reject) => {
+          npmInstall.on('close', (code) => {
+            if (code === 0) {
+              resolve(undefined)
+            } else {
+              reject(new Error(`Frontend dependency installation failed with code ${code}`))
+            }
+          })
+          npmInstall.on('error', reject)
+        })
+      }
+
+      // Always build frontend for fresh start
+      console.log(chalk.yellow('🔨 Building frontend...'))
+      const buildProcess = spawn('npm', ['run', 'build'], {
         cwd: frontendDir,
         stdio: 'inherit'
       })
 
       await new Promise((resolve, reject) => {
-        npmInstall.on('close', (code) => {
+        buildProcess.on('close', (code) => {
           if (code === 0) {
             resolve(undefined)
           } else {
-            reject(new Error(`Frontend dependency installation failed with code ${code}`))
+            reject(new Error(`Frontend build failed with code ${code}`))
           }
         })
-        npmInstall.on('error', reject)
+        buildProcess.on('error', reject)
       })
     }
 
@@ -131,11 +152,11 @@ PASTEVAULT_MAIN_PORT="${port}"
     if (!noFrontend && existsSync(frontendDir)) {
       console.log(chalk.yellow('🌐 Starting frontend server...'))
       
-      frontendProcess = spawn('npm', ['run', 'dev'], {
+      frontendProcess = spawn('npm', ['run', 'start', '--', '-p', frontendPort.toString()], {
         cwd: frontendDir,
         stdio: detach ? 'ignore' : 'inherit',
         detached: detach,
-        env: { ...process.env, PORT: frontendPort.toString() }
+        env: { ...process.env }
       })
 
       console.log(chalk.green(`✅ Frontend server starting on http://localhost:${frontendPort}`))
