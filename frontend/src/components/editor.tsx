@@ -191,16 +191,6 @@ export function Editor({
             },
           })
         }}
-        onMount={(editor, monaco) => {
-          // Set placeholder
-          if (!value && placeholder) {
-            editor.setModel(
-              editor.getModel() || 
-              monaco.editor.createModel('', language)
-            )
-            editor.getModel()?.setValue('')
-          }
-        }}
       />
     </div>
   )
