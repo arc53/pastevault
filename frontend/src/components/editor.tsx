@@ -82,6 +82,14 @@ export function Editor({
             highlightActiveIndentation: false,
             indentation: false,
           },
+          // Mobile-specific options for better clipboard support
+          accessibilitySupport: 'auto',
+          domReadOnly: false,
+          readOnly: false,
+          // Enable proper mobile input handling
+          mouseWheelZoom: false,
+          // Ensure textarea is accessible for mobile clipboard
+          ariaLabel: placeholder || 'Text editor',
         }}
         beforeMount={(monaco) => {
           // Add custom theme support
@@ -131,6 +139,21 @@ export function Editor({
               monaco.editor.createModel('', language)
             )
             editor.getModel()?.setValue('')
+          }
+          
+          // Mobile-specific setup for better clipboard support
+          if (typeof window !== 'undefined' && window.innerWidth <= 768) {
+            // Ensure the editor's textarea is properly configured for mobile
+            const textareaElement = editor.getDomNode()?.querySelector('textarea')
+            if (textareaElement) {
+              textareaElement.setAttribute('autocomplete', 'off')
+              textareaElement.setAttribute('autocorrect', 'off')
+              textareaElement.setAttribute('autocapitalize', 'off')
+              textareaElement.setAttribute('spellcheck', 'false')
+              // Ensure it can handle paste events
+              textareaElement.style.userSelect = 'text'
+              textareaElement.style.webkitUserSelect = 'text'
+            }
           }
         }}
       />

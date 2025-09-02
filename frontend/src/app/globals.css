@@ -237,6 +237,35 @@
     transform: none !important;
   }
   
+  /* Ensure input area is accessible for mobile clipboard operations */
+  .monaco-editor .inputarea {
+    opacity: 1 !important;
+    z-index: 1 !important;
+    pointer-events: auto !important;
+    /* Ensure the textarea can receive focus and clipboard events */
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+    user-select: text !important;
+    /* Enable touch events */
+    touch-action: manipulation !important;
+  }
+
+  /* Ensure the actual textarea element is accessible */
+  .monaco-editor .inputarea textarea {
+    opacity: 1 !important;
+    position: absolute !important;
+    z-index: 2 !important;
+    /* Make sure it's not hidden or clipped */
+    clip: auto !important;
+    clip-path: none !important;
+    /* Ensure it can receive input and clipboard events */
+    pointer-events: auto !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+    user-select: text !important;
+  }
 
   .monaco-editor .overlayWidgets,
   .monaco-editor .actions-container {
@@ -247,5 +276,14 @@
   .monaco-editor .view-lines,
   .monaco-editor .view-line {
     font-size: 16px !important;
+  }
+  
+  /* Improve mobile touch interaction */
+  .monaco-editor {
+    -webkit-touch-callout: default !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+    user-select: text !important;
   }
 }
