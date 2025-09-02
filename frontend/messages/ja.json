@@ -22,8 +22,6 @@
   "createPaste": {
     "burnAfterReading": "閲覧後に削除",
     "enterPassword": "パスワードを入力...",
-    "welcomePlaceholder": "# PasteVaultへようこそ\\n\\nここにコンテンツを入力してください。**Markdown**でフォーマットできます！\\n\\n```javascript\\nconsole.log('コードブロックもサポートされています！')\\n```",
-    "plainPlaceholder": "ここにコンテンツを入力してください...",
     "expiresIn": "有効期限",
     "draft": {
       "unsavedDraft": "{draftAge}前の未保存の下書きがあります",

@@ -22,8 +22,6 @@
   "createPaste": {
     "burnAfterReading": "阅后即焚",
     "enterPassword": "输入密码...",
-    "welcomePlaceholder": "# 欢迎使用贴文库\n\n在此开始输入您的内容。您可以使用 **Markdown** 格式！\n\n```javascript\nconsole.log('也支持代码块！')\n```",
-    "plainPlaceholder": "在此开始输入您的内容...",
     "expiresIn": "过期时间",
     "draft": {
       "unsavedDraft": "您有一个 {draftAge} 前的未保存草稿",

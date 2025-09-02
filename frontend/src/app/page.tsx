@@ -17,6 +17,7 @@ import { saveDraft, loadDraft, clearDraft, getDraftAge } from '@/lib/drafts'
 import { PasteContent } from '@/types'
 import { Lock, Save, Share, Flame, AlertCircle, Menu, X } from 'lucide-react'
 import { nanoid } from 'nanoid'
+import QRCode from 'react-qr-code'
 
 export default function CreatePastePage() {
   const t = useTranslations('common')
@@ -178,6 +179,15 @@ export default function CreatePastePage() {
                   className="font-mono text-sm"
                 />
                 <CopyButton value={shareUrl} variant="outline" />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>QR code</Label>
+              <div className="flex justify-center">
+                <div className="p-3 bg-white rounded">
+                  <QRCode value={shareUrl} size={180} bgColor="#FFFFFF" fgColor="#000000" />
+                </div>
               </div>
             </div>
             
@@ -469,10 +479,6 @@ export default function CreatePastePage() {
             onChange={setBody}
             language={format}
             height="calc(100vh - 200px)"
-            placeholder={format === 'markdown' 
-              ? tCreate('welcomePlaceholder')
-              : tCreate('plainPlaceholder')
-            }
           />
           
           <div className="flex justify-end">

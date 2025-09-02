@@ -22,8 +22,6 @@
   "createPaste": {
     "burnAfterReading": "Quemar después de leer",
     "enterPassword": "Introducir contraseña...",
-    "welcomePlaceholder": "# Bienvenido a PasteVault\n\n¡Comienza a escribir tu contenido aquí. Puedes usar **Markdown** para el formato!\n\n```javascript\nconsole.log('¡Los bloques de código también están soportados!')\n```",
-    "plainPlaceholder": "Comienza a escribir tu contenido aquí...",
     "expiresIn": "Caduca en",
     "draft": {
       "unsavedDraft": "Tienes un borrador sin guardar de hace {draftAge}",

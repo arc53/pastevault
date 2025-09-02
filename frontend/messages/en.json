@@ -22,8 +22,6 @@
   "createPaste": {
     "burnAfterReading": "Burn after reading",
     "enterPassword": "Enter password...",
-    "welcomePlaceholder": "# Welcome to PasteVault\n\nStart typing your content here. You can use **Markdown** for formatting!\n\n```javascript\nconsole.log('Code blocks are supported too!')\n```",
-    "plainPlaceholder": "Start typing your content here...",
     "expiresIn": "Expires In",
     "draft": {
       "unsavedDraft": "You have an unsaved draft from {draftAge}",

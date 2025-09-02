@@ -18,7 +18,6 @@ export function Editor({
   value,
   onChange,
   language = 'markdown',
-  placeholder = 'Start typing...',
   className,
   height = '400px'
 }: EditorProps) {
@@ -87,16 +86,10 @@ export function Editor({
           aria-hidden="true"
           dangerouslySetInnerHTML={{ __html: highlighted || '&nbsp;' }}
         />
-        {!value && placeholder ? (
-          <div className="absolute top-4 left-4 text-muted-foreground pointer-events-none select-none">
-            {placeholder}
-          </div>
-        ) : null}
         <textarea
           ref={textareaRef}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
           className="absolute inset-0 w-full h-full resize-none bg-transparent outline-none p-4 text-[16px] leading-[1.5] font-mono text-transparent caret-[#22C55E]"
           inputMode="text"
           spellCheck={false}

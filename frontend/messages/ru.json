@@ -22,8 +22,6 @@
   "createPaste": {
     "burnAfterReading": "Уничтожить после прочтения",
     "enterPassword": "Введите пароль...",
-    "welcomePlaceholder": "# Добро пожаловать в PasteVault\\n\\nНачните вводить содержимое здесь. Вы можете использовать **Markdown** для форматирования!\\n\\n```javascript\\nconsole.log('Блоки кода тоже поддерживаются!')\\n```",
-    "plainPlaceholder": "Начните вводить содержимое здесь...",
     "expiresIn": "Истекает через",
     "draft": {
       "unsavedDraft": "У вас есть несохранённый черновик от {draftAge}",
