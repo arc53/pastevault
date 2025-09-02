@@ -14,9 +14,6 @@ Requirements: Node.js 18 or 20 and npm.
 npx pastevault up
 ```
 
-- Backend: http://localhost:3001
-- Frontend: http://localhost:3002
-
 ### B) Docker Compose (all-in-one)
 
 Requirements: Docker and Docker Compose.
