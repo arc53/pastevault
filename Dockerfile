@@ -8,10 +8,14 @@ RUN apt-get update -y && apt-get install -y openssl
 
 # Copy package files and install dependencies
 COPY package*.json ./
+# Ensure prisma schema is present for postinstall
+COPY prisma ./prisma/
+# Select Postgres schema inside container to keep local dev (sqlite) unaffected
+ARG DATABASE_PROVIDER=postgresql
+ENV DATABASE_PROVIDER=$DATABASE_PROVIDER
+RUN if [ "$DATABASE_PROVIDER" = "postgresql" ]; then cp prisma/schema.postgres.prisma prisma/schema.prisma; fi
 RUN npm install
 
-# Copy prisma schema
-COPY prisma ./prisma/
 
 # Generate prisma client
 RUN npx prisma generate
@@ -32,17 +36,22 @@ RUN apt-get update -y && apt-get install -y openssl
 
 # Copy package files and install production dependencies
 COPY package*.json ./
-RUN npm install --production
+# Ensure prisma schema is present for postinstall
+COPY prisma ./prisma
+# Select Postgres schema inside container to keep local dev (sqlite) unaffected
+ARG DATABASE_PROVIDER=postgresql
+ENV DATABASE_PROVIDER=$DATABASE_PROVIDER
+RUN if [ "$DATABASE_PROVIDER" = "postgresql" ]; then cp prisma/schema.postgres.prisma prisma/schema.prisma; fi
+# Use deterministic installs and omit devDependencies for smaller image
+RUN npm install --omit=dev
 
 # Copy the built application from the builder stage
 COPY --from=builder /app/dist ./dist
-
-# Copy prisma schema and client
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+# Include runtime scripts for Prisma in container only (does not affect local dev)
+COPY scripts ./scripts
 
 # Expose the port the app runs on
 EXPOSE 3001
 
-# Start the application
-CMD ["npm", "start"]
+# Start the application (ensure DB schema is applied first)
+CMD ["/bin/sh", "-c", "node scripts/prisma-runner.mjs db push && npm start"]

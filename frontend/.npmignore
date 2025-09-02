@@ -1,0 +1,11 @@
+# Include .next directory for npm package
+!.next/
+
+# Still ignore other items
+node_modules/
+.env*.local
+.vercel
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
