@@ -2,9 +2,11 @@
 
 End-to-end encrypted paste sharing with a zero-knowledge design.
 
-## Quickstart
 
-Choose one method.
+<img width="2880" height="1634" alt="CleanShot 2025-09-02 at 13 59 55@2x" src="https://github.com/user-attachments/assets/221c0d5d-825a-4366-9ba0-685b71060549" />
+
+
+## Quickstart
 
 ### A) One command (Node.js)
 
