@@ -24,6 +24,8 @@ export function Editor({
   const { theme, resolvedTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
+  const [monacoLoaded, setMonacoLoaded] = useState(false)
+  const [showMonaco, setShowMonaco] = useState(false)
   const [highlighted, setHighlighted] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const highlightRef = useRef<HTMLDivElement | null>(null)
@@ -54,14 +56,59 @@ export function Editor({
       setHighlighted(html)
     } catch {
       const esc = (value || '')
-        .replace(/&/g, '&')
-        .replace(/</g, '<')
-        .replace(/>/g, '>')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
       setHighlighted(esc)
     }
   }, [value, language])
 
+  useEffect(() => {
+    if (monacoLoaded && !isMobile) {
+      const timer = setTimeout(() => {
+        setShowMonaco(true)
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+  }, [monacoLoaded, isMobile])
 
+
+
+  const FallbackEditor = () => (
+    <div
+      className={`relative border rounded-md overflow-hidden bg-white dark:bg-[#1A1F26] dark:border-[#2F353D] ${className}`}
+      style={{ height: typeof height === 'string' ? height : `${height}px` }}
+    >
+      <div
+        ref={highlightRef}
+        className="absolute inset-0 overflow-auto p-4 font-mono text-[16px] leading-[1.5] whitespace-pre-wrap break-words hljs pointer-events-none"
+        aria-hidden="true"
+        dangerouslySetInnerHTML={{ __html: highlighted || '&nbsp;' }}
+      />
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="absolute inset-0 w-full h-full resize-none bg-transparent outline-none p-4 text-[16px] leading-[1.5] font-mono caret-[#22C55E]"
+        style={{
+          color: 'transparent',
+          caretColor: '#22C55E',
+          WebkitTextFillColor: 'transparent'
+        }}
+        inputMode="text"
+        spellCheck={false}
+        autoCorrect="off"
+        autoCapitalize="none"
+        onScroll={(e) => {
+          const ta = e.currentTarget
+          if (highlightRef.current) {
+            highlightRef.current.scrollTop = ta.scrollTop
+            highlightRef.current.scrollLeft = ta.scrollLeft
+          }
+        }}
+      />
+    </div>
+  )
 
   if (!mounted) {
     return (
@@ -75,123 +122,101 @@ export function Editor({
   }
 
   if (isMobile) {
-    return (
-      <div
-        className={`relative border rounded-md overflow-hidden bg-white dark:bg-[#1A1F26] dark:border-[#2F353D] ${className}`}
-        style={{ height: typeof height === 'string' ? height : `${height}px` }}
-      >
-        <div
-          ref={highlightRef}
-          className="absolute inset-0 overflow-auto p-4 font-mono text-[16px] leading-[1.5] whitespace-pre-wrap break-words hljs pointer-events-none"
-          aria-hidden="true"
-          dangerouslySetInnerHTML={{ __html: highlighted || '&nbsp;' }}
-        />
-        <textarea
-          ref={textareaRef}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="absolute inset-0 w-full h-full resize-none bg-transparent outline-none p-4 text-[16px] leading-[1.5] font-mono text-transparent caret-[#22C55E]"
-          inputMode="text"
-          spellCheck={false}
-          autoCorrect="off"
-          autoCapitalize="none"
-          onScroll={(e) => {
-            const ta = e.currentTarget
-            if (highlightRef.current) {
-              highlightRef.current.scrollTop = ta.scrollTop
-              highlightRef.current.scrollLeft = ta.scrollLeft
-            }
-          }}
-        />
-      </div>
-    )
+    return <FallbackEditor />
   }
 
   return (
     <div className={`relative border rounded-md overflow-hidden bg-white dark:bg-[#1A1F26] dark:border-[#2F353D] ${className}`}>
-      <MonacoEditor
-        key={resolvedTheme}
-        height={height}
-        language={language}
-        theme={resolvedTheme === 'dark' ? 'pastevault-dark' : 'pastevault-light'}
-        value={value}
-        onChange={(value) => onChange(value || '')}
-        options={{
-          minimap: { enabled: false },
-          scrollBeyondLastLine: false,
-          fontSize: typeof window !== 'undefined' && window.innerWidth <= 768 ? 16 : 14,
-          lineHeight: 1.5,
-          padding: { top: 16, bottom: 16 },
-          automaticLayout: true,
-          wordWrap: 'on',
-          wrappingStrategy: 'advanced',
-          suggest: {
-            showKeywords: false,
-            showSnippets: false,
-          },
-          quickSuggestions: false,
-          parameterHints: { enabled: false },
-          contextmenu: false,
-          occurrencesHighlight: 'off',
-          selectionHighlight: false,
-          renderLineHighlight: 'none',
-          hideCursorInOverviewRuler: true,
-          overviewRulerBorder: false,
-          scrollbar: {
-            vertical: 'auto',
-            horizontal: 'auto',
-            verticalScrollbarSize: 12,
-            horizontalScrollbarSize: 12,
-          },
-          bracketPairColorization: { enabled: true },
-          guides: {
-            bracketPairs: false,
-            bracketPairsHorizontal: false,
-            highlightActiveIndentation: false,
-            indentation: false,
-          },
-        }}
-        beforeMount={(monaco) => {
-          // Add custom theme support
-          monaco.editor.defineTheme('pastevault-light', {
-            base: 'vs',
-            inherit: true,
-            rules: [
-              { token: 'comment', foreground: '6B7280', fontStyle: 'italic' },
-              { token: 'keyword', foreground: '16A34A', fontStyle: 'bold' },
-              { token: 'string', foreground: '22C55E' },
-            ],
-            colors: {
-              'editor.background': '#FFFFFF',
-              'editor.foreground': '#262C33',
-              'editor.lineHighlightBackground': '#F8F9FA',
-              'editorCursor.foreground': '#16A34A',
-              'editor.selectionBackground': '#E0F2E0',
-              'editorWidget.background': '#FFFFFF',
-              'editorWidget.border': '#E5E7EB',
+      {!showMonaco && <FallbackEditor />}
+      
+      <div className={showMonaco ? 'block' : 'hidden'}>
+        <MonacoEditor
+          key={resolvedTheme}
+          height={height}
+          language={language}
+          theme={resolvedTheme === 'dark' ? 'pastevault-dark' : 'pastevault-light'}
+          value={value}
+          onChange={(value) => onChange(value || '')}
+          onMount={() => {
+            setMonacoLoaded(true)
+          }}
+          options={{
+            minimap: { enabled: false },
+            scrollBeyondLastLine: false,
+            fontSize: typeof window !== 'undefined' && window.innerWidth <= 768 ? 16 : 14,
+            lineHeight: 1.5,
+            padding: { top: 16, bottom: 16 },
+            automaticLayout: true,
+            wordWrap: 'on',
+            wrappingStrategy: 'advanced',
+            suggest: {
+              showKeywords: false,
+              showSnippets: false,
             },
-          })
-          
-          monaco.editor.defineTheme('pastevault-dark', {
-            base: 'vs-dark',
-            inherit: true,
-            rules: [
-              { token: 'comment', foreground: '8B9BB5', fontStyle: 'italic' },
-              { token: 'keyword', foreground: '22C55E', fontStyle: 'bold' },
-              { token: 'string', foreground: '86EFAC' },
-            ],
-            colors: {
-              'editor.background': '#1A1F26',
-              'editor.foreground': '#EAEBEC',
-              'editor.lineHighlightBackground': '#242A32',
-              'editorCursor.foreground': '#22C55E',
-              'editor.selectionBackground': '#1F2F1F',
-              'editorWidget.background': '#1A1F26',
-              'editorWidget.border': '#2F353D',
+            quickSuggestions: false,
+            parameterHints: { enabled: false },
+            contextmenu: false,
+            occurrencesHighlight: 'off',
+            selectionHighlight: false,
+            renderLineHighlight: 'none',
+            hideCursorInOverviewRuler: true,
+            overviewRulerBorder: false,
+            scrollbar: {
+              vertical: 'auto',
+              horizontal: 'auto',
+              verticalScrollbarSize: 12,
+              horizontalScrollbarSize: 12,
             },
-          })
-        }}
-      />
+            bracketPairColorization: { enabled: true },
+            guides: {
+              bracketPairs: false,
+              bracketPairsHorizontal: false,
+              highlightActiveIndentation: false,
+              indentation: false,
+            },
+          }}
+          beforeMount={(monaco) => {
+            // Add custom theme support
+            monaco.editor.defineTheme('pastevault-light', {
+              base: 'vs',
+              inherit: true,
+              rules: [
+                { token: 'comment', foreground: '6B7280', fontStyle: 'italic' },
+                { token: 'keyword', foreground: '16A34A', fontStyle: 'bold' },
+                { token: 'string', foreground: '22C55E' },
+              ],
+              colors: {
+                'editor.background': '#FFFFFF',
+                'editor.foreground': '#262C33',
+                'editor.lineHighlightBackground': '#F8F9FA',
+                'editorCursor.foreground': '#16A34A',
+                'editor.selectionBackground': '#E0F2E0',
+                'editorWidget.background': '#FFFFFF',
+                'editorWidget.border': '#E5E7EB',
+              },
+            })
+            
+            monaco.editor.defineTheme('pastevault-dark', {
+              base: 'vs-dark',
+              inherit: true,
+              rules: [
+                { token: 'comment', foreground: '8B9BB5', fontStyle: 'italic' },
+                { token: 'keyword', foreground: '22C55E', fontStyle: 'bold' },
+                { token: 'string', foreground: '86EFAC' },
+              ],
+              colors: {
+                'editor.background': '#1A1F26',
+                'editor.foreground': '#EAEBEC',
+                'editor.lineHighlightBackground': '#242A32',
+                'editorCursor.foreground': '#22C55E',
+                'editor.selectionBackground': '#1F2F1F',
+                'editorWidget.background': '#1A1F26',
+                'editorWidget.border': '#2F353D',
+              },
+            })
+          }}
+        />
+      </div>
     </div>
   )
 }
