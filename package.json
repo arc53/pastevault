@@ -1,6 +1,6 @@
 {
   "name": "pastevault",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Secure end-to-end encrypted paste sharing",
   "main": "dist/index.js",
   "bin": {
@@ -53,6 +53,7 @@
     "postgresql",
     "sqlite"
   ],
+  "license": "GPL-3.0",
   "dependencies": {
     "@fastify/cors": "^8.4.0",
     "@fastify/rate-limit": "^8.0.3",
