@@ -2,7 +2,7 @@
 
 import { Editor as MonacoEditor } from '@monaco-editor/react'
 import { useTheme } from 'next-themes'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback, memo } from 'react'
 import hljs from 'highlight.js'
 
 interface EditorProps {
@@ -13,6 +13,107 @@ interface EditorProps {
   className?: string
   height?: string | number
 }
+
+const MobileTextarea = memo(({ value, onChange, className, height, language }: {
+  value: string
+  onChange: (value: string) => void
+  className?: string
+  height?: string | number
+  language?: string
+}) => {
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const highlightRef = useRef<HTMLDivElement>(null)
+  const [highlighted, setHighlighted] = useState('')
+  const isTypingRef = useRef(false)
+  const typingTimeoutRef = useRef<NodeJS.Timeout>()
+  
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    onChange(e.target.value)
+    
+    // Mark as typing to prevent focus loss
+    isTypingRef.current = true
+    
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current)
+    }
+    
+    // Mark as not typing after 100ms
+    typingTimeoutRef.current = setTimeout(() => {
+      isTypingRef.current = false
+    }, 100)
+  }, [onChange])
+
+  useEffect(() => {
+    // Always update highlighting, but use requestAnimationFrame to prevent blocking
+    const updateHighlighting = () => {
+      try {
+        let html = ''
+        if (language && hljs.getLanguage(language)) {
+          html = hljs.highlight(value || '', { language }).value
+        } else {
+          const res = hljs.highlightAuto(value || '')
+          html = res.value
+        }
+        setHighlighted(html)
+      } catch {
+        const escapedText = (value || '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+        setHighlighted(escapedText)
+      }
+    }
+
+    if (isTypingRef.current) {
+      // If typing, defer to next frame
+      requestAnimationFrame(updateHighlighting)
+    } else {
+      // If not typing, update immediately
+      updateHighlighting()
+    }
+  }, [value, language])
+
+  const handleScroll = useCallback((e: React.UIEvent<HTMLTextAreaElement>) => {
+    const ta = e.currentTarget
+    if (highlightRef.current) {
+      highlightRef.current.scrollTop = ta.scrollTop
+      highlightRef.current.scrollLeft = ta.scrollLeft
+    }
+  }, [])
+
+  return (
+    <div
+      className={`relative border rounded-md overflow-hidden bg-white dark:bg-[#1A1F26] dark:border-[#2F353D] ${className}`}
+      style={{ height: typeof height === 'string' ? height : `${height}px` }}
+    >
+      <div
+        ref={highlightRef}
+        className="absolute inset-0 overflow-auto p-4 font-mono text-[16px] leading-[1.5] whitespace-pre-wrap break-words hljs pointer-events-none"
+        aria-hidden="true"
+        dangerouslySetInnerHTML={{ __html: highlighted || '&nbsp;' }}
+      />
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={handleChange}
+        onScroll={handleScroll}
+        className="absolute inset-0 w-full h-full resize-none bg-transparent outline-none p-4 text-[16px] leading-[1.5] font-mono border-0 caret-[#22C55E]"
+        inputMode="text"
+        autoCapitalize="none"
+        style={{
+          minHeight: '100%',
+          WebkitAppearance: 'none',
+          MozAppearance: 'textfield',
+          color: 'transparent',
+          caretColor: '#22C55E',
+          WebkitTextFillColor: 'transparent'
+        }}
+      />
+    </div>
+  )
+})
+MobileTextarea.displayName = 'MobileTextarea'
 
 export function Editor({
   value,
@@ -45,23 +146,29 @@ export function Editor({
   }, [])
 
   useEffect(() => {
-    try {
-      let html = ''
-      if (language && hljs.getLanguage(language)) {
-        html = hljs.highlight(value || '', { language }).value
-      } else {
-        const res = hljs.highlightAuto(value || '')
-        html = res.value
+    if (!isMobile && !showMonaco) return
+    
+    const timeoutId = setTimeout(() => {
+      try {
+        let html = ''
+        if (language && hljs.getLanguage(language)) {
+          html = hljs.highlight(value || '', { language }).value
+        } else {
+          const res = hljs.highlightAuto(value || '')
+          html = res.value
+        }
+        setHighlighted(html)
+      } catch {
+        const esc = (value || '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+        setHighlighted(esc)
       }
-      setHighlighted(html)
-    } catch {
-      const esc = (value || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-      setHighlighted(esc)
-    }
-  }, [value, language])
+    }, isMobile ? 300 : 100)
+
+    return () => clearTimeout(timeoutId)
+  }, [value, language, isMobile, showMonaco])
 
   useEffect(() => {
     if (monacoLoaded && !isMobile) {
@@ -73,6 +180,10 @@ export function Editor({
   }, [monacoLoaded, isMobile])
 
 
+
+  const handleTextareaChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    onChange(e.target.value)
+  }, [onChange])
 
   const FallbackEditor = () => (
     <div
@@ -88,7 +199,7 @@ export function Editor({
       <textarea
         ref={textareaRef}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={handleTextareaChange}
         className="absolute inset-0 w-full h-full resize-none bg-transparent outline-none p-4 text-[16px] leading-[1.5] font-mono caret-[#22C55E]"
         style={{
           color: 'transparent',
@@ -122,7 +233,7 @@ export function Editor({
   }
 
   if (isMobile) {
-    return <FallbackEditor />
+    return <MobileTextarea value={value} onChange={onChange} className={className} height={height} language={language} />
   }
 
   return (
