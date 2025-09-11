@@ -58,7 +58,7 @@
     "@fastify/cors": "^8.4.0",
     "@fastify/rate-limit": "^8.0.3",
     "@monaco-editor/react": "^4.6.0",
-    "@noble/ciphers": "^0.4.1",
+    "@noble/ciphers": "^2.0.0",
     "@prisma/client": "^5.6.0",
     "@radix-ui/react-dialog": "^1.0.5",
     "@radix-ui/react-dropdown-menu": "^2.0.6",
