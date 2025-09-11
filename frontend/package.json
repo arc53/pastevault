@@ -30,7 +30,7 @@
     "lucide-react": "^0.543.0",
     "nanoid": "^5.0.3",
     "next": "^14.0.3",
-    "next-intl": "^4.3.5",
+    "next-intl": "^4.3.7",
     "next-themes": "^0.2.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
