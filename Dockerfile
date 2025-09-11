@@ -1,5 +1,5 @@
 # Stage 1: Build the application
-FROM node:22-slim AS builder
+FROM node:24-slim AS builder
 
 WORKDIR /app
 
@@ -27,7 +27,7 @@ COPY . .
 RUN npm run build
 
 # Stage 2: Create the production image
-FROM node:22-slim
+FROM node:24-slim
 
 WORKDIR /app
 
