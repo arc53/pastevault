@@ -85,7 +85,7 @@
     "next-themes": "^0.2.1",
     "node-cron": "^4.2.1",
     "prisma": "^5.6.0",
-    "react": "^18.2.0",
+    "react": "^19.2.0",
     "react-dom": "^19.1.1",
     "rehype-highlight": "^7.0.2",
     "rehype-sanitize": "^6.0.0",
@@ -101,7 +101,7 @@
   "devDependencies": {
     "@types/node": "^24.3.1",
     "@types/node-cron": "^3.0.11",
-    "@types/react": "^18.2.37",
+    "@types/react": "^19.2.2",
     "@types/react-dom": "^19.1.9",
     "@typescript-eslint/eslint-plugin": "^6.9.1",
     "@typescript-eslint/parser": "^6.9.1",
