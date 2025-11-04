@@ -1,12 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  turbopack: {},
   webpack: (config, { isServer }) => {
     config.experiments = {
       ...config.experiments,
       asyncWebAssembly: true,
       syncWebAssembly: true,
     }
-    
+
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
@@ -15,12 +16,12 @@ const nextConfig = {
         buffer: require.resolve('buffer'),
       }
     }
-    
+
     config.module.rules.push({
       test: /\.wasm$/,
       type: 'webassembly/async',
     })
-    
+
     return config
   },
 }
