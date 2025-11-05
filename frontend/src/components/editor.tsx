@@ -25,7 +25,7 @@ const MobileTextarea = memo(({ value, onChange, className, height, language }: {
   const highlightRef = useRef<HTMLDivElement>(null)
   const [highlighted, setHighlighted] = useState('')
   const isTypingRef = useRef(false)
-  const typingTimeoutRef = useRef<NodeJS.Timeout>()
+  const typingTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined)
   
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     onChange(e.target.value)
