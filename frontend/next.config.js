@@ -8,6 +8,11 @@ const nextConfig = {
       syncWebAssembly: true,
     }
 
+    // Ensure .js extensions are resolved properly for ESM packages
+    config.resolve.extensionAlias = {
+      '.js': ['.js', '.ts', '.tsx'],
+    }
+
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
