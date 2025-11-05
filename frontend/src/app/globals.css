@@ -51,10 +51,11 @@
 
 @layer base {
   * {
-    @apply border-border;
+    border-color: hsl(var(--border));
   }
   body {
-    @apply bg-background text-foreground;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
   }
 }
 
@@ -86,14 +87,23 @@
 @layer base {
   /* Typography prose adjustments for code blocks */
   .prose pre {
-    @apply bg-muted rounded-md p-4 overflow-x-auto;
+    background-color: hsl(var(--muted));
+    border-radius: 0.375rem;
+    padding: 1rem;
+    overflow-x: auto;
   }
   .prose pre code {
-    @apply text-sm;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
     background: transparent !important;
   }
   .prose code:not(pre code) {
-    @apply px-1 py-0.5 rounded bg-muted;
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
+    padding-top: 0.125rem;
+    padding-bottom: 0.125rem;
+    border-radius: 0.25rem;
+    background-color: hsl(var(--muted));
   }
 
   /* Base highlight.js container */
