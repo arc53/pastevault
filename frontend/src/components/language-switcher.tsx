@@ -13,6 +13,7 @@ import { Locale } from '@/lib/i18n'
 const languages = [
   { code: 'en', name: 'English' },
   { code: 'es', name: 'Español' },
+  { code: 'fr', name: 'Français' },
   { code: 'zh', name: '中文' },
   { code: 'ru', name: 'Русский' },
   { code: 'ja', name: '日本語' },

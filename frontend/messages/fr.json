@@ -1,0 +1,111 @@
+{
+  "common": {
+    "pasteVault": "PasteVault",
+    "title": "Titre",
+    "password": "Mot de passe",
+    "send": "Envoyer",
+    "creating": "Création...",
+    "options": "Options",
+    "format": "Format",
+    "cancel": "Annuler",
+    "close": "Fermer",
+    "copy": "Copier",
+    "copied": "Copié !",
+    "loading": "Chargement...",
+    "error": "Erreur",
+    "success": "Succès"
+  },
+  "metadata": {
+    "title": "PasteVault – Partage sécurisé de contenus chiffrés",
+    "description": "Partagez du code, du texte et du markdown de manière sécurisée avec un chiffrement de bout en bout. Partage zéro connaissance avec expiration et option d’autodestruction après lecture."
+  },
+  "createPaste": {
+    "burnAfterReading": "Détruire après lecture",
+    "enterPassword": "Saisir le mot de passe...",
+    "expiresIn": "Expire dans",
+    "draft": {
+      "unsavedDraft": "Vous avez un brouillon non enregistré datant de {draftAge}",
+      "restore": "Restaurer"
+    }
+  },
+  "expiration": {
+    "1hour": "1 heure",
+    "6hours": "6 heures",
+    "1day": "1 jour",
+    "1week": "1 semaine",
+    "1month": "1 mois"
+  },
+  "formats": {
+    "markdown": "Markdown",
+    "plain": "Texte brut",
+    "javascript": "JavaScript",
+    "typescript": "TypeScript",
+    "python": "Python",
+    "java": "Java",
+    "cpp": "C++",
+    "c": "C",
+    "csharp": "C#",
+    "php": "PHP",
+    "go": "Go",
+    "rust": "Rust",
+    "sql": "SQL",
+    "json": "JSON",
+    "yaml": "YAML",
+    "xml": "XML",
+    "html": "HTML",
+    "css": "CSS",
+    "bash": "Bash",
+    "bat": "BAT",
+    "powershell": "PowerShell"
+  },
+  "shareSuccess": {
+    "title": "Paste créé avec succès !",
+    "description": "Votre paste a été chiffré et est prêt à être partagé",
+    "shareUrl": "URL de partage",
+    "important": "Important :",
+    "passwordProtectedWarning": "Ce paste est protégé par un mot de passe. Le destinataire devra le saisir pour le déchiffrer.",
+    "urlWarning": "La clé de déchiffrement se trouve dans le fragment de l’URL (#k=...). Toute personne disposant de cette URL peut lire votre paste.",
+    "createAnother": "Créer un autre paste",
+    "viewPaste": "Voir le paste"
+  },
+  "viewPaste": {
+    "loadingPaste": "Chargement du paste...",
+    "decryptingPaste": "Déchiffrement du paste...",
+    "copyContent": "Copier le contenu",
+    "copyUrl": "Copier l’URL",
+    "createNew": "Créer un nouveau",
+    "passwordProtected": "Protégé par mot de passe",
+    "passwordPrompt": "Ce paste est protégé par un mot de passe. Saisissez-le pour déchiffrer et afficher le contenu.",
+    "decryptPaste": "Déchiffrer le paste",
+    "decrypting": "Déchiffrement...",
+    "views": "vues",
+    "zeroKnowledge": "Zéro connaissance",
+    "burnsAfterReading": "Détruit après lecture",
+    "neverExpires": "N’expire jamais",
+    "expired": "Expiré",
+    "daysRemaining": "{days}j {hours}h restantes",
+    "hoursRemaining": "{hours}h {minutes}min restantes",
+    "minutesRemaining": "{minutes}min restantes"
+  },
+  "errors": {
+    "pasteNotFound": "Paste introuvable",
+    "pasteBurned": "Paste détruit",
+    "pasteExpired": "Paste expiré",
+    "decryptionFailed": "Échec du déchiffrement",
+    "pasteNotFoundDesc": "Le paste que vous recherchez n’existe pas ou a été supprimé.",
+    "pasteBurnedDesc": "Ce paste était configuré pour être détruit après lecture et a déjà été consulté.",
+    "pasteExpiredDesc": "Ce paste a expiré et n’est plus disponible.",
+    "invalidFormat": "Format de paste invalide ou clé de déchiffrement manquante",
+    "decryptionError": "Impossible de déchiffrer le paste. Clé invalide ou données corrompues.",
+    "incorrectPassword": "Mot de passe incorrect ou données corrompues",
+    "createNewPaste": "Créer un nouveau paste"
+  },
+  "footer": {
+    "projectBy": "Projet par",
+    "repo": "Dépôt :"
+  },
+  "accessibility": {
+    "openMenu": "Ouvrir le menu",
+    "closeMenu": "Fermer le menu"
+  }
+}

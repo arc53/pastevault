@@ -1,5 +1,5 @@
 // Simple i18n implementation with localStorage support
-export const locales = ['en', 'es', 'zh', 'ru', 'ja'] as const
+export const locales = ['en', 'es', 'fr', 'zh', 'ru', 'ja'] as const
 export type Locale = typeof locales[number]
 
 export function getBrowserLocale(): Locale {
