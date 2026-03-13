@@ -1,6 +1,8 @@
-import { prisma } from './db'
+import { getPrisma } from './db'
 
 export async function cleanupExpiredPastes(): Promise<number> {
+  const prisma = getPrisma()
+
   const result = await prisma.paste.deleteMany({
     where: {
       OR: [

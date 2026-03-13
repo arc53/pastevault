@@ -122,7 +122,7 @@ export function Editor({
   className,
   height = '400px'
 }: EditorProps) {
-  const { theme, resolvedTheme } = useTheme()
+  const { resolvedTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const [monacoLoaded, setMonacoLoaded] = useState(false)

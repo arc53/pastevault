@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import type { Schema } from 'hast-util-sanitize'
 import { remark } from 'remark'
 import remarkGfm from 'remark-gfm'
 import remarkRehype from 'remark-rehype'
@@ -21,16 +22,18 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
     const processMarkdown = async () => {
       try {
         // Allow highlight.js classes through the sanitizer
-        const schema = structuredClone(defaultSchema)
-        ;(schema as any).attributes = (schema as any).attributes || {}
-        ;(schema as any).tagNames = [ ...((schema as any).tagNames || []), 'span' ]
-        ;(schema as any).attributes.code = [
-          ...(((schema as any).attributes.code) || []),
-          ['className', 'hljs', /^language-/]
+        const schema: Schema = structuredClone(defaultSchema)
+        const attributes = schema.attributes ?? {}
+
+        schema.attributes = attributes
+        schema.tagNames = [...(schema.tagNames ?? []), 'span']
+        attributes.code = [
+          ...(attributes.code ?? []),
+          ['className', 'hljs', /^language-/],
         ]
-        ;(schema as any).attributes.span = [
-          ...(((schema as any).attributes.span) || []),
-          ['className', /^hljs-/]
+        attributes.span = [
+          ...(attributes.span ?? []),
+          ['className', /^hljs-/],
         ]
 
         // Process markdown with remark/rehype

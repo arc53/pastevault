@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify'
-import { prisma } from '../lib/db'
+import { getPrisma } from '../lib/db'
 import { config } from '../lib/config'
 import { generateSlug, calculateExpiryDate, isExpired } from '../lib/utils'
 import { createPasteSchema, getPasteParamsSchema } from '../lib/validation'
@@ -9,6 +9,7 @@ export async function pastesRoute(fastify: FastifyInstance) {
   fastify.post<{
     Body: CreatePasteRequest
   }>('/pastes', async (request, reply) => {
+    const prisma = getPrisma()
     const body = createPasteSchema.parse(request.body)
 
     if (Buffer.from(body.ciphertext, 'base64').length > config.MAX_PASTE_SIZE_BYTES) {
@@ -51,6 +52,7 @@ export async function pastesRoute(fastify: FastifyInstance) {
   fastify.get<{
     Params: { slug: string }
   }>('/pastes/:slug', async (request, reply) => {
+    const prisma = getPrisma()
     const { slug } = getPasteParamsSchema.parse(request.params)
 
     try {

@@ -10,7 +10,7 @@ An open-source, E2EE pastebin with a VS Code-like editor
 
 ### A) One command (Node.js)
 
-Requirements: Node.js 18 or 20 and npm.
+Requirements: Node.js 20.19+, 22.13+, or 24+ and npm.
 
 ```bash
 npx pastevault up

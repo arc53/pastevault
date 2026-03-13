@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  turbopack: {},
+  turbopack: {
+    root: __dirname,
+  },
   webpack: (config, { isServer }) => {
     config.experiments = {
       ...config.experiments,

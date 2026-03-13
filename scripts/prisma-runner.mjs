@@ -6,19 +6,16 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const provider = process.env.DATABASE_PROVIDER || 'postgresql';
-
 // Use package root if running from NPM package, otherwise use current directory
 const packageRoot = process.env.PASTEVAULT_PACKAGE_ROOT || process.cwd();
-const schemaFile = provider === 'sqlite' 
-  ? join(packageRoot, 'prisma/schema.sqlite.prisma')
-  : join(packageRoot, 'prisma/schema.prisma');
+const configFile = join(packageRoot, 'prisma.config.ts');
 
 const command = process.argv.slice(2).join(' ');
 
 try {
-  execSync(`npx prisma ${command} --schema="${schemaFile}"`, {
+  execSync(`npx prisma ${command} --config="${configFile}"`, {
     stdio: 'inherit',
+    cwd: packageRoot,
     env: process.env
   });
 } catch (error) {

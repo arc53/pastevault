@@ -4,10 +4,14 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { NextIntlClientProvider } from 'next-intl'
 import { Locale, getBrowserLocale, setLocale as setStoredLocale, getMessages } from '@/lib/i18n'
 
+type Messages = {
+  [key: string]: Messages | string
+}
+
 interface I18nContextType {
   locale: Locale
   setLocale: (locale: Locale) => void
-  messages: Record<string, any>
+  messages: Messages
   isLoading: boolean
 }
 
@@ -27,7 +31,7 @@ interface I18nProviderProps {
 
 export function I18nProvider({ children }: I18nProviderProps) {
   const [locale, setCurrentLocale] = useState<Locale>('en')
-  const [messages, setMessages] = useState<Record<string, any>>({})
+  const [messages, setMessages] = useState<Messages>({})
   const [isLoading, setIsLoading] = useState(true)
 
   // Load messages for a specific locale

@@ -1,19 +1,21 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander'
+import { exec as execCallback } from 'child_process'
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import rateLimit from '@fastify/rate-limit'
+import packageInfo from '../package.json'
 import { config } from './lib/config'
 import { pastesRoute } from './routes/pastes'
 import { cleanupExpiredPastes } from './lib/cleanup'
 import * as cron from 'node-cron'
 import next from 'next'
-import { parse } from 'url'
 import path from 'path'
+import { promisify } from 'util'
 import { z } from 'zod'
 
-const packageInfo = require('../package.json')
+const execAsync = promisify(execCallback)
 
 const cliArgsSchema = z.object({
   port: z.number().default(3001),
@@ -151,10 +153,6 @@ async function startServer(args: CliArgs) {
     // Run database migrations if not disabled
     if (!args.noMigrations) {
       try {
-        const { exec } = require('child_process')
-        const { promisify } = require('util')
-        const execAsync = promisify(exec)
-        
         fastify.log.info('Running database migrations...')
         await execAsync('node scripts/prisma-runner.mjs migrate deploy', {
           cwd: __dirname + '/..'
