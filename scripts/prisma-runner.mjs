@@ -8,7 +8,7 @@ dotenv.config();
 
 // Use package root if running from NPM package, otherwise use current directory
 const packageRoot = process.env.PASTEVAULT_PACKAGE_ROOT || process.cwd();
-const configFile = join(packageRoot, 'prisma.config.ts');
+const configFile = join(packageRoot, 'prisma.config.js');
 
 const command = process.argv.slice(2).join(' ');
 

@@ -8,6 +8,7 @@ RUN apt-get update -y && apt-get install -y openssl
 
 # Copy package files and install dependencies
 COPY package*.json ./
+COPY prisma.config.js ./
 # Ensure prisma schema is present for postinstall
 COPY prisma ./prisma/
 # Select Postgres schema inside container to keep local dev (sqlite) unaffected
@@ -36,6 +37,7 @@ RUN apt-get update -y && apt-get install -y openssl
 
 # Copy package files and install production dependencies
 COPY package*.json ./
+COPY prisma.config.js ./
 # Ensure prisma schema is present for postinstall
 COPY prisma ./prisma
 # Select Postgres schema inside container to keep local dev (sqlite) unaffected

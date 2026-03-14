@@ -13,7 +13,7 @@
     "frontend/public/",
     "frontend/next.config.js",
     "frontend/package.json",
-    "prisma.config.ts",
+    "prisma.config.js",
     "prisma/",
     "scripts/"
   ],
@@ -29,7 +29,7 @@
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build:cli",
-    "postinstall": "prisma generate --config prisma.config.ts"
+    "postinstall": "prisma generate --config prisma.config.js"
   },
   "repository": {
     "type": "git",
