@@ -1,22 +1,23 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander'
-import { exec as execCallback } from 'child_process'
+import { exec as execCallback } from 'node:child_process'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import rateLimit from '@fastify/rate-limit'
-import packageInfo from '../package.json'
-import { config } from './lib/config'
-import { pastesRoute } from './routes/pastes'
-import { fileSharesRoute } from './routes/file-shares'
-import { cleanupExpiredPastes } from './lib/cleanup'
 import * as cron from 'node-cron'
-import next from 'next'
-import path from 'path'
-import { promisify } from 'util'
 import { z } from 'zod'
 
 const execAsync = promisify(execCallback)
+const packageRoot = fileURLToPath(new URL('..', import.meta.url))
+const frontendDir = fileURLToPath(new URL('../frontend', import.meta.url))
+const packageInfo = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8')
+) as { version: string }
 
 const cliArgsSchema = z.object({
   port: z.number().default(3001),
@@ -68,24 +69,43 @@ program
 
 async function startServer(args: CliArgs) {
   try {
+    const resolvedHost = args.host === '0.0.0.0' ? 'localhost' : args.host
+
     // Set environment variables from CLI args
     if (args.databaseUrl) {
       process.env.DATABASE_URL = args.databaseUrl
-    } else {
-      // Set default DATABASE_URL if not provided
-      process.env.DATABASE_URL = config.DATABASE_URL
     }
-    
-    // Ensure DATABASE_PROVIDER is set
-    process.env.DATABASE_PROVIDER = config.DATABASE_PROVIDER
-    
+
     if (args.dataDir) {
       process.env.DATA_DIR = args.dataDir
     }
+
     process.env.PORT = args.port.toString()
-    
-    // Set CORS to allow all origins for better UX in CLI mode
-    process.env.CORS_ORIGIN = '*'
+    process.env.CORS_ORIGIN = process.env.CORS_ORIGIN || `http://${resolvedHost}:${args.port}`
+    process.env.BETTER_AUTH_URL =
+      process.env.BETTER_AUTH_URL || `http://${resolvedHost}:${args.port}/api/auth`
+
+    const [
+      { config },
+      { authRoute },
+      { accountRoute },
+      { pastesRoute },
+      { fileSharesRoute },
+      { cleanupExpiredPastes },
+    ] = await Promise.all([
+      import('./lib/config.js'),
+      import('./routes/auth.js'),
+      import('./routes/account.js'),
+      import('./routes/pastes.js'),
+      import('./routes/file-shares.js'),
+      import('./lib/cleanup.js'),
+    ])
+
+    if (!process.env.DATABASE_URL) {
+      process.env.DATABASE_URL = config.DATABASE_URL
+    }
+
+    process.env.DATABASE_PROVIDER = process.env.DATABASE_PROVIDER || config.DATABASE_PROVIDER
 
     const fastify = Fastify({
       logger: {
@@ -96,7 +116,7 @@ async function startServer(args: CliArgs) {
     // Register CORS with unrestricted access for CLI
     await fastify.register(cors, {
       origin: true,
-      credentials: false,
+      credentials: true,
       methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
       allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'Referer'],
       exposedHeaders: ['*'],
@@ -111,6 +131,8 @@ async function startServer(args: CliArgs) {
     })
 
     // Register API routes
+    await fastify.register(authRoute, { prefix: '/api' })
+    await fastify.register(accountRoute, { prefix: '/api' })
     await fastify.register(pastesRoute, { prefix: '/api' })
     await fastify.register(fileSharesRoute, { prefix: '/api' })
 
@@ -124,10 +146,18 @@ async function startServer(args: CliArgs) {
     })
 
     // Setup Next.js
-    const frontendDir = path.join(__dirname, '..', 'frontend')
+    const nextModule = await import('next')
+    const createNext = nextModule.default as unknown as (options: {
+      dev: boolean
+      dir: string
+      quiet?: boolean
+    }) => {
+      getRequestHandler: () => (req: unknown, res: unknown) => Promise<void>
+      prepare: () => Promise<void>
+    }
     fastify.log.info(`Looking for Next.js build in: ${frontendDir}`)
     
-    const nextApp = next({ 
+    const nextApp = createNext({ 
       dev: false, 
       dir: frontendDir,
       quiet: args.logLevel !== 'debug' && args.logLevel !== 'trace'
@@ -157,7 +187,7 @@ async function startServer(args: CliArgs) {
       try {
         fastify.log.info('Running database migrations...')
         await execAsync('node scripts/prisma-runner.mjs migrate deploy', {
-          cwd: __dirname + '/..'
+          cwd: packageRoot,
         })
         fastify.log.info('Database migrations completed')
       } catch (error) {
@@ -207,7 +237,7 @@ async function startServer(args: CliArgs) {
 }
 
 // Run the CLI if this file is executed directly
-if (require.main === module) {
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   program.parse()
 }
 

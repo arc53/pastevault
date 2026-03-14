@@ -1,4 +1,5 @@
 import {
+  AccountShare,
   CapabilitiesResponse,
   CompleteFileShareRequest,
   CreateFileShareRequest,
@@ -7,9 +8,20 @@ import {
   CreatePasteResponse,
   GetFileShareResponse,
   GetPasteResponse,
+  ListAccountSharesResponse,
 } from '@/types'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
+function getApiBaseUrl() {
+  if (typeof window !== 'undefined') {
+    if (process.env.NEXT_PUBLIC_API_URL) {
+      return process.env.NEXT_PUBLIC_API_URL
+    }
+
+    return `${window.location.origin}/api`
+  }
+
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'
+}
 
 class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -22,9 +34,10 @@ async function apiRequest<T>(
   endpoint: string,
   options?: RequestInit
 ): Promise<T> {
-  const url = `${API_BASE_URL}${endpoint}`
+  const url = `${getApiBaseUrl()}${endpoint}`
   
   const response = await fetch(url, {
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...options?.headers,
@@ -53,8 +66,11 @@ async function rawRequest(
   endpoint: string,
   options?: RequestInit
 ): Promise<Response> {
-  const url = `${API_BASE_URL}${endpoint}`
-  const response = await fetch(url, options)
+  const url = `${getApiBaseUrl()}${endpoint}`
+  const response = await fetch(url, {
+    credentials: 'include',
+    ...options,
+  })
 
   if (!response.ok) {
     const errorText = await response.text()
@@ -126,6 +142,30 @@ export const api = {
 
   async getFileShare(slug: string): Promise<GetFileShareResponse> {
     return apiRequest(`/file-shares/${slug}`)
+  },
+
+  async getAccountShares(filters?: {
+    share_type?: AccountShare['share_type']
+    status?: AccountShare['status']
+  }): Promise<ListAccountSharesResponse> {
+    const query = new URLSearchParams()
+
+    if (filters?.share_type) {
+      query.set('share_type', filters.share_type)
+    }
+
+    if (filters?.status) {
+      query.set('status', filters.status)
+    }
+
+    const suffix = query.toString() ? `?${query.toString()}` : ''
+    return apiRequest(`/account/shares${suffix}`)
+  },
+
+  async deleteAccountShare(shareId: string): Promise<{ share: AccountShare }> {
+    return apiRequest(`/account/shares/${shareId}`, {
+      method: 'DELETE',
+    })
   },
 
   async downloadFileShareChunk(slug: string, fileId: string, chunkIndex: number) {

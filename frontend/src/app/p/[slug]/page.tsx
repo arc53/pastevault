@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { MarkdownRenderer } from '@/components/markdown-renderer'
 import { useGetPaste } from '@/hooks/usePaste'
-import { ThemeToggle } from '@/components/theme-toggle'
+import { AccountLink } from '@/components/account-link'
 import { CopyButton } from '@/components/copy-button'
 import {
   decryptPaste,
@@ -330,6 +330,9 @@ export default function ViewPastePage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <div className="hidden md:block">
+              <AccountLink compact />
+            </div>
             <div className="hidden items-center gap-2 md:flex xl:hidden">
               <CopyButton
                 getValue={() => content.body}
@@ -517,7 +520,6 @@ export default function ViewPastePage() {
         </div>
       </div>
 
-      <ThemeToggle />
     </div>
   )
 }

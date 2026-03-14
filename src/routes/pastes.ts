@@ -1,19 +1,28 @@
 import { FastifyInstance } from 'fastify'
-import { getPrisma } from '../lib/db'
-import { config } from '../lib/config'
-import { ensurePasteSchema } from '../lib/pastes-db'
-import { generateSlug, calculateExpiryDate, isExpired } from '../lib/utils'
-import { createPasteSchema, getPasteParamsSchema } from '../lib/validation'
-import { CreatePasteRequest, CreatePasteResponse, GetPasteResponse } from '../types'
+import {
+  createOwnedPasteRecord,
+  recordOwnedShareView,
+  markOwnedShareStatus,
+} from '../lib/account-shares.js'
+import { getOptionalAuthSession } from '../lib/auth-session.js'
+import { ensureAccountSystemSchema } from '../lib/account-schema.js'
+import { config } from '../lib/config.js'
+import { getPrisma } from '../lib/db.js'
+import { ensurePasteSchema } from '../lib/pastes-db.js'
+import { generateSlug, calculateExpiryDate, isExpired } from '../lib/utils.js'
+import { createPasteSchema, getPasteParamsSchema } from '../lib/validation.js'
+import { CreatePasteRequest, CreatePasteResponse, GetPasteResponse } from '../types/index.js'
 
 export async function pastesRoute(fastify: FastifyInstance) {
   await ensurePasteSchema()
+  await ensureAccountSystemSchema()
 
   fastify.post<{
     Body: CreatePasteRequest
   }>('/pastes', async (request, reply) => {
     const prisma = getPrisma()
     const body = createPasteSchema.parse(request.body)
+    const session = await getOptionalAuthSession(request)
 
     if (Buffer.from(body.ciphertext, 'base64').length > config.MAX_PASTE_SIZE_BYTES) {
       return reply.code(413).send({
@@ -45,6 +54,21 @@ export async function pastesRoute(fastify: FastifyInstance) {
         expires_at: paste.expires_at,
       }
 
+      if (session) {
+        try {
+          await createOwnedPasteRecord({
+            user_id: session.user.id,
+            resource_id: paste.id,
+            slug: paste.slug,
+            expires_at: paste.expires_at,
+            burn_after_read: paste.burn_after_read,
+            is_password_protected: Boolean(paste.salt),
+          })
+        } catch (error: unknown) {
+          fastify.log.error({ err: error, pasteId: paste.id }, 'Failed to record owned paste')
+        }
+      }
+
       return reply.code(201).send(response)
     } catch (error: unknown) {
       fastify.log.error({ err: error }, 'Failed to create paste')
@@ -72,6 +96,9 @@ export async function pastesRoute(fastify: FastifyInstance) {
       }
 
       if (paste.expires_at && isExpired(paste.expires_at)) {
+        await markOwnedShareStatus('paste', paste.id, 'expired').catch((error: unknown) => {
+          fastify.log.error({ err: error, pasteId: paste.id }, 'Failed to mark paste as expired')
+        })
         await prisma.paste.delete({ where: { id: paste.id } })
         return reply.code(410).send({ error: 'Paste has expired' })
       }
@@ -87,6 +114,14 @@ export async function pastesRoute(fastify: FastifyInstance) {
           view_count: { increment: 1 },
           ...(shouldBurn && { is_burned: true }),
         },
+      })
+
+      await recordOwnedShareView({
+        share_type: 'paste',
+        resource_id: paste.id,
+        next_status: shouldBurn ? 'burned' : undefined,
+      }).catch((error: unknown) => {
+        fastify.log.error({ err: error, pasteId: paste.id }, 'Failed to update owned paste metrics')
       })
 
       const response: GetPasteResponse = {

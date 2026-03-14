@@ -1,10 +1,12 @@
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import rateLimit from '@fastify/rate-limit'
-import { config } from './lib/config'
-import { pastesRoute } from './routes/pastes'
-import { fileSharesRoute } from './routes/file-shares'
-import { cleanupExpiredPastes } from './lib/cleanup'
+import { cleanupExpiredPastes } from './lib/cleanup.js'
+import { config } from './lib/config.js'
+import { accountRoute } from './routes/account.js'
+import { authRoute } from './routes/auth.js'
+import { fileSharesRoute } from './routes/file-shares.js'
+import { pastesRoute } from './routes/pastes.js'
 import * as cron from 'node-cron'
 
 const fastify = Fastify({
@@ -26,6 +28,8 @@ async function start() {
       timeWindow: config.RATE_LIMIT_WINDOW_MS,
     })
 
+    await fastify.register(authRoute, { prefix: '/api' })
+    await fastify.register(accountRoute, { prefix: '/api' })
     await fastify.register(pastesRoute, { prefix: '/api' })
     await fastify.register(fileSharesRoute, { prefix: '/api' })
 

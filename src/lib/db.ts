@@ -1,7 +1,7 @@
 import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { PrismaClient } from '@prisma/client'
-import { config } from './config'
+import { config } from './config.js'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined

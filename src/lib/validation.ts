@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { config } from './config'
+import { config } from './config.js'
 
 export const createPasteSchema = z.object({
   ciphertext: z.string().min(1),
@@ -39,4 +39,23 @@ export const fileShareChunkParamsSchema = z.object({
   slug: z.string().min(1),
   fileId: fileIdSchema,
   chunkIndex: z.coerce.number().int().min(0).max(1_000_000),
+})
+
+export const ownedShareTypeSchema = z.enum(['paste', 'file_share'])
+export const ownedShareStatusSchema = z.enum([
+  'uploading',
+  'active',
+  'burned',
+  'expired',
+  'deleted',
+  'abandoned',
+])
+
+export const accountSharesQuerySchema = z.object({
+  share_type: ownedShareTypeSchema.optional(),
+  status: ownedShareStatusSchema.optional(),
+})
+
+export const accountShareParamsSchema = z.object({
+  shareId: z.string().min(1),
 })

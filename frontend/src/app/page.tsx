@@ -21,7 +21,7 @@ import { Editor } from '@/components/editor'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { ThemeToggle } from '@/components/theme-toggle'
+import { AccountLink } from '@/components/account-link'
 import { useCreateFileShare, useCreatePaste, useGetCapabilities } from '@/hooks/usePaste'
 import { api } from '@/lib/api'
 import {
@@ -533,6 +533,7 @@ export default function CreatePastePage() {
               <h1 className="text-xl font-semibold sm:text-2xl">{shareTitle}</h1>
             </div>
             <div className="flex items-center gap-2">
+              <AccountLink compact />
               <Button variant="outline" onClick={createNew}>
                 {createAnotherLabel}
               </Button>
@@ -613,7 +614,6 @@ export default function CreatePastePage() {
           </div>
         </div>
 
-        <ThemeToggle />
       </div>
     )
   }
@@ -636,6 +636,9 @@ export default function CreatePastePage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <div className="hidden sm:block">
+              <AccountLink compact />
+            </div>
             <div className="hidden items-center gap-2 lg:flex xl:hidden">
               <span className="meta-chip">
                 <strong>{format.toUpperCase()}</strong>
@@ -1028,7 +1031,6 @@ export default function CreatePastePage() {
         </div>
       </div>
 
-      <ThemeToggle />
     </div>
   )
 }

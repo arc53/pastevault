@@ -1,5 +1,12 @@
 import { FastifyInstance } from 'fastify'
-import { config } from '../lib/config'
+import {
+  createOwnedFileShareRecord,
+  markOwnedShareStatus,
+  recordOwnedShareView,
+} from '../lib/account-shares.js'
+import { ensureAccountSystemSchema } from '../lib/account-schema.js'
+import { getOptionalAuthSession } from '../lib/auth-session.js'
+import { config } from '../lib/config.js'
 import {
   completeFileShareRecord,
   createFileShareRecord,
@@ -7,27 +14,27 @@ import {
   ensureFileShareSchema,
   getFileShareRecordBySlug,
   incrementFileShareViewCount,
-} from '../lib/file-shares-db'
+} from '../lib/file-shares-db.js'
 import {
   deleteFileShareObjects,
   downloadFileShareChunk,
   isFileSharingConfigured,
   uploadFileShareChunk,
-} from '../lib/file-storage'
-import { calculateExpiryDate, generateSlug, isExpired } from '../lib/utils'
+} from '../lib/file-storage.js'
+import { calculateExpiryDate, generateSlug, isExpired } from '../lib/utils.js'
 import {
   completeFileShareSchema,
   createFileShareSchema,
   fileShareChunkParamsSchema,
   getFileShareParamsSchema,
-} from '../lib/validation'
+} from '../lib/validation.js'
 import {
   CapabilitiesResponse,
   CompleteFileShareRequest,
   CreateFileShareRequest,
   CreateFileShareResponse,
   GetFileShareResponse,
-} from '../types'
+} from '../types/index.js'
 
 const XCHACHA20POLY1305_TAG_BYTES = 16
 
@@ -38,6 +45,7 @@ async function purgeFileShare(slug: string, id: string) {
 
 export async function fileSharesRoute(fastify: FastifyInstance) {
   await ensureFileShareSchema()
+  await ensureAccountSystemSchema()
   const maxEncryptedChunkSizeBytes =
     config.FILE_CHUNK_SIZE_BYTES + XCHACHA20POLY1305_TAG_BYTES
 
@@ -70,13 +78,14 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
     }
 
     const body = createFileShareSchema.parse(request.body)
+    const session = await getOptionalAuthSession(request)
     const slug = body.slug || generateSlug()
     const expiresAt = body.expires_in_hours
       ? calculateExpiryDate(body.expires_in_hours)
       : null
 
     try {
-      await createFileShareRecord({
+      const shareId = await createFileShareRecord({
         slug,
         expires_at: expiresAt,
         salt: body.salt,
@@ -88,6 +97,22 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
       const response: CreateFileShareResponse = {
         slug,
         expires_at: expiresAt,
+      }
+
+      if (session) {
+        try {
+          await createOwnedFileShareRecord({
+            user_id: session.user.id,
+            resource_id: shareId,
+            slug,
+            expires_at: expiresAt,
+            file_count: body.file_count,
+            total_size_bytes: body.total_size_bytes,
+            is_password_protected: Boolean(body.salt),
+          })
+        } catch (error: unknown) {
+          fastify.log.error({ err: error, shareId }, 'Failed to record owned file share')
+        }
       }
 
       return reply.code(201).send(response)
@@ -122,6 +147,11 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
       }
 
       if (share.expires_at && isExpired(share.expires_at)) {
+        await markOwnedShareStatus('file_share', share.id, 'expired').catch(
+          (error: unknown) => {
+            fastify.log.error({ err: error, shareId: share.id }, 'Failed to mark file share as expired')
+          }
+        )
         await purgeFileShare(share.slug, share.id)
         return reply.code(410).send({ error: 'File share has expired' })
       }
@@ -165,6 +195,9 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
     }
 
     if (share.expires_at && isExpired(share.expires_at)) {
+      await markOwnedShareStatus('file_share', share.id, 'expired').catch((error: unknown) => {
+        fastify.log.error({ err: error, shareId: share.id }, 'Failed to mark file share as expired')
+      })
       await purgeFileShare(share.slug, share.id)
       return reply.code(410).send({ error: 'File share has expired' })
     }
@@ -184,6 +217,10 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
         return reply.code(409).send({ error: 'File share could not be completed' })
       }
 
+      await markOwnedShareStatus('file_share', share.id, 'active').catch((error: unknown) => {
+        fastify.log.error({ err: error, shareId: share.id }, 'Failed to activate owned file share')
+      })
+
       return reply.send({ slug })
     } catch (error: unknown) {
       fastify.log.error({ err: error }, 'Failed to complete file share')
@@ -202,12 +239,21 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
     }
 
     if (share.expires_at && isExpired(share.expires_at)) {
+      await markOwnedShareStatus('file_share', share.id, 'expired').catch((error: unknown) => {
+        fastify.log.error({ err: error, shareId: share.id }, 'Failed to mark file share as expired')
+      })
       await purgeFileShare(share.slug, share.id)
       return reply.code(410).send({ error: 'File share has expired' })
     }
 
     try {
       await incrementFileShareViewCount(share.id)
+      await recordOwnedShareView({
+        share_type: 'file_share',
+        resource_id: share.id,
+      }).catch((error: unknown) => {
+        fastify.log.error({ err: error, shareId: share.id }, 'Failed to update owned file share metrics')
+      })
 
       const response: GetFileShareResponse = {
         metadata: {
@@ -251,6 +297,9 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
     }
 
     if (share.expires_at && isExpired(share.expires_at)) {
+      await markOwnedShareStatus('file_share', share.id, 'expired').catch((error: unknown) => {
+        fastify.log.error({ err: error, shareId: share.id }, 'Failed to mark file share as expired')
+      })
       await purgeFileShare(share.slug, share.id)
       return reply.code(410).send({ error: 'File share has expired' })
     }

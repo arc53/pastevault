@@ -88,6 +88,38 @@ export interface CapabilitiesResponse {
   file_shares: FileShareCapabilities
 }
 
+export type OwnedShareType = 'paste' | 'file_share'
+
+export type OwnedShareStatus =
+  | 'uploading'
+  | 'active'
+  | 'burned'
+  | 'expired'
+  | 'deleted'
+  | 'abandoned'
+
+export interface AccountShare {
+  id: string
+  share_type: OwnedShareType
+  slug: string
+  status: OwnedShareStatus
+  created_at: string
+  expires_at: string | null
+  deleted_at: string | null
+  first_viewed_at: string | null
+  last_viewed_at: string | null
+  view_count: number
+  burn_after_read: boolean
+  file_count: number | null
+  total_size_bytes: string | null
+  is_password_protected: boolean
+  can_delete: boolean
+}
+
+export interface ListAccountSharesResponse {
+  shares: AccountShare[]
+}
+
 export interface EncryptionResult {
   ciphertext: string
   nonce: string

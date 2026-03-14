@@ -1,3 +1,4 @@
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,36 +8,129 @@ datasource db {
 }
 
 model Paste {
-  id             String   @id @default(cuid())
-  slug           String   @unique
-  ciphertext     String
-  nonce          String
-  salt           String?
-  kdf_params     String?
-  created_at     DateTime @default(now())
-  expires_at     DateTime?
-  burn_after_read Boolean  @default(false)
-  is_burned      Boolean  @default(false)
-  view_count     Int      @default(0)
+  id              String    @id @default(cuid())
+  slug            String    @unique
+  ciphertext      String
+  nonce           String
+  salt            String?
+  kdf_params      String?
+  created_at      DateTime  @default(now())
+  expires_at      DateTime?
+  burn_after_read Boolean   @default(false)
+  is_burned       Boolean   @default(false)
+  view_count      Int       @default(0)
 
   @@index([expires_at])
   @@index([slug])
 }
 
 model FileShare {
-  id                  String   @id @default(cuid())
-  slug                String   @unique
+  id                  String    @id @default(cuid())
+  slug                String    @unique
   manifest_ciphertext String?
   manifest_nonce      String?
   salt                String?
   kdf_params          String?
-  created_at          DateTime @default(now())
+  created_at          DateTime  @default(now())
   expires_at          DateTime?
-  is_complete         Boolean  @default(false)
-  view_count          Int      @default(0)
-  file_count          Int      @default(0)
-  total_size_bytes    String   @default("0")
+  is_complete         Boolean   @default(false)
+  view_count          Int       @default(0)
+  file_count          Int       @default(0)
+  total_size_bytes    String    @default("0")
 
   @@index([expires_at])
   @@index([slug])
+}
+
+model User {
+  id              String    @id
+  name            String
+  email           String
+  emailVerified   Boolean   @default(false)
+  image           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  username        String?
+  displayUsername String?
+  sessions        Session[]
+  accounts        Account[]
+  ownedShares     OwnedShare[]
+
+  @@unique([email])
+  @@unique([username])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+model OwnedShare {
+  id                    String    @id @default(cuid())
+  user_id               String
+  share_type            String
+  resource_id           String
+  slug                  String
+  status                String
+  created_at            DateTime  @default(now())
+  expires_at            DateTime?
+  deleted_at            DateTime?
+  first_viewed_at       DateTime?
+  last_viewed_at        DateTime?
+  view_count            Int       @default(0)
+  burn_after_read       Boolean   @default(false)
+  file_count            Int?
+  total_size_bytes      String?
+  is_password_protected Boolean   @default(false)
+  user                  User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([share_type, resource_id])
+  @@index([share_type, resource_id])
+  @@index([user_id, created_at])
+  @@index([user_id, share_type])
+  @@index([user_id, status])
 }

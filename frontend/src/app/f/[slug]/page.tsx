@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { CopyButton } from '@/components/copy-button'
 import { MarkdownRenderer } from '@/components/markdown-renderer'
-import { ThemeToggle } from '@/components/theme-toggle'
+import { AccountLink } from '@/components/account-link'
 import { useGetFileShare } from '@/hooks/usePaste'
 import { api } from '@/lib/api'
 import {
@@ -469,6 +469,9 @@ export default function ViewFileSharePage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <div className="hidden md:block">
+              <AccountLink compact />
+            </div>
             <div className="hidden items-center gap-2 md:flex xl:hidden">
               <CopyButton
                 getValue={() => window.location.href}
@@ -679,7 +682,6 @@ export default function ViewFileSharePage() {
         </div>
       </div>
 
-      <ThemeToggle />
     </div>
   )
 }
