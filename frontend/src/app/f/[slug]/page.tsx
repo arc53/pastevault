@@ -70,10 +70,6 @@ export default function ViewFileSharePage() {
   const [downloadStatus, setDownloadStatus] = useState<Record<string, string>>({})
 
   const { data: share, isLoading, error } = useGetFileShare(slug)
-  const supportsSavePicker =
-    typeof window !== 'undefined' &&
-    typeof (window as SavePickerWindow).showSaveFilePicker === 'function'
-
   useEffect(() => {
     if (!share) {
       return
@@ -677,11 +673,6 @@ export default function ViewFileSharePage() {
                     {share.salt ? tFiles('passwordLocked') : tFiles('zeroKnowledge')}
                   </span>
                 </div>
-                {!supportsSavePicker && (
-                  <div className="rounded-sm border border-amber-500/25 bg-amber-500/10 p-3 text-amber-700 dark:text-amber-200">
-                    {tFiles('browserDownloadWarning')}
-                  </div>
-                )}
               </div>
             </div>
           </aside>
