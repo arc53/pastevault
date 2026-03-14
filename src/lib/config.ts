@@ -12,6 +12,9 @@ const defaultNodeEnv =
 const configSchema = z.object({
   DATABASE_URL: z.string().default('file:./pastevault.db'),
   DATABASE_PROVIDER: z.enum(['postgresql', 'sqlite']).default('sqlite'),
+  DATABASE_SSL_MODE: z
+    .enum(['disable', 'allow', 'prefer', 'require', 'verify-ca', 'verify-full'])
+    .optional(),
   DATA_DIR: z
     .string()
     .default(path.resolve(process.cwd(), 'data'))

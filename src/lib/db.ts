@@ -8,14 +8,56 @@ const globalForPrisma = globalThis as unknown as {
   prismaCacheKey: string | undefined
 }
 
+function resolveDatabaseSslMode(url: URL) {
+  const configuredSslMode = process.env.DATABASE_SSL_MODE || config.DATABASE_SSL_MODE
+  if (configuredSslMode) {
+    return configuredSslMode
+  }
+
+  if (url.hostname.toLowerCase().includes('neon.tech')) {
+    return 'require'
+  }
+
+  return undefined
+}
+
+function normalizeDatabaseUrl(provider: 'postgresql' | 'sqlite', url: string) {
+  if (provider !== 'postgresql') {
+    return url
+  }
+
+  let parsedUrl: URL
+
+  try {
+    parsedUrl = new URL(url)
+  } catch {
+    return url
+  }
+
+  if (parsedUrl.searchParams.has('sslmode')) {
+    return parsedUrl.toString()
+  }
+
+  const sslMode = resolveDatabaseSslMode(parsedUrl)
+  if (!sslMode) {
+    return url
+  }
+
+  parsedUrl.searchParams.set('sslmode', sslMode)
+  return parsedUrl.toString()
+}
+
 function resolveDatabaseProvider() {
   return process.env.DATABASE_PROVIDER === 'postgresql'
     ? 'postgresql'
     : config.DATABASE_PROVIDER
 }
 
-function resolveDatabaseUrl() {
-  return process.env.DATABASE_URL || config.DATABASE_URL
+export function resolveDatabaseUrl() {
+  const provider = resolveDatabaseProvider()
+  const url = process.env.DATABASE_URL || config.DATABASE_URL
+
+  return normalizeDatabaseUrl(provider, url)
 }
 
 function createPrismaClient() {
