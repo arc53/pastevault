@@ -1,32 +1,31 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { useTranslations } from 'next-intl'
+import {
+  AlertCircle,
+  Eye,
+  Flame,
+  Loader2,
+  Lock,
+  Menu,
+  X,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { MarkdownRenderer } from '@/components/markdown-renderer'
 import { useGetPaste } from '@/hooks/usePaste'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { CopyButton } from '@/components/copy-button'
-import { 
-  decryptPaste, 
-  decryptPasteWithPassword, 
-  extractKeyFromFragment 
+import {
+  decryptPaste,
+  decryptPasteWithPassword,
+  extractKeyFromFragment,
 } from '@/lib/crypto'
 import { PasteContent } from '@/types'
-import { 
-  Lock, 
-  Eye, 
-  Flame, 
-  AlertCircle,
-  Loader2,
-  Menu,
-  X 
-} from 'lucide-react'
-import Link from 'next/link'
-import { useTranslations } from 'next-intl'
 
 export default function ViewPastePage() {
   const t = useTranslations('common')
@@ -54,33 +53,30 @@ export default function ViewPastePage() {
       setDecryptionError('')
 
       try {
-        // Check if it's a zero-knowledge link with key in fragment
         const fragmentKey = extractKeyFromFragment()
-        
+
         if (fragmentKey && !paste.salt) {
-          // Zero-knowledge mode
           const keyBytes = new Uint8Array(
             atob(fragmentKey.replace(/-/g, '+').replace(/_/g, '/'))
               .split('')
-              .map(c => c.charCodeAt(0))
+              .map((character) => character.charCodeAt(0))
           )
-          
+
           const decryptedContent = await decryptPaste(
             paste.ciphertext,
             paste.nonce,
             keyBytes,
             paste.metadata.slug
           )
-          
+
           setContent(decryptedContent)
         } else if (paste.salt && paste.kdf_params) {
-          // Password-protected mode
           setShowPasswordPrompt(true)
         } else {
           setDecryptionError('Invalid paste format or missing decryption key')
         }
-      } catch (error) {
-        console.error('Decryption failed:', error)
+      } catch (decryptError) {
+        console.error('Decryption failed:', decryptError)
         setDecryptionError('Failed to decrypt paste. Invalid key or corrupted data.')
       } finally {
         setIsDecrypting(false)
@@ -90,17 +86,20 @@ export default function ViewPastePage() {
     attemptDecryption()
   }, [paste])
 
-  // Close mobile menu on Escape and lock body scroll when open
   useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setMobileMenuOpen(false)
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMobileMenuOpen(false)
+      }
     }
+
     if (mobileMenuOpen) {
       document.body.classList.add('overflow-hidden')
       window.addEventListener('keydown', onKeyDown)
     } else {
       document.body.classList.remove('overflow-hidden')
     }
+
     return () => {
       document.body.classList.remove('overflow-hidden')
       window.removeEventListener('keydown', onKeyDown)
@@ -122,48 +121,72 @@ export default function ViewPastePage() {
         password,
         paste.metadata.slug
       )
-      
+
       setContent(decryptedContent)
       setShowPasswordPrompt(false)
-    } catch (error) {
-      console.error('Password decryption failed:', error)
+    } catch (decryptError) {
+      console.error('Password decryption failed:', decryptError)
       setDecryptionError('Incorrect password or corrupted data')
     } finally {
       setIsDecrypting(false)
     }
   }
 
-
-
-
   const getTimeRemaining = (expiresAt: string | null) => {
     if (!expiresAt) return tView('neverExpires')
-    
+
     const now = new Date().getTime()
     const expiry = new Date(expiresAt).getTime()
     const diff = expiry - now
-    
+
     if (diff <= 0) return tView('expired')
-    
+
     const days = Math.floor(diff / (1000 * 60 * 60 * 24))
     const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
-    
+
     if (days > 0) return tView('daysRemaining', { days, hours })
     if (hours > 0) return tView('hoursRemaining', { hours, minutes })
     return tView('minutesRemaining', { minutes })
   }
 
-  if (isLoading) {
-    return (
-      <div className="container mx-auto py-8 px-4 max-w-4xl">
-        <Card>
-          <CardContent className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin" />
-            <span className="ml-2">{tView('loadingPaste')}</span>
-          </CardContent>
-        </Card>
+  const renderCenteredState = (
+    title: string,
+    description?: string,
+    actionLabel?: string,
+    action?: () => void,
+    icon?: ReactNode
+  ) => (
+    <div className="app-frame py-8">
+      <div className="mx-auto max-w-2xl tool-panel">
+        <div className="tool-panel-header">
+          <div className="min-w-0">
+            <p className="tool-label">{slug}</p>
+            <h1 className="text-lg font-semibold">{title}</h1>
+          </div>
+        </div>
+        <div className="tool-panel-body space-y-4">
+          <div className="flex items-center gap-3 text-sm text-muted-foreground">
+            {icon}
+            <span>{description}</span>
+          </div>
+          {actionLabel && action && (
+            <Button onClick={action}>
+              {actionLabel}
+            </Button>
+          )}
+        </div>
       </div>
+    </div>
+  )
+
+  if (isLoading) {
+    return renderCenteredState(
+      tView('loadingPaste'),
+      tView('loadingPaste'),
+      undefined,
+      undefined,
+      <Loader2 className="h-4 w-4 animate-spin" />
     )
   }
 
@@ -172,121 +195,103 @@ export default function ViewPastePage() {
     const isNotFound = (error as { status?: number })?.status === 404
     const isBurned = errorMessage.includes('burned')
     const isExpired = errorMessage.includes('expired')
+    const title = isNotFound
+      ? tErrors('pasteNotFound')
+      : isBurned
+        ? tErrors('pasteBurned')
+        : isExpired
+          ? tErrors('pasteExpired')
+          : t('error')
+    const description =
+      isNotFound
+        ? tErrors('pasteNotFoundDesc')
+        : isBurned
+          ? tErrors('pasteBurnedDesc')
+          : isExpired
+            ? tErrors('pasteExpiredDesc')
+            : errorMessage
 
-    return (
-      <div className="container mx-auto py-8 px-4 max-w-2xl">
-        <Card>
-          <CardHeader className="text-center">
-            <CardTitle className="flex items-center gap-2 justify-center text-red-600">
-              <AlertCircle className="h-5 w-5" />
-              {isNotFound ? tErrors('pasteNotFound') : 
-               isBurned ? tErrors('pasteBurned') : 
-               isExpired ? tErrors('pasteExpired') : t('error')}
-            </CardTitle>
-            <CardDescription>
-              {isNotFound && tErrors('pasteNotFoundDesc')}
-              {isBurned && tErrors('pasteBurnedDesc')}
-              {isExpired && tErrors('pasteExpiredDesc')}
-              {!isNotFound && !isBurned && !isExpired && errorMessage}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="text-center">
-            <Link href="/">
-              <Button>{tErrors('createNewPaste')}</Button>
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
+    return renderCenteredState(
+      title,
+      description,
+      tErrors('createNewPaste'),
+      () => router.push('/'),
+      <AlertCircle className="h-4 w-4 text-red-500" />
     )
   }
 
   if (showPasswordPrompt) {
     return (
-      <div className="container mx-auto py-8 px-4 max-w-md">
-        <Card>
-          <CardHeader className="text-center">
-            <CardTitle className="flex items-center gap-2 justify-center">
-              <Lock className="h-5 w-5" />
-              {tView('passwordProtected')}
-            </CardTitle>
-            <CardDescription>
-              {tView('passwordPrompt')}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+      <div className="app-frame py-8">
+        <div className="mx-auto max-w-md tool-panel">
+          <div className="tool-panel-header">
+            <div className="min-w-0">
+              <p className="tool-label">{slug}</p>
+              <h1 className="text-lg font-semibold">{tView('passwordProtected')}</h1>
+            </div>
+          </div>
+          <div className="tool-panel-body space-y-4">
+            <p className="text-sm text-muted-foreground">{tView('passwordPrompt')}</p>
+
             <div className="space-y-2">
               <Label htmlFor="password">{t('password')}</Label>
               <Input
                 id="password"
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={t('password') + '...'}
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter' && password) {
-                    handlePasswordDecrypt()
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder={`${t('password')}...`}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && password) {
+                    void handlePasswordDecrypt()
                   }
                 }}
               />
             </div>
 
             {decryptionError && (
-              <div className="text-sm text-red-600 bg-red-50 dark:bg-red-950 p-3 rounded">
+              <div className="rounded-sm border border-red-500/25 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-200">
                 {decryptionError}
               </div>
             )}
 
             <Button
-              onClick={handlePasswordDecrypt}
+              onClick={() => void handlePasswordDecrypt()}
               disabled={!password || isDecrypting}
               className="w-full"
             >
               {isDecrypting ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin" />
                   {tView('decrypting')}
                 </>
               ) : (
                 tView('decryptPaste')
               )}
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     )
   }
 
   if (isDecrypting) {
-    return (
-      <div className="container mx-auto py-8 px-4 max-w-4xl">
-        <Card>
-          <CardContent className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin" />
-            <span className="ml-2">{tView('decryptingPaste')}</span>
-          </CardContent>
-        </Card>
-      </div>
+    return renderCenteredState(
+      tView('decryptingPaste'),
+      tView('decryptingPaste'),
+      undefined,
+      undefined,
+      <Loader2 className="h-4 w-4 animate-spin" />
     )
   }
 
   if (decryptionError) {
-    return (
-      <div className="container mx-auto py-8 px-4 max-w-2xl">
-        <Card>
-          <CardHeader className="text-center">
-            <CardTitle className="flex items-center gap-2 justify-center text-red-600">
-              <AlertCircle className="h-5 w-5" />
-              {tErrors('decryptionFailed')}
-            </CardTitle>
-            <CardDescription>{decryptionError}</CardDescription>
-          </CardHeader>
-          <CardContent className="text-center">
-            <Button onClick={() => router.push('/')}>
-              {tErrors('createNewPaste')}
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+    return renderCenteredState(
+      tErrors('decryptionFailed'),
+      decryptionError,
+      tErrors('createNewPaste'),
+      () => router.push('/'),
+      <AlertCircle className="h-4 w-4 text-red-500" />
     )
   }
 
@@ -294,83 +299,40 @@ export default function ViewPastePage() {
     return null
   }
 
-  // Prepare markdown for rendering based on paste mode
   const toFencedMarkdown = (body: string, lang?: string) => {
     const useTilde = body.includes('```')
     const fence = useTilde ? '~~~~' : '```'
     const langId = lang ? lang : ''
     return `${fence}${langId}\n${body}\n${fence}`
   }
-  const renderedBody = content.render_mode === 'plain'
-    ? toFencedMarkdown(content.body, content.language_hint)
-    : content.body
+
+  const renderedBody =
+    content.render_mode === 'plain'
+      ? toFencedMarkdown(content.body, content.language_hint)
+      : content.body
+
+  const displayTitle =
+    content.title?.trim() && content.title.trim() !== 'Untitled'
+      ? content.title
+      : paste.metadata.slug
+
+  const modeLabel = content.language_hint || content.render_mode
 
   return (
-    <div>
-      {/* Top toolbar */}
-      <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4">
-          <div className="flex items-center justify-between h-16">
-            <Link href="/">
-              <h1 className="text-xl font-semibold cursor-pointer">PasteVault</h1>
+    <div className="pb-8">
+      <header className="sticky top-0 z-40 border-b border-border/80 bg-background/86 backdrop-blur-xl">
+        <div className="app-frame flex flex-wrap items-center justify-between gap-3 py-3">
+          <div className="min-w-0">
+            <p className="tool-label">{paste.metadata.slug}</p>
+            <Link href="/" className="text-xl font-semibold hover:text-foreground/85 sm:text-2xl">
+              PasteVault
             </Link>
-            
-            <div className="flex items-center gap-2">
-              <div className="hidden md:flex items-center gap-4">
-                <CopyButton
-                  getValue={() => content?.body ?? ''}
-                  variant="outline"
-                  size="sm"
-                  label={tView('copyContent')}
-                />
-                <CopyButton
-                  getValue={() => window.location.href}
-                  variant="outline"
-                  size="sm"
-                  label={tView('copyUrl')}
-                />
-                <Link href="/">
-                  <Button size="sm">
-                    {tView('createNew')}
-                  </Button>
-                </Link>
-              </div>
-              <button
-                className="md:hidden inline-flex items-center justify-center rounded-md p-2 hover:bg-muted"
-                aria-controls="mobile-menu"
-                aria-expanded={mobileMenuOpen}
-                aria-label={tAccessibility('openMenu')}
-                onClick={() => setMobileMenuOpen(true)}
-              >
-                <Menu className="h-6 w-6" />
-              </button>
-            </div>
           </div>
-        </div>
-      </div>
 
-      {mobileMenuOpen && (
-        <div className="md:hidden">
-          <div className="fixed inset-0 z-40 bg-black/50" onClick={() => setMobileMenuOpen(false)} />
-          <div
-            className="fixed inset-y-0 right-0 z-50 w-80 max-w-[90vw] bg-background shadow-lg p-4 overflow-y-auto"
-            role="dialog"
-            aria-modal="true"
-            id="mobile-menu"
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold">Options</h2>
-              <button
-                className="inline-flex items-center justify-center rounded-md p-2 hover:bg-muted"
-                aria-label={tAccessibility('closeMenu')}
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                <X className="h-6 w-6" />
-              </button>
-            </div>
-            <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="hidden items-center gap-2 md:flex xl:hidden">
               <CopyButton
-                getValue={() => content?.body ?? ''}
+                getValue={() => content.body}
                 variant="outline"
                 size="sm"
                 label={tView('copyContent')}
@@ -382,67 +344,179 @@ export default function ViewPastePage() {
                 label={tView('copyUrl')}
               />
               <Link href="/">
-                <Button className="w-full">
-                  {tView('createNew')}
-                </Button>
+                <Button size="sm">{tView('createNew')}</Button>
+              </Link>
+            </div>
+            <button
+              className="inline-flex h-9 w-9 items-center justify-center rounded-sm border border-border/80 bg-background/70 hover:bg-accent/40 md:hidden"
+              aria-controls="mobile-menu"
+              aria-expanded={mobileMenuOpen}
+              aria-label={tAccessibility('openMenu')}
+              onClick={() => setMobileMenuOpen(true)}
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {mobileMenuOpen && (
+        <div className="md:hidden">
+          <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
+          <div
+            className="utility-drawer"
+            role="dialog"
+            aria-modal="true"
+            id="mobile-menu"
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="tool-label">{t('options')}</p>
+                <h2 className="text-lg font-semibold">{displayTitle}</h2>
+              </div>
+              <button
+                className="inline-flex h-9 w-9 items-center justify-center rounded-sm border border-border/80 bg-background/70 hover:bg-accent/40"
+                aria-label={tAccessibility('closeMenu')}
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <CopyButton
+                getValue={() => content.body}
+                variant="outline"
+                size="sm"
+                label={tView('copyContent')}
+              />
+              <CopyButton
+                getValue={() => window.location.href}
+                variant="outline"
+                size="sm"
+                label={tView('copyUrl')}
+              />
+              <Link href="/">
+                <Button className="w-full">{tView('createNew')}</Button>
               </Link>
             </div>
           </div>
         </div>
       )}
 
-      {/* Main content */}
-      <div className="container mx-auto px-4 py-6">
-        <div className="space-y-4">
-          <div className="border rounded-md overflow-hidden bg-white dark:bg-[#1A1F26] dark:border-[#2F353D]">
-            {((content.title?.trim() && content.title.trim() !== 'Untitled') || content.language_hint) && (
-              <div className="border-b bg-muted/50 px-4 py-2">
-                {(content.title?.trim() && content.title.trim() !== 'Untitled') && (
-                  <div className="font-medium">{content.title}</div>
-                )}
-                {content.language_hint && (
-                  <div className="text-sm text-muted-foreground">
-                    {content.language_hint}
+      <div className="app-frame py-4">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+          <section className="tool-panel">
+            <div className="tool-panel-header">
+              <div className="min-w-0">
+                <p className="tool-label">{paste.metadata.slug}</p>
+                <h1 className="text-lg font-semibold sm:text-xl">{displayTitle}</h1>
+              </div>
+              <span className="meta-chip">
+                <strong>{modeLabel}</strong>
+              </span>
+            </div>
+
+            <div className="p-0">
+              <MarkdownRenderer
+                content={renderedBody}
+                className="min-h-[420px] p-4 sm:p-6"
+              />
+            </div>
+
+            <div className="status-bar">
+              <span>
+                <Eye className="h-3 w-3" />
+                <span className="text-foreground">
+                  {paste.metadata.view_count} {tView('views')}
+                </span>
+              </span>
+              <span>
+                <Lock className="h-3 w-3" />
+                <span className="text-foreground">
+                  {paste.salt ? t('password') : tView('zeroKnowledge')}
+                </span>
+              </span>
+              {paste.metadata.burn_after_read && (
+                <span className="text-orange-600 dark:text-orange-300">
+                  <Flame className="h-3 w-3" />
+                  {tView('burnsAfterReading')}
+                </span>
+              )}
+              <span>
+                <span className="text-foreground">
+                  {paste.metadata.expires_at
+                    ? getTimeRemaining(paste.metadata.expires_at)
+                    : tView('neverExpires')}
+                </span>
+              </span>
+            </div>
+          </section>
+
+          <aside className="space-y-4">
+            <div className="hidden xl:block tool-panel">
+              <div className="tool-panel-header">
+                <div>
+                  <p className="tool-label">{t('options')}</p>
+                  <h2 className="text-lg font-semibold">{tView('createNew')}</h2>
+                </div>
+              </div>
+              <div className="tool-panel-body space-y-3">
+                <CopyButton
+                  getValue={() => content.body}
+                  variant="outline"
+                  className="w-full justify-start"
+                  label={tView('copyContent')}
+                />
+                <CopyButton
+                  getValue={() => window.location.href}
+                  variant="outline"
+                  className="w-full justify-start"
+                  label={tView('copyUrl')}
+                />
+                <Link href="/" className="block">
+                  <Button className="w-full">{tView('createNew')}</Button>
+                </Link>
+              </div>
+            </div>
+
+            <div className="tool-panel">
+              <div className="tool-panel-header">
+                <div>
+                  <p className="tool-label">{tView('views')}</p>
+                  <h2 className="text-lg font-semibold">{paste.metadata.view_count}</h2>
+                </div>
+              </div>
+              <div className="tool-panel-body space-y-3 text-sm text-muted-foreground">
+                <div className="flex items-center justify-between gap-3">
+                  <span>{tView('views')}</span>
+                  <span className="font-mono text-foreground">{paste.metadata.view_count}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span>{t('password')}</span>
+                  <span className="font-mono text-foreground">
+                    {paste.salt ? t('password') : tView('zeroKnowledge')}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span>TTL</span>
+                  <span className="font-mono text-foreground">
+                    {paste.metadata.expires_at
+                      ? getTimeRemaining(paste.metadata.expires_at)
+                      : tView('neverExpires')}
+                  </span>
+                </div>
+                {paste.metadata.burn_after_read && (
+                  <div className="rounded-sm border border-orange-500/25 bg-orange-500/10 p-3 text-orange-700 dark:text-orange-200">
+                    {tView('burnsAfterReading')}
                   </div>
                 )}
               </div>
-            )}
-            <div className="p-0">
-              <MarkdownRenderer 
-                content={renderedBody} 
-                className="min-h-[400px] p-4"
-              />
             </div>
-          </div>
-
-          {/* Bottom stats bar */}
-          <div className="flex items-center justify-between text-sm text-muted-foreground bg-muted/30 px-4 py-2 rounded-md">
-            <div className="flex items-center gap-6">
-              <div className="flex items-center gap-2">
-                <Eye className="h-3 w-3" />
-                {paste.metadata.view_count} {tView('views')}
-              </div>
-              <div className="flex items-center gap-2">
-                <Lock className="h-3 w-3" />
-                {paste.salt ? t('password') + ' protected' : tView('zeroKnowledge')}
-              </div>
-              {paste.metadata.burn_after_read && (
-                <div className="flex items-center gap-2 text-orange-600">
-                  <Flame className="h-3 w-3" />
-                  {tView('burnsAfterReading')}
-                </div>
-              )}
-            </div>
-            <div>
-              {paste.metadata.expires_at ? (
-                <span className="text-amber-600">{getTimeRemaining(paste.metadata.expires_at)}</span>
-              ) : (
-                tView('neverExpires')
-              )}
-            </div>
-          </div>
+          </aside>
         </div>
       </div>
+
       <ThemeToggle />
     </div>
   )

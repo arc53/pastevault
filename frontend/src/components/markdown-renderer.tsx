@@ -72,7 +72,7 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
 
   return (
     <div 
-      className={`prose prose-slate dark:prose-invert max-w-none ${className}`}
+      className={`prose prose-slate dark:prose-invert max-w-none prose-headings:font-semibold prose-headings:text-foreground prose-p:text-foreground/90 prose-a:text-primary prose-strong:text-foreground ${className}`}
       dangerouslySetInnerHTML={{ __html: html }}
       style={{
         // Custom CSS for Shiki themes

@@ -16,7 +16,6 @@ import {
   X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { CopyButton } from '@/components/copy-button'
 import { Editor } from '@/components/editor'
 import { Input } from '@/components/ui/input'
@@ -115,6 +114,12 @@ export default function CreatePastePage() {
   const fileShareCapabilities = capabilities?.file_shares
   const fileSharesEnabled = fileShareCapabilities?.enabled ?? false
   const optionalNoteContent = buildPasteContent(title, body, format, false)
+  const createActionLabel = isCreating
+    ? t('creating')
+    : hasAttachedFiles
+      ? tFiles('sendShare')
+      : t('send')
+  const editorHeight = 'clamp(360px, 62vh, 860px)'
 
   useEffect(() => {
     const draft = loadDraft()
@@ -426,6 +431,24 @@ export default function CreatePastePage() {
     !(passwordProtected && !password) &&
     (!hasAttachedFiles || Boolean(fileShareCapabilities && fileSharesEnabled))
 
+  const renderExpirySelect = (className = 'w-full') => (
+    <Select
+      value={expiresInHours.toString()}
+      onValueChange={(value) => setExpiresInHours(Number(value))}
+    >
+      <SelectTrigger className={className}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="1">{tExpiration('1hour')}</SelectItem>
+        <SelectItem value="6">{tExpiration('6hours')}</SelectItem>
+        <SelectItem value="24">{tExpiration('1day')}</SelectItem>
+        <SelectItem value="168">{tExpiration('1week')}</SelectItem>
+        <SelectItem value="720">{tExpiration('1month')}</SelectItem>
+      </SelectContent>
+    </Select>
+  )
+
   const renderFormatSelect = (fullWidth = false) => (
     <Select value={format} onValueChange={setFormat}>
       <SelectTrigger className={fullWidth ? 'w-full' : 'w-[180px]'}>
@@ -462,13 +485,13 @@ export default function CreatePastePage() {
       type="button"
       variant={hasAttachedFiles ? 'default' : 'outline'}
       size={mobile ? 'sm' : 'default'}
-      className="gap-2"
+      className="justify-between gap-2"
       onClick={() => fileInputRef.current?.click()}
     >
       <Paperclip className="h-4 w-4" />
       <span>{tFiles('attachFiles')}</span>
       {hasAttachedFiles && (
-        <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-background/20 px-1.5 text-xs font-medium">
+        <span className="inline-flex min-w-5 items-center justify-center rounded-sm border border-primary/30 bg-background/30 px-1.5 text-[10px] font-medium">
           {selectedFiles.length}
         </span>
       )}
@@ -502,63 +525,101 @@ export default function CreatePastePage() {
           : tShare('viewPaste')
 
     return (
-      <div className="container mx-auto max-w-2xl px-4 py-8">
-        <Card>
-          <CardHeader className="text-center">
-            <CardTitle className="flex items-center justify-center gap-2">
-              <Share className="h-5 w-5" />
-              {shareTitle}
-            </CardTitle>
-            <CardDescription>{shareDescription}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>{tShare('shareUrl')}</Label>
-              <div className="flex gap-2">
-                <Input value={shareUrl} readOnly className="font-mono text-sm" />
-                <CopyButton value={shareUrl} variant="outline" />
-              </div>
+      <div className="pb-8">
+        <header className="sticky top-0 z-40 border-b border-border/80 bg-background/86 backdrop-blur-xl">
+          <div className="app-frame flex flex-wrap items-center justify-between gap-3 py-3">
+            <div className="min-w-0">
+              <p className="tool-label">{t('pasteVault')}</p>
+              <h1 className="text-xl font-semibold sm:text-2xl">{shareTitle}</h1>
             </div>
-
-            <div className="space-y-2">
-              <Label>QR code</Label>
-              <div className="flex justify-center">
-                <div className="rounded bg-white p-3">
-                  <QRCode value={shareUrl} size={180} bgColor="#FFFFFF" fgColor="#000000" />
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-lg bg-muted/50 p-4">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="mt-0.5 h-4 w-4 text-amber-500" />
-                <div className="text-sm">
-                  <p className="font-medium">{tShare('important')}</p>
-                  <p className="mt-1 text-muted-foreground">
-                    {passwordProtected
-                      ? tShare('passwordProtectedWarning')
-                      : tShare('urlWarning')}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-2">
-              <Button onClick={createNew} className="flex-1">
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={createNew}>
                 {createAnotherLabel}
               </Button>
-              <Button onClick={() => window.location.assign(shareUrl)} variant="outline">
+              <Button onClick={() => window.location.assign(shareUrl)}>
                 {viewLabel}
               </Button>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </header>
+
+        <div className="app-frame py-4">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+            <section className="tool-panel">
+              <div className="tool-panel-header">
+                <div className="min-w-0">
+                  <p className="tool-label">{tShare('shareUrl')}</p>
+                  <h2 className="text-lg font-semibold text-balance">{shareDescription}</h2>
+                </div>
+                <span className="meta-chip">
+                  <Share className="h-3.5 w-3.5" />
+                  <strong>{lastShareKind.toUpperCase()}</strong>
+                </span>
+              </div>
+
+              <div className="tool-panel-body space-y-4">
+                <div className="space-y-2">
+                  <Label>{tShare('shareUrl')}</Label>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input value={shareUrl} readOnly className="flex-1" />
+                    <CopyButton value={shareUrl} variant="outline" />
+                  </div>
+                </div>
+
+                <div className="rounded-sm border border-amber-500/25 bg-amber-500/10 p-4">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="mt-0.5 h-4 w-4 text-amber-500" />
+                    <div className="text-sm">
+                      <p className="font-medium">{tShare('important')}</p>
+                      <p className="mt-1 text-muted-foreground">
+                        {passwordProtected
+                          ? tShare('passwordProtectedWarning')
+                          : tShare('urlWarning')}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="status-bar">
+                <span>
+                  <Share className="h-3 w-3" />
+                  <span className="text-foreground">{shareTitle}</span>
+                </span>
+                <span>
+                  <Lock className="h-3 w-3" />
+                  <span className="text-foreground">
+                    {passwordProtected ? t('password') : 'E2E'}
+                  </span>
+                </span>
+              </div>
+            </section>
+
+            <aside className="space-y-4">
+              <div className="tool-panel">
+                <div className="tool-panel-header">
+                  <div>
+                    <p className="tool-label">QR</p>
+                    <h2 className="text-lg font-semibold">Scan</h2>
+                  </div>
+                </div>
+                <div className="tool-panel-body flex justify-center">
+                  <div className="rounded-sm border border-border/80 bg-white p-3">
+                    <QRCode value={shareUrl} size={180} bgColor="#FFFFFF" fgColor="#000000" />
+                  </div>
+                </div>
+              </div>
+            </aside>
+          </div>
+        </div>
+
+        <ThemeToggle />
       </div>
     )
   }
 
   return (
-    <div>
+    <div className="pb-8">
       <input
         ref={fileInputRef}
         type="file"
@@ -567,146 +628,106 @@ export default function CreatePastePage() {
         onChange={(event) => selectFiles(event.target.files)}
       />
 
-      <div className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4">
-          <div className="flex h-16 items-center justify-between">
-            <h1 className="text-xl font-semibold">{t('pasteVault')}</h1>
+      <header className="sticky top-0 z-40 border-b border-border/80 bg-background/86 backdrop-blur-xl">
+        <div className="app-frame flex flex-wrap items-center justify-between gap-3 py-3">
+          <div className="min-w-0">
+            <p className="tool-label">{t('pasteVault')}</p>
+            <h1 className="text-xl font-semibold sm:text-2xl">{t('pasteVault')}</h1>
+          </div>
 
-            <div className="flex items-center gap-2">
-              <div className="hidden items-center gap-4 md:flex">
-                {renderAttachButton()}
-
-                <Select
-                  value={expiresInHours.toString()}
-                  onValueChange={(value) => setExpiresInHours(Number(value))}
-                >
-                  <SelectTrigger className="w-[120px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1">{tExpiration('1hour')}</SelectItem>
-                    <SelectItem value="6">{tExpiration('6hours')}</SelectItem>
-                    <SelectItem value="24">{tExpiration('1day')}</SelectItem>
-                    <SelectItem value="168">{tExpiration('1week')}</SelectItem>
-                    <SelectItem value="720">{tExpiration('1month')}</SelectItem>
-                  </SelectContent>
-                </Select>
-
-                {!hasAttachedFiles && (
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={burnAfterRead}
-                      onChange={(event) => setBurnAfterRead(event.target.checked)}
-                      className="rounded"
-                    />
-                    <Flame className="h-4 w-4" />
-                    {tCreate('burnAfterReading')}
-                  </label>
-                )}
-
-                <div className="flex items-center gap-2">
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={passwordProtected}
-                      onChange={(event) => setPasswordProtected(event.target.checked)}
-                      className="rounded"
-                    />
-                    <Lock className="h-4 w-4" />
-                    {t('password')}
-                  </label>
-                  {passwordProtected && (
-                    <Input
-                      type="password"
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
-                      placeholder={tCreate('enterPassword')}
-                      className="h-9 w-32"
-                    />
-                  )}
-                </div>
-              </div>
-
-              <div className="md:hidden">{renderAttachButton(true)}</div>
-
-              <button
-                className="inline-flex items-center justify-center rounded-md p-2 hover:bg-muted md:hidden"
-                aria-controls="mobile-menu"
-                aria-expanded={mobileMenuOpen}
-                aria-label={tAccessibility('openMenu')}
-                onClick={() => setMobileMenuOpen(true)}
-              >
-                <Menu className="h-6 w-6" />
-              </button>
+          <div className="flex items-center gap-2">
+            <div className="hidden items-center gap-2 lg:flex xl:hidden">
+              <span className="meta-chip">
+                <strong>{format.toUpperCase()}</strong>
+              </span>
+              <span className="meta-chip">
+                <strong>{expiresInHours}h</strong>
+              </span>
+              {hasAttachedFiles && (
+                <span className="meta-chip">
+                  <Paperclip className="h-3.5 w-3.5" />
+                  <strong>{selectedFiles.length}</strong>
+                </span>
+              )}
             </div>
+            <Button
+              className="xl:hidden"
+              onClick={() => void handleCreate()}
+              disabled={!canSubmit || isCreating}
+            >
+              {createActionLabel}
+            </Button>
+            <button
+              className="inline-flex h-9 w-9 items-center justify-center rounded-sm border border-border/80 bg-background/70 hover:bg-accent/40 xl:hidden"
+              aria-controls="mobile-menu"
+              aria-expanded={mobileMenuOpen}
+              aria-label={tAccessibility('openMenu')}
+              onClick={() => setMobileMenuOpen(true)}
+            >
+              <Menu className="h-5 w-5" />
+            </button>
           </div>
         </div>
-      </div>
+      </header>
 
       {mobileMenuOpen && (
-        <div className="md:hidden">
-          <div className="fixed inset-0 z-40 bg-black/50" onClick={() => setMobileMenuOpen(false)} />
+        <div className="xl:hidden">
+          <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
           <div
-            className="fixed inset-y-0 right-0 z-50 w-80 max-w-[90vw] overflow-y-auto bg-background p-4 shadow-lg"
+            className="utility-drawer"
             role="dialog"
             aria-modal="true"
             id="mobile-menu"
           >
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold">{t('options')}</h2>
+              <div>
+                <p className="tool-label">{t('options')}</p>
+                <h2 className="text-lg font-semibold">{t('pasteVault')}</h2>
+              </div>
               <button
-                className="inline-flex items-center justify-center rounded-md p-2 hover:bg-muted"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-sm border border-border/80 bg-background/70 hover:bg-accent/40"
                 aria-label={tAccessibility('closeMenu')}
                 onClick={() => setMobileMenuOpen(false)}
               >
-                <X className="h-6 w-6" />
+                <X className="h-5 w-5" />
               </button>
             </div>
 
             <div className="space-y-4">
+              {renderAttachButton(true)}
+
               <div className="space-y-2">
                 <Label>{tCreate('expiresIn')}</Label>
-                <Select
-                  value={expiresInHours.toString()}
-                  onValueChange={(value) => setExpiresInHours(Number(value))}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1">{tExpiration('1hour')}</SelectItem>
-                    <SelectItem value="6">{tExpiration('6hours')}</SelectItem>
-                    <SelectItem value="24">{tExpiration('1day')}</SelectItem>
-                    <SelectItem value="168">{tExpiration('1week')}</SelectItem>
-                    <SelectItem value="720">{tExpiration('1month')}</SelectItem>
-                  </SelectContent>
-                </Select>
+                {renderExpirySelect()}
               </div>
 
               {!hasAttachedFiles && (
-                <label className="flex items-center gap-2 text-sm">
+                <label className="flex items-center justify-between rounded-sm border border-border/70 bg-muted/35 px-3 py-2 text-sm">
+                  <span className="flex items-center gap-2">
+                    <Flame className="h-4 w-4" />
+                    {tCreate('burnAfterReading')}
+                  </span>
                   <input
                     type="checkbox"
                     checked={burnAfterRead}
                     onChange={(event) => setBurnAfterRead(event.target.checked)}
-                    className="rounded"
+                    className="h-4 w-4 rounded-sm border-border bg-background text-primary focus:ring-ring"
                   />
-                  <Flame className="h-4 w-4" />
-                  {tCreate('burnAfterReading')}
                 </label>
               )}
 
               <div className="space-y-2">
-                <label className="flex items-center gap-2 text-sm">
+                <label className="flex items-center justify-between rounded-sm border border-border/70 bg-muted/35 px-3 py-2 text-sm">
+                  <span className="flex items-center gap-2">
+                    <Lock className="h-4 w-4" />
+                    {t('password')}
+                  </span>
                   <input
                     type="checkbox"
                     checked={passwordProtected}
                     onChange={(event) => setPasswordProtected(event.target.checked)}
-                    className="rounded"
+                    className="h-4 w-4 rounded-sm border-border bg-background text-primary focus:ring-ring"
                   />
-                  <Lock className="h-4 w-4" />
-                  {t('password')}
                 </label>
                 {passwordProtected && (
                   <Input
@@ -718,15 +739,29 @@ export default function CreatePastePage() {
                   />
                 )}
               </div>
+
+              {hasDraft && (
+                <Button variant="outline" className="w-full" onClick={loadFromDraft}>
+                  {tCreate('draft.restore')}
+                </Button>
+              )}
+
+              <Button
+                className="w-full"
+                onClick={() => void handleCreate()}
+                disabled={!canSubmit || isCreating}
+              >
+                {createActionLabel}
+              </Button>
             </div>
           </div>
         </div>
       )}
 
       {hasDraft && (
-        <div className="border-b bg-blue-50 dark:bg-blue-950">
-          <div className="container mx-auto px-4 py-2">
-            <div className="flex items-center justify-between">
+        <div className="app-frame pt-4">
+          <div className="tool-panel border-sky-500/25 bg-sky-500/10">
+            <div className="tool-panel-body flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2 text-sm">
                 <Save className="h-4 w-4" />
                 <span>{tCreate('draft.unsavedDraft', { draftAge })}</span>
@@ -744,127 +779,252 @@ export default function CreatePastePage() {
         </div>
       )}
 
-      <div className="container mx-auto px-4 py-4">
-        <div className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_180px]">
-            <div className="space-y-2">
-              <Label htmlFor="note-title">{t('title')}</Label>
-              <Input
-                id="note-title"
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                placeholder={t('title')}
-                onBlur={saveCurrentDraft}
+      <div className="app-frame py-4">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <section className="tool-panel">
+            <div className="tool-panel-header">
+              <div className="min-w-0 flex-1 space-y-2">
+                <Label htmlFor="note-title">{t('title')}</Label>
+                <Input
+                  id="note-title"
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  placeholder={t('title')}
+                  onBlur={saveCurrentDraft}
+                  className="h-10 text-sm"
+                />
+              </div>
+
+              <div className="w-full space-y-2 sm:w-[220px]">
+                <Label>{t('format')}</Label>
+                {renderFormatSelect(true)}
+              </div>
+            </div>
+
+            <div className="tool-panel-body space-y-4">
+              {hasAttachedFiles && (
+                <div className="space-y-3 rounded-sm border border-border/70 bg-muted/28 p-3">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="tool-label">{tFiles('attachmentsTitle')}</p>
+                      <p className="mt-1 text-sm font-medium">
+                        {formatFileCount(selectedFiles.length)} · {formatBytes(totalSelectedFileSize)}
+                      </p>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        {tFiles('addMoreFiles')}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearFiles}
+                      >
+                        {tFiles('removeAllFiles')}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    {selectedFiles.map((file, index) => (
+                      <div
+                        key={`${file.name}-${file.size}-${file.lastModified}-${index}`}
+                        className="flex items-center justify-between gap-3 rounded-sm border border-border/70 bg-background/55 px-3 py-2"
+                      >
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium leading-tight">{file.name}</div>
+                          <div className="mt-0.5 text-[11px] text-muted-foreground">
+                            {formatBytes(file.size)}
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0 text-muted-foreground"
+                          onClick={() => removeFile(index)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {uploadProgress > 0 && (
+                    <div className="space-y-2 pt-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span>{tFiles('uploadProgress')}</span>
+                        <span>{uploadProgress}%</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-sm border border-border/60 bg-muted/60">
+                        <div
+                          className="h-full bg-primary transition-all"
+                          style={{ width: `${uploadProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {createError && (
+                <div className="rounded-sm border border-red-500/25 bg-red-500/10 p-4 text-sm text-red-700 dark:text-red-200">
+                  {createError}
+                </div>
+              )}
+
+              <Editor
+                value={body}
+                onChange={setBody}
+                language={format}
+                height={editorHeight}
               />
             </div>
 
-            <div className="space-y-2">
-              <Label>{t('format')}</Label>
-              {renderFormatSelect(true)}
+            <div className="status-bar">
+              <span>
+                {t('format')}
+                <span className="text-foreground">{format.toUpperCase()}</span>
+              </span>
+              <span>
+                {tCreate('expiresIn')}
+                <span className="text-foreground">{expiresInHours}h</span>
+              </span>
+              {passwordProtected && (
+                <span>
+                  <Lock className="h-3 w-3" />
+                  <span className="text-foreground">{t('password')}</span>
+                </span>
+              )}
+              {!hasAttachedFiles && burnAfterRead && (
+                <span className="text-orange-600 dark:text-orange-300">
+                  <Flame className="h-3 w-3" />
+                  {tCreate('burnAfterReading')}
+                </span>
+              )}
+              {hasAttachedFiles && (
+                <span>
+                  <Paperclip className="h-3 w-3" />
+                  <span className="text-foreground">{formatFileCount(selectedFiles.length)}</span>
+                </span>
+              )}
             </div>
-          </div>
+          </section>
 
-          {hasAttachedFiles && (
-            <Card>
-              <CardHeader className="p-4 pb-2">
-                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      <Paperclip className="h-3.5 w-3.5" />
-                      {tFiles('attachmentsTitle')}
-                    </CardTitle>
-                    <CardDescription className="mt-0.5 text-[11px]">
-                      {formatFileCount(selectedFiles.length)} · {formatBytes(totalSelectedFileSize)}
-                    </CardDescription>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-7 px-2.5 text-xs"
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      {tFiles('addMoreFiles')}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-1.5 text-xs"
-                      onClick={clearFiles}
-                    >
-                      {tFiles('removeAllFiles')}
-                    </Button>
-                  </div>
+          <aside className="hidden space-y-4 xl:block xl:sticky xl:top-[84px] xl:self-start">
+            <div className="tool-panel">
+              <div className="tool-panel-header">
+                <div>
+                  <p className="tool-label">{t('options')}</p>
+                  <h2 className="text-lg font-semibold">{createActionLabel}</h2>
                 </div>
-              </CardHeader>
+              </div>
+              <div className="tool-panel-body space-y-4">
+                <Button
+                  className="w-full justify-between"
+                  size="lg"
+                  onClick={() => void handleCreate()}
+                  disabled={!canSubmit || isCreating}
+                >
+                  <span>{createActionLabel}</span>
+                  <Share className="h-4 w-4" />
+                </Button>
+                {renderAttachButton()}
+                {hasDraft && (
+                  <Button variant="outline" className="w-full" onClick={loadFromDraft}>
+                    {tCreate('draft.restore')}
+                  </Button>
+                )}
+                <div className="space-y-2">
+                  <Label>{tCreate('expiresIn')}</Label>
+                  {renderExpirySelect()}
+                </div>
 
-              <CardContent className="space-y-2 p-4 pt-1">
-                {selectedFiles.map((file, index) => (
-                  <div
-                    key={`${file.name}-${file.size}-${file.lastModified}-${index}`}
-                    className="flex items-center justify-between gap-3 rounded-md border px-3 py-2"
-                  >
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium leading-tight">{file.name}</div>
-                      <div className="mt-0.5 text-[11px] text-muted-foreground">
-                        {formatBytes(file.size)}
-                      </div>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 w-7 p-0 text-muted-foreground"
-                      onClick={() => removeFile(index)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                ))}
+                {!hasAttachedFiles && (
+                  <label className="flex items-center justify-between rounded-sm border border-border/70 bg-muted/35 px-3 py-2 text-sm">
+                    <span className="flex items-center gap-2">
+                      <Flame className="h-4 w-4" />
+                      {tCreate('burnAfterReading')}
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={burnAfterRead}
+                      onChange={(event) => setBurnAfterRead(event.target.checked)}
+                      className="h-4 w-4 rounded-sm border-border bg-background text-primary focus:ring-ring"
+                    />
+                  </label>
+                )}
 
-                {uploadProgress > 0 && (
-                  <div className="space-y-2 pt-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span>{tFiles('uploadProgress')}</span>
-                      <span>{uploadProgress}%</span>
-                    </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full bg-primary transition-all"
-                        style={{ width: `${uploadProgress}%` }}
-                      />
-                    </div>
+                <div className="space-y-2">
+                  <label className="flex items-center justify-between rounded-sm border border-border/70 bg-muted/35 px-3 py-2 text-sm">
+                    <span className="flex items-center gap-2">
+                      <Lock className="h-4 w-4" />
+                      {t('password')}
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={passwordProtected}
+                      onChange={(event) => setPasswordProtected(event.target.checked)}
+                      className="h-4 w-4 rounded-sm border-border bg-background text-primary focus:ring-ring"
+                    />
+                  </label>
+                  {passwordProtected && (
+                    <Input
+                      type="password"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      placeholder={tCreate('enterPassword')}
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {(hasAttachedFiles || !fileSharesEnabled) && (
+              <div className="tool-panel">
+              <div className="tool-panel-header">
+                <div>
+                  <p className="tool-label">{tFiles('attachmentsTitle')}</p>
+                  <h2 className="text-lg font-semibold">
+                    {hasAttachedFiles
+                      ? `${formatFileCount(selectedFiles.length)} · ${formatBytes(totalSelectedFileSize)}`
+                      : tFiles('description')}
+                  </h2>
+                </div>
+              </div>
+              <div className="tool-panel-body space-y-3 text-sm text-muted-foreground">
+                {!fileSharesEnabled && hasAttachedFiles && (
+                  <div className="rounded-sm border border-red-500/25 bg-red-500/10 p-3 text-red-700 dark:text-red-200">
+                    {tFiles('notConfigured')}
                   </div>
                 )}
-              </CardContent>
-            </Card>
-          )}
-
-          {createError && (
-            <div className="rounded-lg bg-red-50 p-4 text-sm text-red-700 dark:bg-red-950 dark:text-red-100">
-              {createError}
-            </div>
-          )}
-
-          <Editor
-            value={body}
-            onChange={setBody}
-            language={format}
-            height={hasAttachedFiles ? 'calc(100vh - 360px)' : 'calc(100vh - 260px)'}
-          />
-
-          <div className="flex justify-end">
-            <Button onClick={() => void handleCreate()} disabled={!canSubmit || isCreating} size="lg">
-              {isCreating
-                ? t('creating')
-                : hasAttachedFiles
-                  ? tFiles('sendShare')
-                  : t('send')}
-            </Button>
-          </div>
+                {fileShareCapabilities && fileSharesEnabled && (
+                  <>
+                    <div className="flex items-center justify-between gap-3">
+                      <span>{tFiles('attachmentsTitle')}</span>
+                      <span className="font-mono text-foreground">
+                        {fileShareCapabilities.max_files}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <span>Max size</span>
+                      <span className="font-mono text-foreground">
+                        {formatBytes(fileShareCapabilities.max_share_size_bytes)}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+              </div>
+            )}
+          </aside>
         </div>
       </div>
 

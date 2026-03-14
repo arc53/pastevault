@@ -3,48 +3,55 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 220 9% 15%;
+    --background: 210 20% 97%;
+    --foreground: 220 18% 13%;
     --card: 0 0% 100%;
-    --card-foreground: 220 9% 15%;
+    --card-foreground: 220 18% 13%;
     --popover: 0 0% 100%;
-    --popover-foreground: 220 9% 15%;
+    --popover-foreground: 220 18% 13%;
     --primary: 142 76% 36%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 220 13% 95%;
-    --secondary-foreground: 220 9% 15%;
-    --muted: 220 13% 95%;
-    --muted-foreground: 220 9% 45%;
-    --accent: 220 13% 95%;
-    --accent-foreground: 220 9% 15%;
+    --secondary: 210 16% 94%;
+    --secondary-foreground: 220 18% 13%;
+    --muted: 214 20% 93%;
+    --muted-foreground: 218 14% 38%;
+    --accent: 212 24% 91%;
+    --accent-foreground: 220 18% 13%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 100%;
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
+    --border: 218 17% 83%;
+    --input: 218 17% 83%;
     --ring: 142 76% 36%;
-    --radius: 0.75rem;
+    --radius: 0.375rem;
+    --panel-shadow: 0 0 0 1px rgba(15, 23, 42, 0.06), 0 24px 48px -30px rgba(15, 23, 42, 0.42);
+    --grid-color: rgba(15, 23, 42, 0.08);
+    --font-sans: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
+    --font-display: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
+    --font-mono: "JetBrains Mono", "IBM Plex Mono", "SFMono-Regular", monospace;
   }
 
   .dark {
-    --background: 220 13% 9%;
-    --foreground: 220 9% 92%;
-    --card: 220 13% 9%;
-    --card-foreground: 220 9% 92%;
-    --popover: 220 13% 9%;
-    --popover-foreground: 220 9% 92%;
+    --background: 210 20% 8%;
+    --foreground: 214 20% 92%;
+    --card: 210 18% 10%;
+    --card-foreground: 214 20% 92%;
+    --popover: 210 18% 10%;
+    --popover-foreground: 214 20% 92%;
     --primary: 142 76% 36%;
-    --primary-foreground: 220 13% 9%;
-    --secondary: 220 13% 14%;
-    --secondary-foreground: 220 9% 92%;
-    --muted: 220 13% 14%;
-    --muted-foreground: 220 9% 65%;
-    --accent: 220 13% 14%;
-    --accent-foreground: 220 9% 92%;
+    --primary-foreground: 210 20% 8%;
+    --secondary: 210 16% 13%;
+    --secondary-foreground: 214 20% 92%;
+    --muted: 210 16% 13%;
+    --muted-foreground: 214 12% 67%;
+    --accent: 210 16% 14%;
+    --accent-foreground: 214 20% 92%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
-    --border: 220 13% 18%;
-    --input: 220 13% 18%;
+    --border: 215 16% 20%;
+    --input: 215 16% 20%;
     --ring: 142 76% 36%;
+    --panel-shadow: 0 0 0 1px rgba(148, 163, 184, 0.06), 0 28px 60px -34px rgba(0, 0, 0, 0.8);
+    --grid-color: rgba(148, 163, 184, 0.08);
   }
 }
 
@@ -52,47 +59,191 @@
   * {
     @apply border-border;
   }
+  html {
+    min-height: 100%;
+    scroll-behavior: smooth;
+  }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    min-height: 100vh;
+    position: relative;
+    font-family: var(--font-sans);
+    font-feature-settings: "ss01" 1, "cv05" 1;
+    background-image:
+      radial-gradient(circle at top, hsl(var(--primary) / 0.08), transparent 24%),
+      radial-gradient(circle at bottom right, hsl(var(--foreground) / 0.06), transparent 28%);
+    background-attachment: fixed;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background-image:
+      linear-gradient(to right, var(--grid-color) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--grid-color) 1px, transparent 1px);
+    background-size: 32px 32px;
+    mask-image: radial-gradient(circle at center, black 18%, transparent 88%);
+    opacity: 0.4;
+  }
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background:
+      linear-gradient(180deg, transparent 0%, hsl(var(--background) / 0.08) 100%),
+      radial-gradient(circle at top left, hsl(var(--primary) / 0.06), transparent 34%);
+    mix-blend-mode: normal;
+  }
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-display);
+    letter-spacing: -0.03em;
+  }
+  code,
+  pre,
+  textarea,
+  input,
+  select,
+  .font-mono {
+    font-family: var(--font-mono);
+  }
+  ::selection {
+    background: hsl(var(--primary) / 0.22);
+  }
+  a,
+  button,
+  input,
+  textarea,
+  select {
+    transition:
+      background-color 140ms ease,
+      border-color 140ms ease,
+      color 140ms ease,
+      box-shadow 140ms ease,
+      transform 140ms ease;
   }
 }
 
 /* Prevent white flash by setting initial theme based on system preference */
 @media (prefers-color-scheme: dark) {
   :root:not(.light) {
-    --background: 220 13% 9%;
-    --foreground: 220 9% 92%;
-    --card: 220 13% 9%;
-    --card-foreground: 220 9% 92%;
-    --popover: 220 13% 9%;
-    --popover-foreground: 220 9% 92%;
+    --background: 210 20% 8%;
+    --foreground: 214 20% 92%;
+    --card: 210 18% 10%;
+    --card-foreground: 214 20% 92%;
+    --popover: 210 18% 10%;
+    --popover-foreground: 214 20% 92%;
     --primary: 142 76% 36%;
-    --primary-foreground: 220 13% 9%;
-    --secondary: 220 13% 14%;
-    --secondary-foreground: 220 9% 92%;
-    --muted: 220 13% 14%;
-    --muted-foreground: 220 9% 65%;
-    --accent: 220 13% 14%;
-    --accent-foreground: 220 9% 92%;
+    --primary-foreground: 210 20% 8%;
+    --secondary: 210 16% 13%;
+    --secondary-foreground: 214 20% 92%;
+    --muted: 210 16% 13%;
+    --muted-foreground: 214 12% 67%;
+    --accent: 210 16% 14%;
+    --accent-foreground: 214 20% 92%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
-    --border: 220 13% 18%;
-    --input: 220 13% 18%;
+    --border: 215 16% 20%;
+    --input: 215 16% 20%;
     --ring: 142 76% 36%;
+    --panel-shadow: 0 0 0 1px rgba(148, 163, 184, 0.06), 0 28px 60px -34px rgba(0, 0, 0, 0.8);
+    --grid-color: rgba(148, 163, 184, 0.08);
+  }
+}
+
+@layer components {
+  .app-frame {
+    @apply mx-auto w-full max-w-[1600px] px-4 sm:px-6;
+  }
+
+  .tool-panel {
+    @apply overflow-hidden rounded-sm border border-border/80 bg-card/80 backdrop-blur-md;
+    box-shadow: var(--panel-shadow);
+  }
+
+  .tool-panel-header {
+    @apply flex flex-wrap items-start justify-between gap-3 border-b border-border/70 px-4 py-3;
+    background: linear-gradient(180deg, hsl(var(--background) / 0.92), hsl(var(--background) / 0.6));
+  }
+
+  .tool-panel-body {
+    @apply p-4;
+  }
+
+  .tool-label {
+    @apply text-[10px] font-medium uppercase tracking-[0.28em] text-muted-foreground;
+    font-family: var(--font-mono);
+  }
+
+  .meta-chip {
+    @apply inline-flex items-center gap-2 rounded-sm border border-border/70 px-2 py-1 text-[11px] text-muted-foreground;
+    background: hsl(var(--muted) / 0.62);
+    font-family: var(--font-mono);
+  }
+
+  .meta-chip strong {
+    color: hsl(var(--foreground));
+    font-weight: 500;
+  }
+
+  .status-bar {
+    @apply flex flex-wrap items-center gap-2 border-t border-border/70 px-4 py-2 text-[11px] text-muted-foreground;
+    background: hsl(var(--background) / 0.72);
+    font-family: var(--font-mono);
+  }
+
+  .status-bar > span {
+    @apply inline-flex items-center gap-2 rounded-sm border border-border/70 px-2 py-1;
+    background: hsl(var(--muted) / 0.44);
+  }
+
+  .console-divider {
+    @apply relative h-px bg-border/70;
+  }
+
+  .console-divider::after {
+    content: "";
+    position: absolute;
+    inset-inline-start: 0;
+    top: -1px;
+    height: 3px;
+    width: 72px;
+    background: hsl(var(--primary) / 0.78);
+  }
+
+  .utility-drawer {
+    @apply fixed inset-y-0 right-0 z-50 w-80 max-w-[92vw] overflow-y-auto border-l border-border/80 bg-background/95 p-4 shadow-2xl backdrop-blur-xl;
   }
 }
 
 @layer base {
   /* Typography prose adjustments for code blocks */
+  .prose {
+    @apply text-sm leading-7;
+  }
+  .prose :where(h1, h2, h3, h4) {
+    @apply mb-3 mt-6;
+  }
+  .prose :where(p, ul, ol) {
+    @apply my-3;
+  }
   .prose pre {
-    @apply bg-muted rounded-md p-4 overflow-x-auto;
+    @apply overflow-x-auto rounded-sm border border-border/80 p-4;
+    background: hsl(var(--muted) / 0.5);
   }
   .prose pre code {
     @apply text-sm;
     background: transparent !important;
   }
   .prose code:not(pre code) {
-    @apply px-1 py-0.5 rounded bg-muted;
+    @apply rounded-sm px-1.5 py-0.5;
+    background: hsl(var(--muted) / 0.74);
   }
 
   /* Base highlight.js container */
@@ -227,8 +378,18 @@
   html.dark .hljs-link { color: #a5d6ff !important; text-decoration: underline; }
 }
 
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
 /* Mobile-specific fixes */
 @media screen and (max-width: 768px) {
+  body::before {
+    opacity: 0.22;
+  }
+
   /* Prevent zoom on editor focus */
   .monaco-editor .inputarea.ime-input,
   .monaco-editor textarea {

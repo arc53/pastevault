@@ -84,12 +84,12 @@ const MobileTextarea = memo(({ value, onChange, className, height, language }: {
 
   return (
     <div
-      className={`relative border rounded-md overflow-hidden bg-white dark:bg-[#1A1F26] dark:border-[#2F353D] ${className}`}
+      className={`relative overflow-hidden rounded-sm border border-border/80 bg-background/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] ${className}`}
       style={{ height: typeof height === 'string' ? height : `${height}px` }}
     >
       <div
         ref={highlightRef}
-        className="absolute inset-0 overflow-auto p-4 font-mono text-[16px] leading-[1.5] whitespace-pre-wrap break-words hljs pointer-events-none"
+        className="absolute inset-0 overflow-auto p-4 font-mono text-[15px] leading-[1.55] whitespace-pre-wrap break-words hljs pointer-events-none"
         aria-hidden="true"
         dangerouslySetInnerHTML={{ __html: highlighted || '&nbsp;' }}
       />
@@ -98,7 +98,7 @@ const MobileTextarea = memo(({ value, onChange, className, height, language }: {
         value={value}
         onChange={handleChange}
         onScroll={handleScroll}
-        className="absolute inset-0 w-full h-full resize-none bg-transparent outline-none p-4 text-[16px] leading-[1.5] font-mono border-0 caret-[#22C55E]"
+        className="absolute inset-0 h-full w-full resize-none border-0 bg-transparent p-4 font-mono text-[15px] leading-[1.55] outline-none caret-[#22C55E]"
         inputMode="text"
         autoCapitalize="none"
         style={{
@@ -187,12 +187,12 @@ export function Editor({
 
   const FallbackEditor = () => (
     <div
-      className={`relative border rounded-md overflow-hidden bg-white dark:bg-[#1A1F26] dark:border-[#2F353D] ${className}`}
+      className={`relative overflow-hidden rounded-sm border border-border/80 bg-background/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] ${className}`}
       style={{ height: typeof height === 'string' ? height : `${height}px` }}
     >
       <div
         ref={highlightRef}
-        className="absolute inset-0 overflow-auto p-4 font-mono text-[16px] leading-[1.5] whitespace-pre-wrap break-words hljs pointer-events-none"
+        className="absolute inset-0 overflow-auto p-4 font-mono text-[14px] leading-[1.55] whitespace-pre-wrap break-words hljs pointer-events-none sm:text-[15px]"
         aria-hidden="true"
         dangerouslySetInnerHTML={{ __html: highlighted || '&nbsp;' }}
       />
@@ -200,7 +200,7 @@ export function Editor({
         ref={textareaRef}
         value={value}
         onChange={handleTextareaChange}
-        className="absolute inset-0 w-full h-full resize-none bg-transparent outline-none p-4 text-[16px] leading-[1.5] font-mono caret-[#22C55E]"
+        className="absolute inset-0 h-full w-full resize-none bg-transparent p-4 font-mono text-[14px] leading-[1.55] outline-none caret-[#22C55E] sm:text-[15px]"
         style={{
           color: 'transparent',
           caretColor: '#22C55E',
@@ -224,7 +224,7 @@ export function Editor({
   if (!mounted) {
     return (
       <div 
-        className={`border rounded-md bg-background dark:bg-[#1A1F26] flex items-center justify-center ${className}`}
+        className={`flex items-center justify-center rounded-sm border border-border/80 bg-background/70 ${className}`}
         style={{ height: typeof height === 'string' ? height : `${height}px` }}
       >
         <span className="text-muted-foreground">Loading editor...</span>
@@ -237,7 +237,7 @@ export function Editor({
   }
 
   return (
-    <div className={`relative border rounded-md overflow-hidden bg-white dark:bg-[#1A1F26] dark:border-[#2F353D] ${className}`}>
+    <div className={`relative overflow-hidden rounded-sm border border-border/80 bg-background/70 ${className}`}>
       {!showMonaco && <FallbackEditor />}
       
       <div className={showMonaco ? 'block' : 'hidden'}>
@@ -254,9 +254,9 @@ export function Editor({
           options={{
             minimap: { enabled: false },
             scrollBeyondLastLine: false,
-            fontSize: typeof window !== 'undefined' && window.innerWidth <= 768 ? 16 : 14,
+            fontSize: typeof window !== 'undefined' && window.innerWidth <= 768 ? 15 : 13,
             lineHeight: 1.5,
-            padding: { top: 16, bottom: 16 },
+            padding: { top: 14, bottom: 14 },
             automaticLayout: true,
             wordWrap: 'on',
             wrappingStrategy: 'advanced',

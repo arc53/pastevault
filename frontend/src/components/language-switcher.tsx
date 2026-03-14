@@ -29,14 +29,14 @@ export function LanguageSwitcher() {
 
   return (
     <Select value={locale} onValueChange={handleLanguageChange}>
-      <SelectTrigger className="w-[50px] h-6 text-xs border-none bg-transparent hover:bg-muted/50 p-1 text-muted-foreground hover:text-foreground transition-colors">
+      <SelectTrigger className="h-8 w-[68px] border-border/70 bg-background/55 px-2 py-0 text-[11px] text-muted-foreground hover:text-foreground">
         <SelectValue>
           <span>
             {currentLanguage?.code.toUpperCase()}
           </span>
         </SelectValue>
       </SelectTrigger>
-      <SelectContent align="end" className="min-w-[100px]">
+      <SelectContent align="end" className="min-w-[120px]">
         {languages.map((language) => (
           <SelectItem key={language.code} value={language.code} className="text-xs">
             {language.name}

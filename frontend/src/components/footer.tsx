@@ -7,29 +7,32 @@ export function Footer() {
   const t = useTranslations('footer')
   
   return (
-    <footer className="border-t text-xs text-muted-foreground py-2 px-4 sm:px-6 text-center relative">
-      <div className="text-[10px] sm:text-xs pr-16 sm:pr-0">
-        {t('projectBy')}{' '}
-        <a
-          href="https://www.arc53.com/"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-medium hover:text-foreground transition-colors"
-        >
-          Arc53
-        </a>
-        {' '}• {t('repo')}{' '}
-        <a
-          href="https://github.com/arc53/pastevault"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-mono hover:text-foreground transition-colors"
-        >
-          github.com/arc53/pastevault
-        </a>
-      </div>
-      <div className="absolute right-4 sm:right-6 top-1/2 transform -translate-y-1/2">
-        <LanguageSwitcher />
+    <footer className="border-t border-border/80 bg-background/70 backdrop-blur-md">
+      <div className="app-frame flex flex-col gap-3 py-3 text-[11px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <span className="tool-label">{t('projectBy')}</span>
+          <a
+            href="https://www.arc53.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-foreground/85 hover:text-foreground"
+          >
+            Arc53
+          </a>
+          <span className="tool-label">{t('repo')}</span>
+          <a
+            href="https://github.com/arc53/pastevault"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-mono text-foreground/85 hover:text-foreground"
+          >
+            github.com/arc53/pastevault
+          </a>
+        </div>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <span className="tool-label">locale</span>
+          <LanguageSwitcher />
+        </div>
       </div>
     </footer>
   )

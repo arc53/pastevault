@@ -1,11 +1,8 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
 import './globals.css'
 import { Providers } from '@/components/providers'
 import { I18nProvider } from '@/components/i18n-provider'
 import { Footer } from '@/components/footer'
-
-const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'PasteVault - Secure Encrypted Paste Sharing',
@@ -42,14 +39,12 @@ export default function RootLayout({
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
         <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
         <meta name="theme-color" content="#14161a" media="(prefers-color-scheme: dark)" />
-
-
       </head>
-      <body className={inter.className}>
+      <body className="min-h-screen antialiased">
         <I18nProvider>
           <Providers>
-            <div className="min-h-screen bg-background flex flex-col">
-              <main className="flex-1">
+            <div className="min-h-screen bg-transparent flex flex-col">
+              <main className="relative flex-1">
                 {children}
               </main>
               <Footer />

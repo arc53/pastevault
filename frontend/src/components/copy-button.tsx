@@ -53,8 +53,8 @@ export function CopyButton({
       aria-live="polite"
       aria-label={copied ? defaultCopiedLabel : defaultLabel}
       className={cn(
-        'transition-colors',
-        copied && 'bg-green-600 text-white border-green-600 hover:bg-green-600 animate-pulse',
+        copied &&
+          'border-emerald-500/50 bg-emerald-500/15 text-emerald-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)] hover:bg-emerald-500/15 dark:text-emerald-300',
         className
       )}
       {...buttonProps}
