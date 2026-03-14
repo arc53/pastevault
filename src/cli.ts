@@ -8,6 +8,7 @@ import rateLimit from '@fastify/rate-limit'
 import packageInfo from '../package.json'
 import { config } from './lib/config'
 import { pastesRoute } from './routes/pastes'
+import { fileSharesRoute } from './routes/file-shares'
 import { cleanupExpiredPastes } from './lib/cleanup'
 import * as cron from 'node-cron'
 import next from 'next'
@@ -111,6 +112,7 @@ async function startServer(args: CliArgs) {
 
     // Register API routes
     await fastify.register(pastesRoute, { prefix: '/api' })
+    await fastify.register(fileSharesRoute, { prefix: '/api' })
 
     // Health check endpoint
     fastify.get('/health', async () => {

@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
-import { CreatePasteRequest } from '@/types'
+import { CreateFileShareRequest, CreatePasteRequest } from '@/types'
 
 export function useCreatePaste() {
   return useMutation({
@@ -20,5 +20,28 @@ export function useGetPaste(slug: string) {
 export function useDeletePaste() {
   return useMutation({
     mutationFn: (slug: string) => api.deletePaste(slug),
+  })
+}
+
+export function useGetCapabilities() {
+  return useQuery({
+    queryKey: ['capabilities'],
+    queryFn: () => api.getCapabilities(),
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useCreateFileShare() {
+  return useMutation({
+    mutationFn: (data: CreateFileShareRequest) => api.createFileShare(data),
+  })
+}
+
+export function useGetFileShare(slug: string) {
+  return useQuery({
+    queryKey: ['file-share', slug],
+    queryFn: () => api.getFileShare(slug),
+    enabled: !!slug,
+    retry: false,
   })
 }

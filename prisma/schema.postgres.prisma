@@ -22,3 +22,21 @@ model Paste {
   @@index([expires_at])
   @@index([slug])
 }
+
+model FileShare {
+  id                  String   @id @default(cuid())
+  slug                String   @unique
+  manifest_ciphertext String?
+  manifest_nonce      String?
+  salt                String?
+  kdf_params          String?
+  created_at          DateTime @default(now())
+  expires_at          DateTime?
+  is_complete         Boolean  @default(false)
+  view_count          Int      @default(0)
+  file_count          Int      @default(0)
+  total_size_bytes    String   @default("0")
+
+  @@index([expires_at])
+  @@index([slug])
+}

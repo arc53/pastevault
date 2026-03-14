@@ -9,12 +9,12 @@ function createAssociatedData(pasteId: string, version: string = ALGORITHM_VERSI
   return new TextEncoder().encode(data)
 }
 
-function base64urlEncode(bytes: Uint8Array): string {
+export function base64urlEncode(bytes: Uint8Array): string {
   const base64 = btoa(String.fromCharCode.apply(null, Array.from(bytes)))
   return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
 }
 
-function base64urlDecode(str: string): Uint8Array {
+export function base64urlDecode(str: string): Uint8Array {
   const base64 = str.replace(/-/g, '+').replace(/_/g, '/')
   const padded = base64 + '=='.slice(0, (4 - base64.length % 4) % 4)
   const binary = atob(padded)
@@ -154,6 +154,19 @@ export function createShareUrl(slug: string, key?: Uint8Array): string {
     return `${baseUrl}#k=${keyStr}`
   }
   return baseUrl
+}
+
+export function createFileShareUrl(slug: string, key?: Uint8Array): string {
+  const baseUrl = `${window.location.origin}/f/${slug}`
+  if (key) {
+    const keyStr = base64urlEncode(key)
+    return `${baseUrl}#k=${keyStr}`
+  }
+  return baseUrl
+}
+
+export function decodeKeyString(key: string): Uint8Array {
+  return base64urlDecode(key)
 }
 
 export async function calculateContentHash(content: PasteContent): Promise<string> {

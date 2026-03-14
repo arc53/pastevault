@@ -1,11 +1,14 @@
 import { FastifyInstance } from 'fastify'
 import { getPrisma } from '../lib/db'
 import { config } from '../lib/config'
+import { ensurePasteSchema } from '../lib/pastes-db'
 import { generateSlug, calculateExpiryDate, isExpired } from '../lib/utils'
 import { createPasteSchema, getPasteParamsSchema } from '../lib/validation'
 import { CreatePasteRequest, CreatePasteResponse, GetPasteResponse } from '../types'
 
 export async function pastesRoute(fastify: FastifyInstance) {
+  await ensurePasteSchema()
+
   fastify.post<{
     Body: CreatePasteRequest
   }>('/pastes', async (request, reply) => {
