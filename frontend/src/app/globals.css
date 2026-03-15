@@ -220,6 +220,176 @@
   .utility-drawer {
     @apply fixed inset-y-0 right-0 z-50 w-80 max-w-[92vw] overflow-y-auto border-l border-border/80 bg-background/95 p-4 shadow-2xl backdrop-blur-xl;
   }
+
+  .transfer-hud {
+    @apply space-y-3 rounded-sm border border-border/70 p-3;
+    background:
+      linear-gradient(180deg, hsl(var(--background) / 0.94), hsl(var(--muted) / 0.42)),
+      radial-gradient(circle at top right, hsl(var(--primary) / 0.12), transparent 42%);
+  }
+
+  .transfer-hud-header {
+    @apply flex flex-wrap items-center justify-between gap-3;
+  }
+
+  .transfer-phase {
+    @apply inline-flex items-center gap-2 rounded-sm border px-2 py-1 text-[11px];
+    border-color: hsl(var(--primary) / 0.26);
+    background: hsl(var(--primary) / 0.12);
+    color: hsl(var(--foreground));
+    font-family: var(--font-mono);
+  }
+
+  .transfer-phase-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    background: hsl(var(--primary));
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0.34);
+    animation: transfer-pulse 1.6s ease-out infinite;
+    flex: none;
+  }
+
+  .transfer-track {
+    @apply relative h-3 overflow-hidden rounded-sm border border-border/70;
+    background: linear-gradient(180deg, hsl(var(--muted) / 0.94), hsl(var(--background) / 0.78));
+  }
+
+  .transfer-track::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      hsl(var(--foreground) / 0.04) 24%,
+      hsl(var(--foreground) / 0.1) 42%,
+      transparent 62%
+    );
+    transform: translateX(-100%);
+  }
+
+  .transfer-hud.is-uploading .transfer-track::before,
+  .transfer-hud.is-finalizing .transfer-track::before,
+  .transfer-hud.is-stalled .transfer-track::before {
+    animation: transfer-glide 1.5s linear infinite;
+  }
+
+  .transfer-fill {
+    position: relative;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(
+      90deg,
+      hsl(var(--primary) / 0.74),
+      hsl(var(--primary)) 52%,
+      hsl(187 75% 46%) 100%
+    );
+    box-shadow:
+      inset 0 0 0 1px hsl(0 0% 100% / 0.16),
+      0 0 18px hsl(var(--primary) / 0.28);
+    transition: width 220ms ease;
+  }
+
+  .transfer-fill::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: linear-gradient(
+      135deg,
+      hsl(0 0% 100% / 0.14) 0%,
+      hsl(0 0% 100% / 0.26) 16%,
+      transparent 16%,
+      transparent 32%,
+      hsl(0 0% 100% / 0.16) 32%,
+      hsl(0 0% 100% / 0.06) 48%,
+      transparent 48%
+    );
+    background-size: 28px 100%;
+  }
+
+  .transfer-hud.is-uploading .transfer-fill::after,
+  .transfer-hud.is-finalizing .transfer-fill::after {
+    animation: transfer-stripes 0.95s linear infinite;
+  }
+
+  .transfer-hud.is-finalizing .transfer-fill::after {
+    animation-duration: 1.5s;
+  }
+
+  .transfer-hud.is-stalled .transfer-phase {
+    border-color: rgb(245 158 11 / 0.36);
+    background: rgb(245 158 11 / 0.12);
+  }
+
+  .transfer-hud.is-stalled .transfer-phase-dot {
+    background: rgb(245 158 11);
+    box-shadow: none;
+    animation: none;
+  }
+
+  .transfer-hud.is-stalled .transfer-fill {
+    background: linear-gradient(90deg, rgb(245 158 11 / 0.78), rgb(234 88 12 / 0.92));
+    box-shadow:
+      inset 0 0 0 1px rgb(255 255 255 / 0.16),
+      0 0 18px rgb(245 158 11 / 0.18);
+  }
+
+  .transfer-hud.is-stalled .transfer-track::before {
+    animation-duration: 2.4s;
+    opacity: 0.65;
+  }
+
+  .transfer-readout {
+    @apply flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground;
+    font-family: var(--font-mono);
+  }
+
+  .transfer-readout-value {
+    color: hsl(var(--foreground));
+    font-weight: 500;
+  }
+
+  .transfer-readout-separator {
+    color: hsl(var(--muted-foreground) / 0.7);
+  }
+}
+
+@keyframes transfer-pulse {
+  0% {
+    transform: scale(0.92);
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0.34);
+  }
+
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 8px hsl(var(--primary) / 0);
+  }
+
+  100% {
+    transform: scale(0.92);
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0);
+  }
+}
+
+@keyframes transfer-glide {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(140%);
+  }
+}
+
+@keyframes transfer-stripes {
+  0% {
+    background-position: 0 0;
+  }
+
+  100% {
+    background-position: 28px 0;
+  }
 }
 
 @layer base {

@@ -42,6 +42,66 @@ import { Draft, FileShareManifest, PasteContent } from '@/types'
 type ShareKind = 'paste' | 'files' | 'mixed'
 
 const DEFAULT_EXPIRY_HOURS = 24
+const STALL_THRESHOLD_MS = 4000
+
+type UploadPhase = 'idle' | 'uploading' | 'finalizing'
+
+type UploadTelemetry = {
+  phase: UploadPhase
+  progress: number
+  uploadedBytes: number
+  totalBytes: number
+  smoothedBytesPerSecond: number
+  estimatedSecondsRemaining: number | null
+  isStalled: boolean
+  lastNetworkActivityAt: number | null
+}
+
+function createInitialUploadTelemetry(): UploadTelemetry {
+  return {
+    phase: 'idle',
+    progress: 0,
+    uploadedBytes: 0,
+    totalBytes: 0,
+    smoothedBytesPerSecond: 0,
+    estimatedSecondsRemaining: null,
+    isStalled: false,
+    lastNetworkActivityAt: null,
+  }
+}
+
+function formatTransferRate(bytesPerSecond: number) {
+  if (!Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) {
+    return '0 B/s'
+  }
+
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  const exponent = Math.min(
+    Math.floor(Math.log(bytesPerSecond) / Math.log(1024)),
+    units.length - 1
+  )
+  const value = bytesPerSecond / 1024 ** exponent
+  const digits = value >= 100 || exponent === 0 ? 0 : 1
+
+  return `${value.toFixed(digits)} ${units[exponent]}/s`
+}
+
+function formatEta(seconds: number) {
+  const rounded = Math.max(1, Math.round(seconds))
+  const hours = Math.floor(rounded / 3600)
+  const minutes = Math.floor((rounded % 3600) / 60)
+  const remainingSeconds = rounded % 60
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`
+  }
+
+  if (minutes > 0) {
+    return `${minutes}m ${remainingSeconds}s`
+  }
+
+  return `${remainingSeconds}s`
+}
 
 function formatFileCount(count: number) {
   return count === 1 ? '1 file' : `${count} files`
@@ -99,12 +159,20 @@ export default function CreatePastePage() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [createError, setCreateError] = useState('')
-  const [uploadProgress, setUploadProgress] = useState(0)
+  const [uploadTelemetry, setUploadTelemetry] = useState<UploadTelemetry>(
+    () => createInitialUploadTelemetry()
+  )
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const uploadSpeedRef = useRef(0)
   const createPaste = useCreatePaste()
   const createFileShare = useCreateFileShare()
   const { data: capabilities } = useGetCapabilities()
+
+  const resetUploadTelemetry = () => {
+    uploadSpeedRef.current = 0
+    setUploadTelemetry(createInitialUploadTelemetry())
+  }
 
   const totalSelectedFileSize = selectedFiles.reduce(
     (total, file) => total + file.size,
@@ -120,6 +188,38 @@ export default function CreatePastePage() {
       ? tFiles('sendShare')
       : t('send')
   const editorHeight = 'clamp(360px, 62vh, 860px)'
+  const shouldShowUploadTelemetry =
+    hasAttachedFiles &&
+    uploadTelemetry.totalBytes > 0 &&
+    (isCreating || uploadTelemetry.progress > 0 || Boolean(createError))
+  const uploadStateClass = uploadTelemetry.isStalled
+    ? 'is-stalled'
+    : uploadTelemetry.phase === 'uploading'
+      ? 'is-uploading'
+      : uploadTelemetry.phase === 'finalizing'
+        ? 'is-finalizing'
+        : ''
+  const uploadPhaseLabel = uploadTelemetry.isStalled
+    ? tFiles('phaseStalled')
+    : uploadTelemetry.phase === 'finalizing'
+      ? tFiles('phaseFinalizing')
+      : tFiles('phaseUploading')
+  const uploadSpeedText =
+    uploadTelemetry.smoothedBytesPerSecond > 0
+      ? formatTransferRate(uploadTelemetry.smoothedBytesPerSecond)
+      : tFiles('calculating')
+  const uploadAmountText = `${formatBytes(uploadTelemetry.uploadedBytes)} / ${formatBytes(
+    uploadTelemetry.totalBytes
+  )}`
+  const uploadEtaText =
+    uploadTelemetry.phase === 'finalizing'
+      ? tFiles('finalizingEta')
+      : uploadTelemetry.smoothedBytesPerSecond > 0 &&
+          uploadTelemetry.estimatedSecondsRemaining !== null
+        ? tFiles('etaRemaining', {
+            time: formatEta(uploadTelemetry.estimatedSecondsRemaining),
+          })
+        : tFiles('calculating')
 
   useEffect(() => {
     const draft = loadDraft()
@@ -148,6 +248,42 @@ export default function CreatePastePage() {
       window.removeEventListener('keydown', onKeyDown)
     }
   }, [mobileMenuOpen])
+
+  useEffect(() => {
+    if (
+      uploadTelemetry.phase !== 'uploading' ||
+      uploadTelemetry.lastNetworkActivityAt === null
+    ) {
+      return
+    }
+
+    const intervalId = window.setInterval(() => {
+      setUploadTelemetry((current) => {
+        if (
+          current.phase !== 'uploading' ||
+          current.lastNetworkActivityAt === null
+        ) {
+          return current
+        }
+
+        const isStalled =
+          performance.now() - current.lastNetworkActivityAt >= STALL_THRESHOLD_MS
+
+        if (current.isStalled === isStalled) {
+          return current
+        }
+
+        return {
+          ...current,
+          isStalled,
+        }
+      })
+    }, 400)
+
+    return () => {
+      window.clearInterval(intervalId)
+    }
+  }, [uploadTelemetry.phase, uploadTelemetry.lastNetworkActivityAt])
 
   const loadFromDraft = () => {
     const draft = loadDraft()
@@ -255,10 +391,20 @@ export default function CreatePastePage() {
 
     setIsCreating(true)
     setCreateError('')
-    setUploadProgress(0)
 
     try {
       const clientSlug = nanoid(12)
+      uploadSpeedRef.current = 0
+      setUploadTelemetry({
+        phase: 'uploading',
+        progress: 0,
+        uploadedBytes: 0,
+        totalBytes: totalSelectedFileSize,
+        smoothedBytesPerSecond: 0,
+        estimatedSecondsRemaining: null,
+        isStalled: false,
+        lastNetworkActivityAt: null,
+      })
       const encryption = await prepareFileShareEncryption(
         passwordProtected ? password : undefined
       )
@@ -296,6 +442,13 @@ export default function CreatePastePage() {
             fileId,
             chunkIndex
           )
+          const uploadStartedAt = performance.now()
+          setUploadTelemetry((current) => ({
+            ...current,
+            phase: 'uploading',
+            isStalled: false,
+            lastNetworkActivityAt: uploadStartedAt,
+          }))
 
           await api.uploadFileShareChunk(
             clientSlug,
@@ -303,6 +456,13 @@ export default function CreatePastePage() {
             chunkIndex,
             encryptedChunk.ciphertext
           )
+          const uploadDurationMs = Math.max(performance.now() - uploadStartedAt, 1)
+          const instantaneousBytesPerSecond =
+            (plaintextChunk.length / uploadDurationMs) * 1000
+          uploadSpeedRef.current =
+            uploadSpeedRef.current === 0
+              ? instantaneousBytesPerSecond
+              : uploadSpeedRef.current * 0.72 + instantaneousBytesPerSecond * 0.28
 
           chunks.push({
             index: chunkIndex,
@@ -311,12 +471,30 @@ export default function CreatePastePage() {
           })
 
           uploadedBytes += plaintextChunk.length
-          setUploadProgress(
-            Math.min(
-              100,
-              Math.round((uploadedBytes / Math.max(totalSelectedFileSize, 1)) * 100)
-            )
-          )
+          const remainingBytes = Math.max(totalSelectedFileSize - uploadedBytes, 0)
+          const progress =
+            totalSelectedFileSize === 0
+              ? 100
+              : Math.min(
+                  100,
+                  Math.round((uploadedBytes / Math.max(totalSelectedFileSize, 1)) * 100)
+                )
+          const nextPhase: UploadPhase =
+            remainingBytes === 0 ? 'finalizing' : 'uploading'
+
+          setUploadTelemetry((current) => ({
+            ...current,
+            phase: nextPhase,
+            progress,
+            uploadedBytes,
+            smoothedBytesPerSecond: uploadSpeedRef.current,
+            estimatedSecondsRemaining:
+              remainingBytes === 0 || uploadSpeedRef.current <= 0
+                ? 0
+                : remainingBytes / uploadSpeedRef.current,
+            isStalled: false,
+            lastNetworkActivityAt: null,
+          }))
         }
 
         manifestFiles.push({
@@ -328,6 +506,17 @@ export default function CreatePastePage() {
           chunks,
         })
       }
+
+      setUploadTelemetry((current) => ({
+        ...current,
+        phase: 'finalizing',
+        progress: current.totalBytes === 0 ? 100 : current.progress,
+        uploadedBytes:
+          current.totalBytes === 0 ? current.totalBytes : current.uploadedBytes,
+        estimatedSecondsRemaining: 0,
+        isStalled: false,
+        lastNetworkActivityAt: null,
+      }))
 
       const manifest = {
         version: 'v1',
@@ -350,7 +539,6 @@ export default function CreatePastePage() {
       )
       setLastShareKind(optionalNoteContent ? 'mixed' : 'files')
       setSelectedFiles([])
-      setUploadProgress(0)
       if (optionalNoteContent) {
         clearDraft()
         setHasDraft(false)
@@ -360,6 +548,11 @@ export default function CreatePastePage() {
       }
     } catch (error) {
       console.error('Failed to create file share:', error)
+      setUploadTelemetry((current) => ({
+        ...current,
+        isStalled: false,
+        lastNetworkActivityAt: null,
+      }))
       setCreateError((error as Error).message || t('error'))
     } finally {
       setIsCreating(false)
@@ -384,7 +577,7 @@ export default function CreatePastePage() {
     setBurnAfterRead(false)
     setSelectedFiles([])
     setCreateError('')
-    setUploadProgress(0)
+    resetUploadTelemetry()
     setShareUrl('')
     setLastShareKind('paste')
     setHasDraft(false)
@@ -396,13 +589,14 @@ export default function CreatePastePage() {
   }
 
   const selectFiles = (files: FileList | null) => {
-    if (!files) {
+    if (!files || isCreating) {
       return
     }
 
     const nextFiles = Array.from(files)
     setCreateError('')
     setBurnAfterRead(false)
+    resetUploadTelemetry()
     setSelectedFiles((current) => {
       const currentKeys = new Set(current.map(getSelectedFileKey))
       const uniqueNextFiles = nextFiles.filter((file) => !currentKeys.has(getSelectedFileKey(file)))
@@ -415,12 +609,13 @@ export default function CreatePastePage() {
   }
 
   const removeFile = (index: number) => {
+    resetUploadTelemetry()
     setSelectedFiles((current) => current.filter((_, currentIndex) => currentIndex !== index))
   }
 
   const clearFiles = () => {
     setSelectedFiles([])
-    setUploadProgress(0)
+    resetUploadTelemetry()
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
@@ -486,6 +681,7 @@ export default function CreatePastePage() {
       variant={hasAttachedFiles ? 'default' : 'outline'}
       size={mobile ? 'sm' : 'default'}
       className="justify-between gap-2"
+      disabled={isCreating}
       onClick={() => fileInputRef.current?.click()}
     >
       <Paperclip className="h-4 w-4" />
@@ -625,6 +821,7 @@ export default function CreatePastePage() {
         type="file"
         multiple
         className="hidden"
+        disabled={isCreating}
         onChange={(event) => selectFiles(event.target.files)}
       />
 
@@ -820,6 +1017,7 @@ export default function CreatePastePage() {
                         type="button"
                         variant="outline"
                         size="sm"
+                        disabled={isCreating}
                         onClick={() => fileInputRef.current?.click()}
                       >
                         {tFiles('addMoreFiles')}
@@ -828,6 +1026,7 @@ export default function CreatePastePage() {
                         type="button"
                         variant="ghost"
                         size="sm"
+                        disabled={isCreating}
                         onClick={clearFiles}
                       >
                         {tFiles('removeAllFiles')}
@@ -852,6 +1051,7 @@ export default function CreatePastePage() {
                           variant="ghost"
                           size="sm"
                           className="h-7 w-7 p-0 text-muted-foreground"
+                          disabled={isCreating}
                           onClick={() => removeFile(index)}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -860,17 +1060,56 @@ export default function CreatePastePage() {
                     ))}
                   </div>
 
-                  {uploadProgress > 0 && (
-                    <div className="space-y-2 pt-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span>{tFiles('uploadProgress')}</span>
-                        <span>{uploadProgress}%</span>
+                  {shouldShowUploadTelemetry && (
+                    <div className={`transfer-hud ${uploadStateClass}`} aria-live="polite">
+                      <div className="transfer-hud-header">
+                        <span className="transfer-phase">
+                          <span className="transfer-phase-dot" />
+                          {uploadPhaseLabel}
+                        </span>
+                        <span className="meta-chip">
+                          <strong>{uploadTelemetry.progress}%</strong>
+                        </span>
                       </div>
-                      <div className="h-2 overflow-hidden rounded-sm border border-border/60 bg-muted/60">
+
+                      <div className="transfer-track" aria-hidden="true">
                         <div
-                          className="h-full bg-primary transition-all"
-                          style={{ width: `${uploadProgress}%` }}
+                          className="transfer-fill"
+                          style={{ width: `${uploadTelemetry.progress}%` }}
                         />
+                      </div>
+
+                      <div className="transfer-readout" aria-live="polite">
+                        <span
+                          className="transfer-readout-value"
+                          aria-label={`${tFiles('uploadedAmount')}: ${uploadAmountText}`}
+                        >
+                          {uploadAmountText}
+                        </span>
+                        <span
+                          className="transfer-readout-separator"
+                          aria-hidden="true"
+                        >
+                          |
+                        </span>
+                        <span
+                          className="transfer-readout-value"
+                          aria-label={`${tFiles('speed')}: ${uploadSpeedText}`}
+                        >
+                          {uploadSpeedText}
+                        </span>
+                        <span
+                          className="transfer-readout-separator"
+                          aria-hidden="true"
+                        >
+                          |
+                        </span>
+                        <span
+                          className="transfer-readout-value"
+                          aria-label={`${tFiles('eta')}: ${uploadEtaText}`}
+                        >
+                          {uploadEtaText}
+                        </span>
                       </div>
                     </div>
                   )}
