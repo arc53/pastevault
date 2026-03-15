@@ -24,7 +24,7 @@ const configSchema = z.object({
   CORS_ORIGIN: z
     .string()
     .default(defaultNodeEnv === 'production' ? 'http://localhost:3000' : 'http://localhost:3002'),
-  RATE_LIMIT_MAX: z.string().default('10').transform(Number),
+  RATE_LIMIT_MAX: z.string().default('2000').transform(Number),
   RATE_LIMIT_WINDOW_MS: z.string().default('60000').transform(Number),
   MAX_PASTE_SIZE_BYTES: z.string().default('1048576').transform(Number),
   MAX_FILE_SHARE_SIZE_BYTES: z.string().default('10737418240').transform(Number),
