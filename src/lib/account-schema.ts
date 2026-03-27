@@ -63,6 +63,22 @@ async function ensureAuthTables() {
     )
   `)
 
+  await prisma.$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS "deviceCode" (
+      "id" TEXT NOT NULL PRIMARY KEY,
+      "deviceCode" TEXT NOT NULL UNIQUE,
+      "userCode" TEXT NOT NULL UNIQUE,
+      "userId" TEXT,
+      "expiresAt" TIMESTAMP NOT NULL,
+      "status" TEXT NOT NULL,
+      "lastPolledAt" TIMESTAMP,
+      "pollingInterval" INTEGER,
+      "clientId" TEXT,
+      "scope" TEXT,
+      FOREIGN KEY ("userId") REFERENCES "user"("id") ON DELETE CASCADE
+    )
+  `)
+
   await prisma.$executeRawUnsafe(
     'CREATE INDEX IF NOT EXISTS "session_userId_idx" ON "session"("userId")'
   )
@@ -71,6 +87,12 @@ async function ensureAuthTables() {
   )
   await prisma.$executeRawUnsafe(
     'CREATE INDEX IF NOT EXISTS "verification_identifier_idx" ON "verification"("identifier")'
+  )
+  await prisma.$executeRawUnsafe(
+    'CREATE INDEX IF NOT EXISTS "deviceCode_userId_idx" ON "deviceCode"("userId")'
+  )
+  await prisma.$executeRawUnsafe(
+    'CREATE INDEX IF NOT EXISTS "deviceCode_status_expiresAt_idx" ON "deviceCode"("status", "expiresAt")'
   )
 }
 

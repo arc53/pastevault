@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { ExternalLink, Eye, KeyRound, Loader2, Lock, Trash2, UserRound } from 'lucide-react'
@@ -98,10 +99,21 @@ function getShareSizeLabel(share: AccountShare) {
   return `${share.file_count || 0} files · ${formatBytes(Number(share.total_size_bytes))}`
 }
 
+function getSafeRedirectTarget(value: string | null) {
+  if (!value || !value.startsWith('/') || value.startsWith('//')) {
+    return null
+  }
+
+  return value
+}
+
 export default function AccountPage() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const queryClient = useQueryClient()
   const { data: session, isPending: isSessionPending } = authClient.useSession()
   const deleteShare = useDeleteAccountShare()
+  const redirectTarget = getSafeRedirectTarget(searchParams.get('redirectTo'))
 
   const [mode, setMode] = useState<'signin' | 'signup'>('signin')
   const [authError, setAuthError] = useState('')
@@ -146,6 +158,9 @@ export default function AccountPage() {
         setAuthError(result.error.message || 'Unable to sign in')
       } else {
         await queryClient.invalidateQueries({ queryKey: ['account-shares'] })
+        if (redirectTarget) {
+          router.push(redirectTarget)
+        }
       }
     } catch (error) {
       setAuthError((error as Error).message || 'Unable to sign in')
@@ -172,6 +187,9 @@ export default function AccountPage() {
         setAuthError(result.error.message || 'Unable to create account')
       } else {
         await queryClient.invalidateQueries({ queryKey: ['account-shares'] })
+        if (redirectTarget) {
+          router.push(redirectTarget)
+        }
       }
     } catch (error) {
       setAuthError((error as Error).message || 'Unable to create account')
@@ -220,6 +238,12 @@ export default function AccountPage() {
       }
     })
   }, [mode])
+
+  useEffect(() => {
+    if (session && redirectTarget) {
+      router.replace(redirectTarget)
+    }
+  }, [redirectTarget, router, session])
 
   if (isSessionPending) {
     return (

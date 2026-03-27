@@ -1,9 +1,9 @@
 'use client'
 
 import { createAuthClient } from 'better-auth/react'
-import { usernameClient } from 'better-auth/client/plugins'
+import { deviceAuthorizationClient, usernameClient } from 'better-auth/client/plugins'
 
-function getAuthBaseUrl() {
+export function getAuthBaseUrl() {
   if (typeof window !== 'undefined') {
     if (process.env.NEXT_PUBLIC_API_URL) {
       return `${process.env.NEXT_PUBLIC_API_URL}/auth`
@@ -20,5 +20,5 @@ export const authClient = createAuthClient({
   fetchOptions: {
     credentials: 'include',
   },
-  plugins: [usernameClient()],
+  plugins: [usernameClient(), deviceAuthorizationClient()],
 })
