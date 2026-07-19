@@ -1,0 +1,87 @@
+version: 2
+
+project_name: pastevault
+
+builds:
+  - id: pastevault
+    main: ./cmd/pastevault
+    binary: pastevault
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - >-
+        -s -w
+        -X main.version={{ .Version }}
+        -X main.commit={{ .Commit }}
+        -X main.date={{ .Date }}
+        -X github.com/arc53/pastevault/internal/update.embeddedPublicKey={{ .Env.PASTEVAULT_MINISIGN_PUBLIC_KEY }}
+
+archives:
+  - id: pastevault
+    ids:
+      - pastevault
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - LICENSE
+      - README.md
+    name_template: >-
+      pastevault_{{ .Os }}_{{- if eq .Arch "amd64" -}}x86_64{{- else -}}{{ .Arch }}{{- end -}}
+
+checksum:
+  name_template: checksums.txt
+
+signs:
+  - id: update-checksums
+    artifacts: checksum
+    signature: "${artifact}.minisig"
+    cmd: go
+    args:
+      - run
+      - ./cmd/pastevault-release-sign
+      - sign
+      - "${artifact}"
+      - "${signature}"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+release:
+  github:
+    owner: arc53
+    name: pastevault
+  prerelease: auto
+
+homebrew_casks:
+  - ids:
+      - pastevault
+    repository:
+      owner: arc53
+      name: homebrew-DocsGPT-cli
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Casks
+    homepage: https://pastevault.dev
+    description: End-to-end encrypted file sharing from the terminal
+    license: GPL-3.0
+    binaries:
+      - pastevault
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/pastevault"]
+          end
+
+changelog:
+  use: git

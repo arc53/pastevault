@@ -1,0 +1,48 @@
+name: Release PasteVault CLI
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: release-pastevault-cli
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.repository == 'arc53/pastevault'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Validate CLI
+        run: go test ./...
+
+      - name: Configure release signing
+        env:
+          PASTEVAULT_MINISIGN_PRIVATE_KEY: ${{ secrets.PASTEVAULT_MINISIGN_PRIVATE_KEY }}
+        run: |
+          public_key="$(go run ./cmd/pastevault-release-sign public-key)"
+          test -n "$public_key"
+          echo "PASTEVAULT_MINISIGN_PUBLIC_KEY=$public_key" >> "$GITHUB_ENV"
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          PASTEVAULT_MINISIGN_PRIVATE_KEY: ${{ secrets.PASTEVAULT_MINISIGN_PRIVATE_KEY }}

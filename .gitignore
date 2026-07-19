@@ -12,3 +12,7 @@ yarn-error.log*
 *.log
 pastevault.db
 *.tgz
+
+# Local native CLI build and release-signing secret
+/pastevault
+/pastevault-release.key

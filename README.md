@@ -8,7 +8,50 @@ An open-source, E2EE pastebin with a VS Code-like editor
 
 ## Quickstart
 
-### A) One command (Node.js)
+### A) Share or download files from the terminal
+
+macOS/Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/arc53/pastevault/main/scripts/install.sh | sh
+```
+
+Windows PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/arc53/pastevault/main/scripts/install.ps1 | iex
+```
+
+Usage:
+
+```bash
+pastevault login
+pastevault put ./report.pdf
+pastevault get https://your-server.example/f/abc123#k=yourkey
+pastevault get abc123#k=yourkey
+pastevault whoami
+pastevault logout
+```
+
+The native CLI talks to `https://api.pastevault.dev` by default and emits public share links on `https://pastevault.dev`. `pastevault login` uses a browser link or short code flow on `/device`, and logged-in CLI uploads show up later in the web account dashboard. Override the defaults with `PASTEVAULT_SERVER`, `PASTEVAULT_PUBLIC_URL`, or `--server` when testing against another deployment.
+
+### Native CLI updates
+
+Direct binary installs check for a signed release in the background at most once a day. A verified update is staged without delaying the current command and installed on the next invocation. Homebrew-managed and non-writable installations only show a notification.
+
+```bash
+pastevault update                         # Check, confirm, and install now
+pastevault update --check                 # Check without installing
+pastevault update --yes                   # Install without confirmation
+pastevault update --rollback              # Restore the previous binary
+pastevault config set-auto-update on      # Automatic staging/installing (default)
+pastevault config set-auto-update notify  # Notify only
+pastevault config set-auto-update off     # Disable update checks
+```
+
+Set `PASTEVAULT_NO_UPDATE_CHECK=1` to suppress passive checks for a particular environment. Automatic update output is written to stderr so machine-readable command output remains clean.
+
+### B) One command self-hosting (Node.js)
 
 Requirements: Node.js 20.19+, 22.13+, or 24+ and npm.
 
@@ -16,7 +59,7 @@ Requirements: Node.js 20.19+, 22.13+, or 24+ and npm.
 npx pastevault up
 ```
 
-### B) Docker Compose (all-in-one)
+### C) Docker Compose (all-in-one)
 
 Requirements: Docker and Docker Compose.
 
@@ -39,9 +82,17 @@ docker compose -f docker-compose.all.yml down
 - End-to-end encryption (XChaCha20-Poly1305) with client-side key generation
 - Zero-knowledge: decryption key kept in URL fragment (#), never sent to server
 - Optional password mode (PBKDF2) and per-paste expiry/burn-after-read
+- Native Go client for terminal upload/download workflows
 - Markdown support with code syntax highlighting
 - Simple REST API with validation and rate limiting
 - SQLite (default) or PostgreSQL storage
+
+## CLI install paths
+
+- Native client: `curl | sh` on macOS/Linux, `irm | iex` on Windows
+- Self-hosted server launcher: `npx pastevault up`
+- Homebrew: `brew install --cask arc53/DocsGPT-cli/pastevault`
+- Distribution details are documented in [docs/distribution.md](./docs/distribution.md)
 
 ## Minimal configuration
 
