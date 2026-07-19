@@ -30,6 +30,44 @@ function reservePort() {
   })
 }
 
+function startTestServer({ port, databasePath, dataDirectory, environment = {} }) {
+  const child = spawn(
+    process.execPath,
+    [
+      'dist/cli.js',
+      'up',
+      '--port',
+      String(port),
+      '--host',
+      '127.0.0.1',
+      '--database-url',
+      `file:${databasePath}`,
+      '--data-dir',
+      dataDirectory,
+      '--log-level',
+      'warn',
+      '--no-migrations',
+    ],
+    {
+      cwd: projectRoot,
+      env: {
+        ...process.env,
+        DATABASE_PROVIDER: 'sqlite',
+        NODE_ENV: 'test',
+        DISABLE_AUTH: 'false',
+        DISABLE_SIGNUP: 'false',
+        ...environment,
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }
+  )
+
+  child.stdout.on('data', (chunk) => serverOutput.push(chunk.toString()))
+  child.stderr.on('data', (chunk) => serverOutput.push(chunk.toString()))
+
+  return child
+}
+
 async function waitForServer(baseUrl, child) {
   const deadline = Date.now() + 30_000
 
@@ -110,36 +148,7 @@ try {
 
   const port = await reservePort()
   const baseUrl = `http://127.0.0.1:${port}`
-  child = spawn(
-    process.execPath,
-    [
-      'dist/cli.js',
-      'up',
-      '--port',
-      String(port),
-      '--host',
-      '127.0.0.1',
-      '--database-url',
-      `file:${databasePath}`,
-      '--data-dir',
-      dataDirectory,
-      '--log-level',
-      'warn',
-      '--no-migrations',
-    ],
-    {
-      cwd: projectRoot,
-      env: {
-        ...process.env,
-        DATABASE_PROVIDER: 'sqlite',
-        NODE_ENV: 'test',
-      },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    }
-  )
-
-  child.stdout.on('data', (chunk) => serverOutput.push(chunk.toString()))
-  child.stderr.on('data', (chunk) => serverOutput.push(chunk.toString()))
+  child = startTestServer({ port, databasePath, dataDirectory })
 
   await waitForServer(baseUrl, child)
 
@@ -155,6 +164,8 @@ try {
 
   const capabilities = await request(baseUrl, '/api/capabilities')
   assert.equal(capabilities.response.status, 200)
+  assert.equal(capabilities.body.auth.enabled, true)
+  assert.equal(capabilities.body.auth.signup_enabled, true)
   assert.equal(capabilities.body.file_shares.enabled, true)
 
   const pasteSlug = `e2e-paste-${randomUUID()}`
@@ -269,7 +280,98 @@ try {
   assert.equal(missingApiRoute.response.status, 404)
   assert.equal(missingApiRoute.body.error, 'Not Found')
 
-  console.log('E2E smoke test passed: UI, pastes, burn-after-read, and file shares')
+  await stopServer(child)
+  child = undefined
+
+  const anonymousPort = await reservePort()
+  const anonymousBaseUrl = `http://127.0.0.1:${anonymousPort}`
+  child = startTestServer({
+    port: anonymousPort,
+    databasePath: path.join(temporaryRoot, 'anonymous.db'),
+    dataDirectory: path.join(temporaryRoot, 'anonymous-data'),
+    environment: {
+      DISABLE_AUTH: 'true',
+    },
+  })
+  await waitForServer(anonymousBaseUrl, child)
+
+  const anonymousCapabilities = await request(anonymousBaseUrl, '/api/capabilities')
+  assert.equal(anonymousCapabilities.response.status, 200)
+  assert.equal(anonymousCapabilities.body.auth.enabled, false)
+  assert.equal(anonymousCapabilities.body.auth.signup_enabled, false)
+
+  const disabledAuthRoute = await request(anonymousBaseUrl, '/api/auth/get-session')
+  assert.equal(disabledAuthRoute.response.status, 404)
+
+  const disabledAccountRoute = await request(anonymousBaseUrl, '/api/account/shares')
+  assert.equal(disabledAccountRoute.response.status, 404)
+
+  const anonymousPaste = await request(anonymousBaseUrl, '/api/pastes', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      slug: `anonymous-${randomUUID()}`,
+      ciphertext,
+      nonce,
+      burn_after_read: false,
+    }),
+  })
+  assert.equal(anonymousPaste.response.status, 201)
+
+  await stopServer(child)
+  child = undefined
+
+  const signupDisabledPort = await reservePort()
+  const signupDisabledBaseUrl = `http://127.0.0.1:${signupDisabledPort}`
+  child = startTestServer({
+    port: signupDisabledPort,
+    databasePath: path.join(temporaryRoot, 'signup-disabled.db'),
+    dataDirectory: path.join(temporaryRoot, 'signup-disabled-data'),
+    environment: {
+      DISABLE_SIGNUP: 'true',
+    },
+  })
+  await waitForServer(signupDisabledBaseUrl, child)
+
+  const signupDisabledCapabilities = await request(
+    signupDisabledBaseUrl,
+    '/api/capabilities'
+  )
+  assert.equal(signupDisabledCapabilities.response.status, 200)
+  assert.equal(signupDisabledCapabilities.body.auth.enabled, true)
+  assert.equal(signupDisabledCapabilities.body.auth.signup_enabled, false)
+
+  const availableSessionRoute = await request(
+    signupDisabledBaseUrl,
+    '/api/auth/get-session'
+  )
+  assert.equal(availableSessionRoute.response.status, 200)
+  assert.equal(availableSessionRoute.body, null)
+
+  const blockedSignup = await request(
+    signupDisabledBaseUrl,
+    '/api/auth/sign-up/email',
+    {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        origin: signupDisabledBaseUrl,
+      },
+      body: JSON.stringify({
+        name: 'E2E User',
+        email: 'e2e@example.com',
+        username: 'e2e_user',
+        displayUsername: 'e2e_user',
+        password: 'correct-horse-battery-staple',
+      }),
+    }
+  )
+  assert.equal(blockedSignup.response.status, 403)
+  assert.equal(blockedSignup.body.code, 'SIGN_UP_DISABLED')
+
+  console.log(
+    'E2E smoke test passed: UI, shares, burn-after-read, anonymous mode, and sign-up controls'
+  )
 } catch (error) {
   if (serverOutput.length > 0) {
     console.error(serverOutput.join(''))
