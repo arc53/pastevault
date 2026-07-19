@@ -4,8 +4,19 @@ import Link from 'next/link'
 import { UserRound } from 'lucide-react'
 import { authClient } from '@/lib/auth-client'
 import { Button } from '@/components/ui/button'
+import { useGetCapabilities } from '@/hooks/usePaste'
 
 export function AccountLink({ compact = false }: { compact?: boolean }) {
+  const { data: capabilities, isPending } = useGetCapabilities()
+
+  if (isPending || capabilities?.auth?.enabled === false) {
+    return null
+  }
+
+  return <EnabledAccountLink compact={compact} />
+}
+
+function EnabledAccountLink({ compact }: { compact: boolean }) {
   const { data: session, isPending } = authClient.useSession()
   const label =
     !isPending && session?.user

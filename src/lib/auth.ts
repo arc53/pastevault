@@ -129,6 +129,7 @@ export const auth = betterAuth({
   }),
   emailAndPassword: {
     enabled: true,
+    disableSignUp: config.DISABLE_SIGNUP,
     autoSignIn: true,
   },
   plugins: [

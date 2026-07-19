@@ -85,6 +85,10 @@ export interface FileShareCapabilities {
 }
 
 export interface CapabilitiesResponse {
+  auth: {
+    enabled: boolean
+    signup_enabled: boolean
+  }
   file_shares: FileShareCapabilities
 }
 

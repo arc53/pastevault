@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { authClient, getAuthBaseUrl } from '@/lib/auth-client'
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useGetCapabilities } from '@/hooks/usePaste'
 
 type DeviceAuthorizationStatus = 'pending' | 'approved' | 'denied'
 
@@ -56,6 +57,37 @@ async function requestAuthJSON<T>(path: string, init?: RequestInit): Promise<T> 
 }
 
 export default function DevicePage() {
+  const router = useRouter()
+  const { data: capabilities, isPending } = useGetCapabilities()
+  const authEnabled = capabilities?.auth?.enabled !== false
+
+  useEffect(() => {
+    if (!authEnabled) {
+      router.replace('/')
+    }
+  }, [authEnabled, router])
+
+  if (isPending) {
+    return (
+      <div className="app-frame py-10">
+        <div className="tool-panel">
+          <div className="tool-panel-body flex items-center gap-3 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading configuration...
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!authEnabled) {
+    return null
+  }
+
+  return <DeviceContent signupEnabled={capabilities?.auth?.signup_enabled !== false} />
+}
+
+function DeviceContent({ signupEnabled }: { signupEnabled: boolean }) {
   const searchParams = useSearchParams()
   const { data: session, isPending: isSessionPending } = authClient.useSession()
 
@@ -237,7 +269,7 @@ export default function DevicePage() {
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Button asChild>
                     <Link href={`/account?redirectTo=${encodeURIComponent(redirectTarget)}`}>
-                      Sign in or create account
+                      {signupEnabled ? 'Sign in or create account' : 'Sign in'}
                     </Link>
                   </Button>
                 </div>

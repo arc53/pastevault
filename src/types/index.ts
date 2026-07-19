@@ -71,6 +71,10 @@ export interface GetFileShareResponse {
 }
 
 export interface CapabilitiesResponse {
+  auth: {
+    enabled: boolean
+    signup_enabled: boolean
+  }
   file_shares: {
     enabled: boolean
     max_share_size_bytes: number

@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest } from 'fastify'
 import { auth } from '../lib/auth.js'
 import { ensureAccountSystemSchema } from '../lib/account-schema.js'
+import { config } from '../lib/config.js'
 
 function getRequestOrigin(request: FastifyRequest) {
   const forwardedProto = request.headers['x-forwarded-proto']
@@ -39,6 +40,17 @@ function buildRequestBody(request: FastifyRequest) {
 
 async function handleAuthRequest(request: FastifyRequest) {
   const url = new URL(request.url, getRequestOrigin(request))
+
+  if (config.DISABLE_SIGNUP && /\/auth\/sign-up(?:\/|$)/.test(url.pathname)) {
+    return Response.json(
+      {
+        message: 'Account registration is disabled',
+        code: 'SIGN_UP_DISABLED',
+      },
+      { status: 403 }
+    )
+  }
+
   const headers = new Headers()
 
   for (const [key, value] of Object.entries(request.headers)) {

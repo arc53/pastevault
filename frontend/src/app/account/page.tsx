@@ -7,6 +7,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { ExternalLink, Eye, KeyRound, Loader2, Lock, Trash2, UserRound } from 'lucide-react'
 import { authClient } from '@/lib/auth-client'
 import { useAccountShares, useDeleteAccountShare } from '@/hooks/useAccount'
+import { useGetCapabilities } from '@/hooks/usePaste'
 import { formatBytes } from '@/lib/file-shares'
 import { AccountShare, OwnedShareStatus, OwnedShareType } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -109,6 +110,37 @@ function getSafeRedirectTarget(value: string | null) {
 
 export default function AccountPage() {
   const router = useRouter()
+  const { data: capabilities, isPending } = useGetCapabilities()
+  const authEnabled = capabilities?.auth?.enabled !== false
+
+  useEffect(() => {
+    if (!authEnabled) {
+      router.replace('/')
+    }
+  }, [authEnabled, router])
+
+  if (isPending) {
+    return (
+      <div className="app-frame py-10">
+        <div className="tool-panel">
+          <div className="tool-panel-body flex items-center gap-3 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading configuration...
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!authEnabled) {
+    return null
+  }
+
+  return <AccountContent signupEnabled={capabilities?.auth?.signup_enabled !== false} />
+}
+
+function AccountContent({ signupEnabled }: { signupEnabled: boolean }) {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const queryClient = useQueryClient()
   const { data: session, isPending: isSessionPending } = authClient.useSession()
@@ -170,6 +202,10 @@ export default function AccountPage() {
   }
 
   const handleSignUp = async () => {
+    if (!signupEnabled) {
+      return
+    }
+
     setAuthBusy(true)
     setAuthError('')
 
@@ -223,6 +259,11 @@ export default function AccountPage() {
   const totalViews = shares.reduce((total, share) => total + share.view_count, 0)
 
   useEffect(() => {
+    if (!signupEnabled && mode === 'signup') {
+      setMode('signin')
+      return
+    }
+
     if (mode !== 'signup') {
       return
     }
@@ -237,7 +278,7 @@ export default function AccountPage() {
         username: generateUsernameSuggestion(),
       }
     })
-  }, [mode])
+  }, [mode, signupEnabled])
 
   useEffect(() => {
     if (session && redirectTarget) {
@@ -315,13 +356,15 @@ export default function AccountPage() {
                 >
                   Sign in
                 </Button>
-                <Button
-                  type="button"
-                  variant={mode === 'signup' ? 'default' : 'outline'}
-                  onClick={() => setMode('signup')}
-                >
-                  Create account
-                </Button>
+                {signupEnabled && (
+                  <Button
+                    type="button"
+                    variant={mode === 'signup' ? 'default' : 'outline'}
+                    onClick={() => setMode('signup')}
+                  >
+                    Create account
+                  </Button>
+                )}
               </div>
             </CardHeader>
             <CardContent className="space-y-4">

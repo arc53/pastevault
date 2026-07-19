@@ -87,15 +87,11 @@ async function startServer(args: CliArgs) {
 
     const [
       { config },
-      { authRoute },
-      { accountRoute },
       { pastesRoute },
       { fileSharesRoute },
       { cleanupExpiredPastes },
     ] = await Promise.all([
       import('./lib/config.js'),
-      import('./routes/auth.js'),
-      import('./routes/account.js'),
       import('./routes/pastes.js'),
       import('./routes/file-shares.js'),
       import('./lib/cleanup.js'),
@@ -131,8 +127,14 @@ async function startServer(args: CliArgs) {
     })
 
     // Register API routes
-    await fastify.register(authRoute, { prefix: '/api' })
-    await fastify.register(accountRoute, { prefix: '/api' })
+    if (!config.DISABLE_AUTH) {
+      const [{ authRoute }, { accountRoute }] = await Promise.all([
+        import('./routes/auth.js'),
+        import('./routes/account.js'),
+      ])
+      await fastify.register(authRoute, { prefix: '/api' })
+      await fastify.register(accountRoute, { prefix: '/api' })
+    }
     await fastify.register(pastesRoute, { prefix: '/api' })
     await fastify.register(fileSharesRoute, { prefix: '/api' })
 

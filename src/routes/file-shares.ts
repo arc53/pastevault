@@ -45,7 +45,9 @@ async function purgeFileShare(slug: string, id: string) {
 
 export async function fileSharesRoute(fastify: FastifyInstance) {
   await ensureFileShareSchema()
-  await ensureAccountSystemSchema()
+  if (!config.DISABLE_AUTH) {
+    await ensureAccountSystemSchema()
+  }
   const maxEncryptedChunkSizeBytes =
     config.FILE_CHUNK_SIZE_BYTES + XCHACHA20POLY1305_TAG_BYTES
 
@@ -57,6 +59,10 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
 
   fastify.get('/capabilities', async (_request, reply) => {
     const response: CapabilitiesResponse = {
+      auth: {
+        enabled: !config.DISABLE_AUTH,
+        signup_enabled: !config.DISABLE_AUTH && !config.DISABLE_SIGNUP,
+      },
       file_shares: {
         enabled: isFileSharingConfigured(),
         max_share_size_bytes: config.MAX_FILE_SHARE_SIZE_BYTES,
