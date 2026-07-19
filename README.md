@@ -102,7 +102,12 @@ DATABASE_URL=postgresql://pastevault:pastevault_dev_password@localhost:5432/past
 DATABASE_PROVIDER=postgresql
 PORT=3001
 CORS_ORIGIN=http://localhost:3000
+DISABLE_SIGNUP=false
+DISABLE_AUTH=false
 ```
+
+Set `DISABLE_SIGNUP=true` to keep existing account sign-in available while preventing new
+registrations. Set `DISABLE_AUTH=true` to run without authentication, account routes, or account UI.
 
 Frontend (.env.local):
 ```env

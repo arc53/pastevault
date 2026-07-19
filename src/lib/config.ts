@@ -38,6 +38,14 @@ const configSchema = z.object({
   S3_SECRET_ACCESS_KEY: z.string().optional(),
   BETTER_AUTH_URL: z.string().optional(),
   BETTER_AUTH_TRUSTED_ORIGINS: z.string().optional(),
+  DISABLE_SIGNUP: z
+    .string()
+    .default('false')
+    .transform((value) => value === 'true'),
+  DISABLE_AUTH: z
+    .string()
+    .default('false')
+    .transform((value) => value === 'true'),
   S3_FORCE_PATH_STYLE: z
     .string()
     .default('true')

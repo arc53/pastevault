@@ -15,7 +15,9 @@ import { CreatePasteRequest, CreatePasteResponse, GetPasteResponse } from '../ty
 
 export async function pastesRoute(fastify: FastifyInstance) {
   await ensurePasteSchema()
-  await ensureAccountSystemSchema()
+  if (!config.DISABLE_AUTH) {
+    await ensureAccountSystemSchema()
+  }
 
   fastify.post<{
     Body: CreatePasteRequest

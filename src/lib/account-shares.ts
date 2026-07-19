@@ -1,5 +1,6 @@
 import { getPrisma } from './db.js'
 import { ensureAccountSystemSchema } from './account-schema.js'
+import { config } from './config.js'
 
 export const OWNED_SHARE_TYPES = ['paste', 'file_share'] as const
 export type OwnedShareType = (typeof OWNED_SHARE_TYPES)[number]
@@ -22,6 +23,10 @@ async function findOwnedShareByResource(
   shareType: OwnedShareType,
   resourceId: string
 ) {
+  if (config.DISABLE_AUTH) {
+    return null
+  }
+
   await ensureAccountSystemSchema()
   const prisma = getPrisma()
 
