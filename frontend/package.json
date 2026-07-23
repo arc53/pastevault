@@ -55,7 +55,7 @@
     "@typescript-eslint/parser": "^8.64.0",
     "autoprefixer": "^10.5.4",
     "eslint": "^10.7.0",
-    "eslint-config-next": "16.2.10",
+    "eslint-config-next": "16.2.11",
     "postcss": "^8.5.20",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3"
