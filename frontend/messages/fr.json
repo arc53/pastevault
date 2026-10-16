@@ -27,8 +27,8 @@
     "modePaste": "Paste",
     "modeFiles": "Fichiers",
     "draft": {
-      "unsavedDraft": "Vous avez un brouillon non enregistré datant de {draftAge}",
-      "restore": "Restaurer"
+      "restored": "Brouillon restauré",
+      "discard": "Supprimer"
     }
   },
   "expiration": {

@@ -27,8 +27,8 @@
     "modePaste": "Paste",
     "modeFiles": "Files",
     "draft": {
-      "unsavedDraft": "You have an unsaved draft from {draftAge}",
-      "restore": "Restore"
+      "restored": "Restored draft",
+      "discard": "Discard"
     }
   },
   "expiration": {

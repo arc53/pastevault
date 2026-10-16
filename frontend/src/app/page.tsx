@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { nanoid } from 'nanoid'
 import QRCode from 'react-qr-code'
@@ -10,7 +10,6 @@ import {
   Lock,
   Menu,
   Paperclip,
-  Save,
   Share,
   Trash2,
   X,
@@ -22,6 +21,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { AccountLink } from '@/components/account-link'
+import { useLocale } from '@/components/i18n-provider'
 import { useCreateFileShare, useCreatePaste, useGetCapabilities } from '@/hooks/usePaste'
 import { api } from '@/lib/api'
 import {
@@ -36,8 +36,16 @@ import {
   formatBytes,
   prepareFileShareEncryption,
 } from '@/lib/file-shares'
-import { clearDraft, getDraftAge, loadDraft, saveDraft } from '@/lib/drafts'
-import { Draft, FileShareManifest, PasteContent } from '@/types'
+import {
+  clearDraft,
+  DraftContent,
+  formatDraftAge,
+  isDraftEmpty,
+  loadDraft,
+  saveDraft,
+  serializeDraft,
+} from '@/lib/drafts'
+import { FileShareManifest, PasteContent } from '@/types'
 
 type ShareKind = 'paste' | 'files' | 'mixed'
 
@@ -154,8 +162,8 @@ export default function CreatePastePage() {
   const [shareUrl, setShareUrl] = useState('')
   const [lastShareKind, setLastShareKind] = useState<ShareKind>('paste')
   const [isCreating, setIsCreating] = useState(false)
-  const [hasDraft, setHasDraft] = useState(false)
-  const [draftAge, setDraftAge] = useState('')
+  const [draftReady, setDraftReady] = useState(false)
+  const [restoredDraftAt, setRestoredDraftAt] = useState<number | null>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [createError, setCreateError] = useState('')
@@ -164,6 +172,9 @@ export default function CreatePastePage() {
   )
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  // Serialized draft this page last restored or wrote to storage, or null if it owns none.
+  const lastSavedDraftRef = useRef<string | null>(null)
+  const { locale } = useLocale()
   const uploadSpeedRef = useRef(0)
   const createPaste = useCreatePaste()
   const createFileShare = useCreateFileShare()
@@ -224,8 +235,78 @@ export default function CreatePastePage() {
   useEffect(() => {
     const draft = loadDraft()
     if (draft) {
-      setHasDraft(true)
-      setDraftAge(getDraftAge(draft))
+      const restoredFormat = draft.language_hint || 'markdown'
+      const restoredExpiry = draft.expires_in_hours || DEFAULT_EXPIRY_HOURS
+      setTitle(draft.title)
+      setBody(draft.body)
+      setFormat(restoredFormat)
+      setExpiresInHours(restoredExpiry)
+      setBurnAfterRead(draft.burn_after_read)
+      setPasswordProtected(draft.password_protected)
+      setRestoredDraftAt(draft.saved_at)
+      lastSavedDraftRef.current = serializeDraft({
+        title: draft.title,
+        body: draft.body,
+        language_hint: restoredFormat,
+        expires_in_hours: restoredExpiry,
+        burn_after_read: draft.burn_after_read,
+        password_protected: draft.password_protected,
+      })
+    }
+    setDraftReady(true)
+  }, [])
+
+  const persistDraft = useEffectEvent(() => {
+    // Skip until the stored draft has been restored, and once the note has been sent.
+    if (!draftReady || shareUrl) {
+      return
+    }
+
+    const draft: DraftContent = {
+      title,
+      body,
+      language_hint: format,
+      expires_in_hours: expiresInHours,
+      burn_after_read: burnAfterRead,
+      password_protected: passwordProtected,
+    }
+    const serialized = serializeDraft(draft)
+    if (serialized === lastSavedDraftRef.current) {
+      return
+    }
+
+    setRestoredDraftAt(null)
+    if (isDraftEmpty(draft)) {
+      // Only clear a draft this page restored or wrote, never one saved by another tab.
+      if (lastSavedDraftRef.current !== null) {
+        clearDraft()
+      }
+      lastSavedDraftRef.current = null
+    } else {
+      saveDraft(draft)
+      lastSavedDraftRef.current = serialized
+    }
+  })
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => persistDraft(), 500)
+    return () => window.clearTimeout(timeoutId)
+  }, [title, body, format, expiresInHours, burnAfterRead, passwordProtected])
+
+  useEffect(() => {
+    // Flush pending edits when the tab is hidden or closed.
+    const flush = () => persistDraft()
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        flush()
+      }
+    }
+
+    window.addEventListener('pagehide', flush)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      window.removeEventListener('pagehide', flush)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
     }
   }, [])
 
@@ -285,30 +366,21 @@ export default function CreatePastePage() {
     }
   }, [uploadTelemetry.phase, uploadTelemetry.lastNetworkActivityAt])
 
-  const loadFromDraft = () => {
-    const draft = loadDraft()
-    if (draft) {
-      setTitle(draft.title)
-      setBody(draft.body)
-      setFormat(draft.language_hint || 'markdown')
-      setExpiresInHours(draft.expires_in_hours || DEFAULT_EXPIRY_HOURS)
-      setBurnAfterRead(draft.burn_after_read)
-      setPasswordProtected(draft.password_protected)
-      setHasDraft(false)
-    }
+  const forgetDraft = () => {
+    clearDraft()
+    lastSavedDraftRef.current = null
+    setRestoredDraftAt(null)
   }
 
-  const saveCurrentDraft = () => {
-    if (title || body) {
-      saveDraft({
-        title,
-        body,
-        language_hint: format !== 'markdown' && format !== 'plain' ? format : undefined,
-        expires_in_hours: expiresInHours,
-        burn_after_read: burnAfterRead,
-        password_protected: passwordProtected,
-      } satisfies Omit<Draft, 'saved_at'>)
-    }
+  const discardDraft = () => {
+    setTitle('')
+    setBody('')
+    setFormat('markdown')
+    setExpiresInHours(DEFAULT_EXPIRY_HOURS)
+    setBurnAfterRead(false)
+    setPasswordProtected(false)
+    setPassword('')
+    forgetDraft()
   }
 
   const handleCreatePaste = async () => {
@@ -353,8 +425,7 @@ export default function CreatePastePage() {
         )
       )
       setLastShareKind('paste')
-      clearDraft()
-      setHasDraft(false)
+      forgetDraft()
     } catch (error) {
       console.error('Failed to create paste:', error)
       setCreateError((error as Error).message || t('error'))
@@ -540,8 +611,7 @@ export default function CreatePastePage() {
       setLastShareKind(optionalNoteContent ? 'mixed' : 'files')
       setSelectedFiles([])
       if (optionalNoteContent) {
-        clearDraft()
-        setHasDraft(false)
+        forgetDraft()
       }
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
@@ -580,8 +650,7 @@ export default function CreatePastePage() {
     resetUploadTelemetry()
     setShareUrl('')
     setLastShareKind('paste')
-    setHasDraft(false)
-    clearDraft()
+    forgetDraft()
 
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
@@ -940,12 +1009,6 @@ export default function CreatePastePage() {
                 )}
               </div>
 
-              {hasDraft && (
-                <Button variant="outline" className="w-full" onClick={loadFromDraft}>
-                  {tCreate('draft.restore')}
-                </Button>
-              )}
-
               <Button
                 className="w-full"
                 onClick={() => void handleCreate()}
@@ -958,39 +1021,31 @@ export default function CreatePastePage() {
         </div>
       )}
 
-      {hasDraft && (
-        <div className="app-frame pt-4">
-          <div className="tool-panel border-sky-500/25 bg-sky-500/10">
-            <div className="tool-panel-body flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-2 text-sm">
-                <Save className="h-4 w-4" />
-                <span>{tCreate('draft.unsavedDraft', { draftAge })}</span>
-              </div>
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" onClick={loadFromDraft}>
-                  {tCreate('draft.restore')}
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => setHasDraft(false)}>
-                  ×
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       <div className="app-frame py-4">
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
           <section className="tool-panel">
             <div className="tool-panel-header">
               <div className="min-w-0 flex-1 space-y-2">
-                <Label htmlFor="note-title">{t('title')}</Label>
+                <div className="flex items-baseline justify-between gap-3">
+                  <Label htmlFor="note-title">{t('title')}</Label>
+                  {restoredDraftAt !== null && (
+                    <p className="truncate text-xs text-muted-foreground">
+                      {tCreate('draft.restored')} · {formatDraftAge(restoredDraftAt, locale)} ·{' '}
+                      <button
+                        type="button"
+                        className="underline-offset-2 hover:text-foreground hover:underline"
+                        onClick={discardDraft}
+                      >
+                        {tCreate('draft.discard')}
+                      </button>
+                    </p>
+                  )}
+                </div>
                 <Input
                   id="note-title"
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
                   placeholder={t('title')}
-                  onBlur={saveCurrentDraft}
                   className="h-10 text-sm"
                 />
               </div>
@@ -1179,11 +1234,6 @@ export default function CreatePastePage() {
                   <Share className="h-4 w-4" />
                 </Button>
                 {renderAttachButton()}
-                {hasDraft && (
-                  <Button variant="outline" className="w-full" onClick={loadFromDraft}>
-                    {tCreate('draft.restore')}
-                  </Button>
-                )}
                 <div className="space-y-2">
                   <Label>{tCreate('expiresIn')}</Label>
                   {renderExpirySelect()}

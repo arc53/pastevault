@@ -27,8 +27,8 @@
     "modePaste": "Paste",
     "modeFiles": "Files",
     "draft": {
-      "unsavedDraft": "Tienes un borrador sin guardar de hace {draftAge}",
-      "restore": "Restaurar"
+      "restored": "Borrador restaurado",
+      "discard": "Descartar"
     }
   },
   "expiration": {
