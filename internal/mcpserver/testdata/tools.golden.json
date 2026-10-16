@@ -1,0 +1,880 @@
+[
+  {
+    "annotations": {
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Audit log"
+    },
+    "description": "Show the account's audit log: shares created, viewed, burned, revoked; secret requests; agents and tokens. Metadata only.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "event": {
+          "description": "Only this event, e.g. share.viewed or request.fulfilled",
+          "maxLength": 64,
+          "type": "string"
+        },
+        "limit": {
+          "default": 50,
+          "description": "Maximum number of events",
+          "maximum": 200,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "since": {
+          "description": "Only events after this: 15m, 24h, 7d, or an RFC 3339 time",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "audit",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "events": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "next_cursor": {
+          "type": [
+            "null",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "events",
+        "next_cursor"
+      ],
+      "type": "object"
+    },
+    "title": "Audit log"
+  },
+  {
+    "annotations": {
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "List stored secrets"
+    },
+    "description": "List the secrets in the local store as pv://secret/NAME handles (names and metadata only, never values). Use a handle with: pastevault run --env-file .env.pv -- <command>.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "name": "list_secrets",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "secrets": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "created_at": {
+                "type": "string"
+              },
+              "handle": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "source": {
+                "additionalProperties": false,
+                "properties": {
+                  "ref": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "name",
+              "handle",
+              "kind",
+              "created_at",
+              "source"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "agent",
+        "secrets"
+      ],
+      "type": "object"
+    },
+    "title": "List stored secrets"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+      "title": "Open a share"
+    },
+    "description": "Open a share and write it to output_path (inside the allowed roots, files 0600) or into the local secret store with save_as (then use pv://secret/NAME with pastevault run). One of them is required: the content is only returned when the MCP server runs with --allow-plaintext, allow_plaintext is true and it does not look like a secret. Opening uses a view; the last view destroys the share.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "allow_plaintext": {
+          "description": "Return the text in the result. Only works when the server was started with --allow-plaintext, and never for content that looks like a secret.",
+          "type": "boolean"
+        },
+        "output_path": {
+          "description": "Write the content here: a file path, or a directory (existing, or ending in /) for multi-file shares. Must be inside the allowed roots.",
+          "type": "string"
+        },
+        "overwrite": {
+          "description": "Replace an existing output file or stored secret",
+          "type": "boolean"
+        },
+        "ref": {
+          "description": "Share link (/p/ or /f/ URL with #k=), slug, or pv://share handle",
+          "minLength": 1,
+          "type": "string"
+        },
+        "save_as": {
+          "description": "Store the content in the local secret store as NAME; use it as pv://secret/NAME with pastevault run",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_.-]{0,127}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref"
+      ],
+      "type": "object"
+    },
+    "name": "receive",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "burned": {
+          "type": "boolean"
+        },
+        "content": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "files": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "size": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "name",
+              "size"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "kind": {
+          "type": "string"
+        },
+        "notices": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "recipient": {
+          "additionalProperties": false,
+          "properties": {
+            "fingerprint": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "fingerprint"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "saved_as": {
+          "type": "string"
+        },
+        "size_bytes": {
+          "type": "integer"
+        },
+        "slug": {
+          "type": "string"
+        },
+        "title": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "views_remaining": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "withheld": {
+          "type": "string"
+        },
+        "written_to": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "slug",
+        "size_bytes",
+        "burned",
+        "views_remaining"
+      ],
+      "type": "object"
+    },
+    "title": "Open a share"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Request a secret"
+    },
+    "description": "Ask the user for a secret (API key, password, file) without it passing through the conversation. The user opens a PasteVault link signed in to their account and enters the value; it is stored encrypted on this machine and you get a pv://secret/NAME handle, never the value. If the client supports URL elicitation the link is shown to the user directly; otherwise show the returned url to the user and call request_status later.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "accept": {
+          "default": "text",
+          "description": "What the user may send: text (default), file or any",
+          "enum": [
+            "text",
+            "file",
+            "any"
+          ],
+          "type": "string"
+        },
+        "name": {
+          "description": "What to ask for, e.g. OPENAI_API_KEY. It also becomes the store name: pv://secret/NAME",
+          "pattern": "^[A-Za-z_][A-Za-z0-9_.-]{0,127}$",
+          "type": "string"
+        },
+        "reason": {
+          "description": "Why you need it; shown to the user (as untrusted text) on the request page",
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string"
+        },
+        "timeout_seconds": {
+          "default": 300,
+          "description": "How long to wait for the answer",
+          "maximum": 900,
+          "minimum": 10,
+          "type": "integer"
+        },
+        "ttl": {
+          "default": "10m",
+          "description": "How long the request stays open, e.g. 10m or 2h",
+          "pattern": "^[0-9]+[smhd]$",
+          "type": "string"
+        },
+        "wait": {
+          "default": true,
+          "description": "After the user was shown the link (URL elicitation), wait for the answer. Without elicitation support the link is returned at once.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "name": "request_secret",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "expires_at": {
+          "type": "string"
+        },
+        "fingerprint": {
+          "type": "string"
+        },
+        "handle": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "request_id",
+        "code",
+        "url",
+        "fingerprint",
+        "expires_at",
+        "status"
+      ],
+      "type": "object"
+    },
+    "title": "Ask the user for a secret"
+  },
+  {
+    "annotations": {
+      "idempotentHint": false,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Check a secret request"
+    },
+    "description": "Check a secret request made with request_secret. When the user has answered, the secret is stored locally and the pv://secret/NAME handle is returned (never the value).",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "request_id": {
+          "description": "Request id or code from request_secret",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "name": "request_status",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "expires_at": {
+          "type": "string"
+        },
+        "fingerprint": {
+          "type": "string"
+        },
+        "handle": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "request_id",
+        "code",
+        "url",
+        "fingerprint",
+        "expires_at",
+        "status"
+      ],
+      "type": "object"
+    },
+    "title": "Check a secret request"
+  },
+  {
+    "annotations": {
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": false,
+      "title": "Revoke a share"
+    },
+    "description": "Delete a share you created, so its link stops working.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "description": "Share link, slug or owned-share id",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref"
+      ],
+      "type": "object"
+    },
+    "name": "revoke_share",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "slug": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "slug",
+        "status"
+      ],
+      "type": "object"
+    },
+    "title": "Revoke a share"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Share files"
+    },
+    "description": "Share files end-to-end encrypted and get a link. Paths must be regular files inside the allowed roots; credential directories (~/.ssh, ~/.aws, ...) and the PasteVault config dir are refused. Defaults: one view, expires in 1h.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "as": {
+          "default": "auto",
+          "description": "auto (default: a single .env file becomes a text paste), paste or files",
+          "enum": [
+            "auto",
+            "paste",
+            "files"
+          ],
+          "type": "string"
+        },
+        "expires": {
+          "default": "1h",
+          "description": "Expiry such as 15m, 2h or 7d",
+          "pattern": "^[0-9]+[mhd]$",
+          "type": "string"
+        },
+        "max_views": {
+          "default": 1,
+          "description": "Destroy the share after this many views",
+          "maximum": 1000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "paths": {
+          "description": "Files to share (absolute, or relative to the first root); they must be inside the allowed roots",
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 25,
+          "minItems": 1,
+          "type": "array"
+        },
+        "to": {
+          "description": "Seal the share to an agent of your account (name or pvk1_ fingerprint)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "paths"
+      ],
+      "type": "object"
+    },
+    "name": "send_file",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "expires_at": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "files": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "size": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "name",
+              "size"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "key_in_url": {
+          "type": "boolean"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "max_views": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "notices": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "recipient": {
+          "additionalProperties": false,
+          "properties": {
+            "fingerprint": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "fingerprint"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "slug": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "slug",
+        "kind",
+        "url",
+        "key_in_url",
+        "expires_at",
+        "max_views"
+      ],
+      "type": "object"
+    },
+    "title": "Share files (encrypted)"
+  },
+  {
+    "annotations": {
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true,
+      "readOnlyHint": false,
+      "title": "Share text"
+    },
+    "description": "Share text end-to-end encrypted and get a link. Defaults: one view, expires in 1h. With to, the share is sealed to an agent of your account and the link carries no key. Anything sent leaves this machine, so only share what the user wants shared; never use this to move secrets the user did not ask you to send.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "expires": {
+          "default": "1h",
+          "description": "Expiry such as 15m, 2h or 7d",
+          "pattern": "^[0-9]+[mhd]$",
+          "type": "string"
+        },
+        "format": {
+          "description": "plain (default) or markdown",
+          "enum": [
+            "plain",
+            "markdown"
+          ],
+          "type": "string"
+        },
+        "max_views": {
+          "default": 1,
+          "description": "Destroy the share after this many views",
+          "maximum": 1000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "text": {
+          "description": "The text to share. It is encrypted on this machine; the server never sees it.",
+          "maxLength": 1048576,
+          "minLength": 1,
+          "type": "string"
+        },
+        "title": {
+          "description": "Optional title shown above the text",
+          "maxLength": 200,
+          "type": "string"
+        },
+        "to": {
+          "description": "Seal the share to an agent of your account (name or pvk1_ fingerprint): the link then has no key and only that agent can open it",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "type": "object"
+    },
+    "name": "send_text",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "expires_at": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "files": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "size": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "name",
+              "size"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "key_in_url": {
+          "type": "boolean"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "max_views": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "notices": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "recipient": {
+          "additionalProperties": false,
+          "properties": {
+            "fingerprint": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "fingerprint"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "slug": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "slug",
+        "kind",
+        "url",
+        "key_in_url",
+        "expires_at",
+        "max_views"
+      ],
+      "type": "object"
+    },
+    "title": "Share text (encrypted)"
+  },
+  {
+    "annotations": {
+      "idempotentHint": true,
+      "openWorldHint": false,
+      "readOnlyHint": true,
+      "title": "Share status"
+    },
+    "description": "Show a share you created: status, views and its activity. wait_for viewed|burned waits (up to wait_seconds) for a read receipt.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "description": "Share link, slug or owned-share id",
+          "minLength": 1,
+          "type": "string"
+        },
+        "wait_for": {
+          "description": "Wait until the share is viewed or burned (a read receipt)",
+          "enum": [
+            "viewed",
+            "burned"
+          ],
+          "type": "string"
+        },
+        "wait_seconds": {
+          "default": 30,
+          "description": "How long wait_for waits",
+          "maximum": 120,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "ref"
+      ],
+      "type": "object"
+    },
+    "name": "share_status",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "events": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "expires_at": {
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "kind": {
+          "type": "string"
+        },
+        "max_views": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        },
+        "slug": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "timed_out": {
+          "type": "boolean"
+        },
+        "view_count": {
+          "type": "integer"
+        },
+        "views_remaining": {
+          "type": [
+            "null",
+            "integer"
+          ]
+        }
+      },
+      "required": [
+        "slug",
+        "kind",
+        "status",
+        "view_count",
+        "max_views",
+        "views_remaining",
+        "expires_at",
+        "events"
+      ],
+      "type": "object"
+    },
+    "title": "Share status"
+  }
+]

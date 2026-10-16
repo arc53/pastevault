@@ -1,0 +1,25 @@
+{
+  "name": "pastevault",
+  "version": "0.1.6",
+  "description": "Ask the user for secrets without them entering the chat, use them via pastevault run, and share text and files end-to-end encrypted. Needs the pastevault CLI on PATH.",
+  "mcpServers": {
+    "pastevault": {
+      "command": "pastevault",
+      "args": ["mcp"]
+    }
+  },
+  "contextFileName": "GEMINI.md",
+  "settings": [
+    {
+      "name": "PasteVault server",
+      "description": "API URL of a self-hosted PasteVault server. Leave empty for https://api.pastevault.dev.",
+      "envVar": "PASTEVAULT_SERVER"
+    },
+    {
+      "name": "PasteVault API token",
+      "description": "Optional API token (pv_pat_...). Leave empty to use the login stored by pastevault login.",
+      "envVar": "PASTEVAULT_TOKEN",
+      "sensitive": true
+    }
+  ]
+}

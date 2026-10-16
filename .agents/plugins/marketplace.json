@@ -1,0 +1,20 @@
+{
+  "name": "pastevault",
+  "interface": {
+    "displayName": "PasteVault"
+  },
+  "plugins": [
+    {
+      "name": "pastevault",
+      "source": {
+        "source": "local",
+        "path": "./integrations/pastevault"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

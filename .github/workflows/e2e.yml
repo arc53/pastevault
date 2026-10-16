@@ -56,6 +56,10 @@ jobs:
       # web's own test (fingerprint.ts, wrap.ts).
       - name: Crypto vectors match the web implementation
         run: npm run test:crypto
+      # Plugin, extension and skill manifests (Claude Code, Codex, Gemini):
+      # valid, complete, starting pastevault mcp, versions in sync.
+      - name: Agent integration manifests
+        run: node scripts/check-integrations.mjs
 
   e2e-sqlite:
     name: E2E (SQLite, incl. Go CLI)

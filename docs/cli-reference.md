@@ -412,6 +412,20 @@ pastevault inject -i TEMPLATE [-o OUT [--overwrite] | --stdout]
 
 Replaces every `{{ pv://… }}` (or `{{ https://host/p/…#k=… }}`) placeholder in TEMPLATE (`-` for stdin) with the secret it names, with the same rules as `run`. Other `{{ … }}` text is left alone. `-o` writes a new file `0600` (exit 13 if it exists, checked before anything is resolved, unless `--overwrite`); `--stdout` writes to stdout. Any unresolvable placeholder exits 125 and writes nothing. JSON (with `-o`): `{"written_to":"…","placeholders":N}`.
 
+## `mcp`: the MCP server for agents
+
+```
+pastevault mcp [--agent NAME] [--root DIR]... [--allow-plaintext] [--server URL]
+```
+
+Serves the Model Context Protocol on stdin/stdout for agent harnesses (Claude Code, Codex, Gemini CLI, Cursor, ...). stdout carries only protocol messages; diagnostics go to stderr. It uses the same credentials, agent keys, pins and local store as the other commands. Setup per harness, the tools and their schemas: [agents.md](agents.md#mcp-server).
+
+- Tools: `send_text`, `send_file`, `receive`, `request_secret`, `request_status`, `list_secrets`, `share_status`, `audit`, `revoke_share`. None returns a stored secret's value.
+- `--agent` acts as that agent (default: the default agent); it cannot be combined with `PASTEVAULT_AGENT_KEY`.
+- `--root DIR` (repeatable) allows `send_file` and `receive` to use DIR. The client's MCP roots are allowed too; without either, the working directory (unless it is the home directory or `/`).
+- `--allow-plaintext` lets `receive` return share content when the call sets `allow_plaintext` and the content does not look like a secret.
+- Tool errors carry the CLI's error object as text: `{"error":{"code","message","exit_code"}}`, with the exit codes above.
+
 ## `login`, `whoami`, `logout`
 
 ```
