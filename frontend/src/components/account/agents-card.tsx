@@ -107,7 +107,7 @@ function AgentRow({ agent, userId, onError }: { agent: AgentSummary; userId: str
             label={t('trustNewKey')}
             confirmLabel={t('confirmTrust')}
             onConfirm={() => {
-              savePin(userId, agent.name, check.fingerprint, agent.public_key, 'manual')
+              savePin(userId, agent, check.fingerprint, 'manual')
               setPinVersion((version) => version + 1)
             }}
           />

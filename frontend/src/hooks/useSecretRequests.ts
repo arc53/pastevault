@@ -1,19 +1,38 @@
 import { useQuery } from '@tanstack/react-query'
-import { api } from '@/lib/api'
+import { ApiError, api } from '@/lib/api'
 import { SecretRequestDetails } from '@/types'
 
 // How often the /r page re-reads a request: every 3 s while an answer waits
 // to be collected (the server allows 120 lookups a minute), slowly while
 // pending to notice a cancel or expiry, and not at all once it is final.
-function refreshInterval(details: SecretRequestDetails | undefined) {
+// After a failed read the next one waits for the server's Retry-After (or
+// 30 s on a 429 without one).
+const RATE_LIMIT_BACKOFF_MS = 30_000
+
+function errorDelay(error: unknown): number | null {
+  if (!(error instanceof ApiError)) {
+    return null
+  }
+  if (error.retryAfterSeconds !== undefined) {
+    return Math.max(1_000, error.retryAfterSeconds * 1_000)
+  }
+  return error.status === 429 ? RATE_LIMIT_BACKOFF_MS : null
+}
+
+function refreshInterval(details: SecretRequestDetails | undefined, error: unknown) {
+  let interval: number | false
   switch (details?.status) {
     case 'fulfilled':
-      return 3_000
+      interval = 3_000
+      break
     case 'pending':
-      return 15_000
+      interval = 15_000
+      break
     default:
       return false
   }
+  const backoff = errorDelay(error)
+  return backoff ? Math.max(interval, backoff) : interval
 }
 
 export function useSecretRequest(code: string, enabled = true) {
@@ -22,9 +41,14 @@ export function useSecretRequest(code: string, enabled = true) {
     queryFn: () => api.getSecretRequestByCode(code),
     enabled: enabled && Boolean(code),
     staleTime: 0,
-    retry: false,
+    // One retry for network or server errors (not for 4xx answers), after
+    // the server's Retry-After or a short backoff. Cached data stays on
+    // screen meanwhile: the page shows an inline "retrying" notice.
+    retry: (failureCount, error) =>
+      failureCount < 1 && !(error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 429),
+    retryDelay: (attempt, error) => errorDelay(error) ?? Math.min(1_000 * 2 ** attempt, 8_000),
     refetchOnWindowFocus: false,
-    refetchInterval: (query) => refreshInterval(query.state.data),
+    refetchInterval: (query) => refreshInterval(query.state.data, query.state.error),
   })
 }
 

@@ -38,14 +38,55 @@ function getApiBaseUrl() {
 
 class ApiError extends Error {
   // Machine-readable `code` from the error body, when the server sends one
-  // (e.g. "recipient_fingerprint_mismatch").
-  constructor(public status: number, message: string, public code?: string) {
+  // (e.g. "recipient_fingerprint_mismatch"), and the Retry-After delay in
+  // seconds on 429/503 responses that carry one.
+  constructor(
+    public status: number,
+    message: string,
+    public code?: string,
+    public retryAfterSeconds?: number
+  ) {
     super(message)
     this.name = 'ApiError'
   }
 }
 
-function toApiError(status: number, errorText: string) {
+// Server clock minus this browser's clock, from the Date header of API
+// responses. Only offsets beyond the header's one-second resolution (plus
+// latency) are applied, so a correct clock isn't made to jitter.
+let serverClockOffsetMs = 0
+const CLOCK_OFFSET_THRESHOLD_MS = 2_000
+
+function recordServerClock(response: Response) {
+  const header = response.headers.get('date')
+  const serverTime = header ? Date.parse(header) : NaN
+  if (Number.isNaN(serverTime)) {
+    return
+  }
+  // The header is truncated to whole seconds: assume the middle.
+  const offset = serverTime + 500 - Date.now()
+  serverClockOffsetMs = Math.abs(offset) > CLOCK_OFFSET_THRESHOLD_MS ? offset : 0
+}
+
+// "Now" on the server's clock, for countdowns against server timestamps.
+export function serverNow() {
+  return Date.now() + serverClockOffsetMs
+}
+
+function parseRetryAfter(response: Response): number | undefined {
+  const header = response.headers.get('retry-after')
+  if (!header) {
+    return undefined
+  }
+  const seconds = Number(header)
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return seconds
+  }
+  const date = Date.parse(header)
+  return Number.isNaN(date) ? undefined : Math.max(0, Math.ceil((date - Date.now()) / 1000))
+}
+
+function toApiError(status: number, errorText: string, retryAfterSeconds?: number) {
   let errorMessage = `HTTP ${status}`
   let code: string | undefined
 
@@ -60,7 +101,7 @@ function toApiError(status: number, errorText: string) {
     errorMessage = errorText || errorMessage
   }
 
-  return new ApiError(status, errorMessage, code)
+  return new ApiError(status, errorMessage, code, retryAfterSeconds)
 }
 
 async function apiRequest<T>(
@@ -80,8 +121,9 @@ async function apiRequest<T>(
     },
   })
 
+  recordServerClock(response)
   if (!response.ok) {
-    throw toApiError(response.status, await response.text())
+    throw toApiError(response.status, await response.text(), parseRetryAfter(response))
   }
 
   return response.json()

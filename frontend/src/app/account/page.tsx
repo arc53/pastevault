@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl'
 import { useQueryClient } from '@tanstack/react-query'
 import { Loader2, UserRound, X } from 'lucide-react'
 import { authClient } from '@/lib/auth-client'
+import { safeRedirectTarget } from '@/lib/redirects'
 import { useGetCapabilities } from '@/hooks/usePaste'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -16,14 +17,6 @@ import { AuthPanel } from '@/components/account/auth-panel'
 import { RequestsCard } from '@/components/account/requests-card'
 import { SharesCard } from '@/components/account/shares-card'
 import { TokensCard } from '@/components/account/tokens-card'
-
-function getSafeRedirectTarget(value: string | null) {
-  if (!value || !value.startsWith('/') || value.startsWith('//')) {
-    return null
-  }
-
-  return value
-}
 
 function LoadingPanel({ label }: { label: string }) {
   return (
@@ -89,7 +82,7 @@ function AccountContent({
   const searchParams = useSearchParams()
   const queryClient = useQueryClient()
   const { data: session, isPending: isSessionPending } = authClient.useSession()
-  const redirectTarget = getSafeRedirectTarget(searchParams.get('redirectTo'))
+  const redirectTarget = safeRedirectTarget(searchParams.get('redirectTo'))
   const [pageError, setPageError] = useState('')
 
   useEffect(() => {

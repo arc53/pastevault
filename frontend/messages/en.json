@@ -532,7 +532,8 @@
       "confirmDecline": "Decline request",
       "send": "Encrypt and send",
       "sending": "Sending...",
-      "e2eNote": "Encrypted in this browser to the request's key. The server never sees the value, and nothing is saved in this browser."
+      "e2eNote": "Encrypted in this browser to the request's key. The server never sees the value, and nothing is saved in this browser.",
+      "maskUnsupported": "This browser can't hide what you type here, so the value is shown. Make sure no one can see your screen."
     },
     "final": {
       "sentWaiting": "Sent. Waiting for {agent} to collect it…",
@@ -546,6 +547,8 @@
       "expired": "This request has expired",
       "expiredBody": "Ask {agent} for a new request if it still needs the secret.",
       "toAccount": "Go to your account"
-    }
+    },
+    "refreshFailed": "Couldn't refresh this request. Retrying…",
+    "expiring": "This request is expiring…"
   }
 }

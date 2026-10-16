@@ -18,9 +18,10 @@ import {
   XCircle,
 } from 'lucide-react'
 import { authClient } from '@/lib/auth-client'
-import { ApiError, api } from '@/lib/api'
+import { ApiError, api, serverNow } from '@/lib/api'
 import { formatFingerprint, shortFingerprint } from '@/lib/fingerprint'
 import { checkAgentKey } from '@/lib/pins'
+import { safeRedirectTarget, signInHref } from '@/lib/redirects'
 import { cn } from '@/lib/utils'
 import { formatBytes } from '@/lib/file-shares'
 import { useGetCapabilities } from '@/hooks/usePaste'
@@ -97,7 +98,7 @@ function Panel({ label, title, children }: { label: string; title?: ReactNode; c
       <div className="tool-panel-header">
         <div className="min-w-0">
           <p className="tool-label">{label}</p>
-          {title && <h2 className="text-lg font-semibold">{title}</h2>}
+          {title && <h2 className="break-all text-lg font-semibold">{title}</h2>}
         </div>
       </div>
       <div className="tool-panel-body space-y-4">{children}</div>
@@ -136,12 +137,14 @@ export default function SecretRequestPage() {
 function SignedInGate({ code }: { code: string }) {
   const t = useTranslations('secretRequest')
   const { data: session, isPending } = authClient.useSession()
-  const [returnTo, setReturnTo] = useState(`/r/${code}`)
+  const path = `/r/${encodeURIComponent(code)}`
+  const [returnTo, setReturnTo] = useState(path)
 
   useEffect(() => {
-    // Keep #fp= through the sign-in round trip.
-    setReturnTo(`/r/${code}${window.location.hash}`)
-  }, [code])
+    // Keep #fp= through the sign-in round trip; the account page only follows
+    // same-origin paths (safeRedirectTarget).
+    setReturnTo(safeRedirectTarget(`${path}${window.location.hash}`) ?? path)
+  }, [path])
 
   if (isPending) {
     return (
@@ -160,7 +163,7 @@ function SignedInGate({ code }: { code: string }) {
         <Panel label={t('label')} title={t('signInTitle')}>
           <p className="text-sm text-muted-foreground">{t('signInBody')}</p>
           <Button asChild>
-            <Link href={`/account?redirectTo=${encodeURIComponent(returnTo)}`} data-testid="sign-in-link">
+            <Link href={signInHref(returnTo)} data-testid="sign-in-link">
               {t('signIn')}
             </Link>
           </Button>
@@ -172,13 +175,15 @@ function SignedInGate({ code }: { code: string }) {
   return <RequestView code={code} userId={session.user.id} />
 }
 
-function useNow(active: boolean) {
-  const [now, setNow] = useState(() => Date.now())
+// The server's "now" (Date header offset), ticking every second.
+function useServerNow(active: boolean) {
+  const [now, setNow] = useState(() => serverNow())
   useEffect(() => {
     if (!active) {
       return
     }
-    const id = window.setInterval(() => setNow(Date.now()), 1000)
+    setNow(serverNow())
+    const id = window.setInterval(() => setNow(serverNow()), 1000)
     return () => window.clearInterval(id)
   }, [active])
   return now
@@ -189,11 +194,12 @@ function RequestView({ code, userId }: { code: string; userId: string }) {
   const queryClient = useQueryClient()
   const requestQuery = useSecretRequest(code)
   const request = requestQuery.data
-  const [linkFingerprint, setLinkFingerprint] = useState<string | null>(null)
+  // null until read; { value: undefined } when the link has no #fp=.
+  const [linkFingerprint, setLinkFingerprint] = useState<{ value: string | undefined } | null>(null)
   const [sentHere, setSentHere] = useState(false)
 
   useEffect(() => {
-    const read = () => setLinkFingerprint(readLinkFingerprint())
+    const read = () => setLinkFingerprint({ value: readLinkFingerprint() })
     read()
     window.addEventListener('hashchange', read)
     return () => window.removeEventListener('hashchange', read)
@@ -212,7 +218,10 @@ function RequestView({ code, userId }: { code: string; userId: string }) {
     )
   }
 
-  if (requestQuery.isError || !request) {
+  // The error view only replaces the page when there is nothing to show.
+  // With a request on screen, a failed refresh is an inline notice and the
+  // form keeps its state.
+  if (!request) {
     const error = requestQuery.error
     const status = error instanceof ApiError ? error.status : 0
     return (
@@ -236,7 +245,8 @@ function RequestView({ code, userId }: { code: string; userId: string }) {
     <RequestDetails
       request={request}
       userId={userId}
-      linkFingerprint={linkFingerprint}
+      linkFingerprint={linkFingerprint.value}
+      refreshFailed={requestQuery.isError}
       sentHere={sentHere}
       onSent={() => {
         setSentHere(true)
@@ -251,22 +261,26 @@ function RequestDetails({
   request,
   userId,
   linkFingerprint,
+  refreshFailed,
   sentHere,
   onSent,
   onChanged,
 }: {
   request: SecretRequestDetails
   userId: string
-  linkFingerprint: string
+  linkFingerprint: string | undefined
+  refreshFailed: boolean
   sentHere: boolean
   onSent: () => void
   onChanged: () => void
 }) {
   const t = useTranslations('secretRequest')
   const pending = request.status === 'pending'
-  const now = useNow(pending)
+  const now = useServerNow(pending)
   const remaining = new Date(request.expires_at).getTime() - now
-  const expiredLocally = pending && remaining <= 0
+  // Only the server decides that a request expired; at zero the form is
+  // disabled and the request re-read until the server says so.
+  const expiring = pending && remaining <= 0
   const keyCheck: RequestKeyCheck = useMemo(
     () => checkRequestKey(request.public_key, request.fingerprint, linkFingerprint),
     [request.public_key, request.fingerprint, linkFingerprint]
@@ -274,14 +288,27 @@ function RequestDetails({
   const agentName = request.requester.agent.name ?? '?'
 
   useEffect(() => {
-    if (expiredLocally) {
-      onChanged()
+    if (!expiring) {
+      return
     }
-    // Refetch once when the countdown runs out.
-  }, [expiredLocally])
+    onChanged()
+    const id = window.setInterval(onChanged, 2_000)
+    return () => window.clearInterval(id)
+    // onChanged is stable in effect: it only invalidates this query.
+  }, [expiring])
 
   return (
     <Shell title={request.name} label={t('labelWithCode', { code: request.code })}>
+      {refreshFailed && (
+        <p
+          className="flex items-center gap-2 rounded-sm border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-xs text-amber-950 dark:text-amber-100"
+          role="status"
+          data-testid="refresh-failed"
+        >
+          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+          {t('refreshFailed')}
+        </p>
+      )}
       <Panel label={t('fromLabel')}>
         <RequesterLine request={request} userId={userId} />
 
@@ -322,14 +349,17 @@ function RequestDetails({
         </dl>
       </Panel>
 
-      {pending && !expiredLocally ? (
+      {pending ? (
         <Panel label={t('answerLabel')} title={t('answerTitle', { name: request.name })}>
+          {expiring && (
+            <Notice tone="info" icon={<Clock className="h-4 w-4" />} title={t('expiring')} testId="state-expiring" />
+          )}
           <KeyNotice check={keyCheck} code={request.code} />
           {keyCheck.state === 'verified' || keyCheck.state === 'unverified' ? (
             <AnswerForm
               request={request}
               requestPublicKey={keyCheck.publicKey}
-              blocked={false}
+              blocked={expiring}
               onSent={onSent}
               onDeclined={onChanged}
               onStale={onChanged}
@@ -339,7 +369,7 @@ function RequestDetails({
           )}
         </Panel>
       ) : (
-        <FinalState request={request} agentName={agentName} sentHere={sentHere} expired={expiredLocally} />
+        <FinalState request={request} agentName={agentName} sentHere={sentHere} />
       )}
     </Shell>
   )
@@ -447,10 +477,10 @@ function RequesterLine({ request, userId }: { request: SecretRequestDetails; use
 
   return (
     <div className="space-y-1" data-testid="requester">
-      <p className="flex flex-wrap items-center gap-2 text-sm">
-        <Bot className="h-4 w-4 text-muted-foreground" />
+      <p className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
+        <Bot className="h-4 w-4 shrink-0 text-muted-foreground" />
         <span>{t('agent')}</span>
-        <span className="font-mono font-semibold">{name}</span>
+        <span className="min-w-0 break-all font-mono font-semibold">{name}</span>
         {identity && <span className="font-mono text-xs text-muted-foreground">{shortFingerprint(identity)}…</span>}
         {check?.state === 'pinned' && (
           <span className="meta-chip py-0.5 text-emerald-700 dark:text-emerald-300">
@@ -468,7 +498,7 @@ function RequesterLine({ request, userId }: { request: SecretRequestDetails; use
         {agent?.revoked_at && <span className="meta-chip py-0.5">{t('revoked')}</span>}
       </p>
       {request.requester.token_name && (
-        <p className="pl-6 text-xs text-muted-foreground">
+        <p className="break-all pl-6 text-xs text-muted-foreground">
           <KeyRound className="mr-1 inline h-3 w-3" />
           {t('viaToken', { name: request.requester.token_name })}
         </p>
@@ -481,15 +511,13 @@ function FinalState({
   request,
   agentName,
   sentHere,
-  expired,
 }: {
   request: SecretRequestDetails
   agentName: string
   sentHere: boolean
-  expired: boolean
 }) {
   const t = useTranslations('secretRequest.final')
-  const status = expired ? 'expired' : request.status
+  const status = request.status
 
   let content: ReactNode
   switch (status) {

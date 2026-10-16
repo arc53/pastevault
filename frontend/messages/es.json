@@ -532,7 +532,8 @@
       "confirmDecline": "Rechazar solicitud",
       "send": "Cifrar y enviar",
       "sending": "Enviando...",
-      "e2eNote": "Se cifra en este navegador con la clave de la solicitud. El servidor nunca ve el valor y no se guarda nada en este navegador."
+      "e2eNote": "Se cifra en este navegador con la clave de la solicitud. El servidor nunca ve el valor y no se guarda nada en este navegador.",
+      "maskUnsupported": "Este navegador no puede ocultar lo que escribes aquí, así que el valor se muestra. Asegúrate de que nadie vea tu pantalla."
     },
     "final": {
       "sentWaiting": "Enviado. Esperando a que {agent} lo recoja…",
@@ -546,6 +547,8 @@
       "expired": "Esta solicitud ha caducado",
       "expiredBody": "Pide a {agent} una nueva solicitud si aún necesita el secreto.",
       "toAccount": "Ir a tu cuenta"
-    }
+    },
+    "refreshFailed": "No se pudo actualizar esta solicitud. Reintentando…",
+    "expiring": "Esta solicitud está caducando…"
   }
 }

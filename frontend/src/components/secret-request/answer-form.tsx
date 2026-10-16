@@ -9,7 +9,6 @@ import { filePayload, maxFileBytes, sealedSize, sealSecretPayload, textPayload }
 import { cn } from '@/lib/utils'
 import { SecretRequestDetails } from '@/types'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ConfirmButton } from '@/components/account/confirm-button'
 
@@ -47,8 +46,10 @@ export function AnswerForm({ request, requestPublicKey, blocked, onSent, onDecli
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
-    // Firefox lacks -webkit-text-security: there the hidden state uses a
-    // password input instead (single line; "Show" for multi-line values).
+    // Masking uses -webkit-text-security on the textarea itself, so the
+    // value is never altered (newlines, spaces). Browsers without it (older
+    // Firefox) show the value with a notice instead of offering a lossy
+    // single-line password field.
     setCanMask(typeof CSS !== 'undefined' && CSS.supports('-webkit-text-security', 'disc'))
   }, [])
 
@@ -165,7 +166,10 @@ export function AnswerForm({ request, requestPublicKey, blocked, onSent, onDecli
       {mode === 'text' ? (
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2">
-            <Label htmlFor="secret-value">{t('valueLabel', { name: request.name })}</Label>
+            <Label htmlFor="secret-value" className="min-w-0 break-all">
+              {t('valueLabel', { name: request.name })}
+            </Label>
+            {canMask && (
             <Button
               type="button"
               variant="ghost"
@@ -178,23 +182,14 @@ export function AnswerForm({ request, requestPublicKey, blocked, onSent, onDecli
               {revealed ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
               {revealed ? t('hide') : t('show')}
             </Button>
+            )}
           </div>
-          {masked && !canMask ? (
-            <Input
-              id="secret-value"
-              type="password"
-              value={text}
-              disabled={disabled}
-              autoComplete="off"
-              data-1p-ignore
-              data-lpignore="true"
-              placeholder={t('valuePlaceholder')}
-              onChange={(event) => setText(event.target.value)}
-              className="font-mono"
-              data-testid="secret-value"
-            />
-          ) : (
-            <textarea
+          {!canMask && (
+            <p className="text-xs text-amber-700 dark:text-amber-300" data-testid="mask-unsupported">
+              {t('maskUnsupported')}
+            </p>
+          )}
+          <textarea
               id="secret-value"
               value={text}
               disabled={disabled}
@@ -207,11 +202,10 @@ export function AnswerForm({ request, requestPublicKey, blocked, onSent, onDecli
               data-lpignore="true"
               placeholder={t('valuePlaceholder')}
               onChange={(event) => setText(event.target.value)}
-              style={masked ? ({ WebkitTextSecurity: 'disc' } as React.CSSProperties) : undefined}
+              style={masked && canMask ? ({ WebkitTextSecurity: 'disc' } as React.CSSProperties) : undefined}
               className="block w-full resize-y rounded-sm border border-input bg-background/75 px-3 py-2 font-mono text-[13px] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] placeholder:text-muted-foreground/85 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
               data-testid="secret-value"
             />
-          )}
           {tooLarge && (
             <p className="text-xs text-red-700 dark:text-red-300" role="alert">
               {t('tooLarge', { size: formatBytes(request.max_bytes) })}
@@ -220,7 +214,9 @@ export function AnswerForm({ request, requestPublicKey, blocked, onSent, onDecli
         </div>
       ) : (
         <div className="space-y-2">
-          <Label htmlFor="secret-file">{t('fileLabel', { name: request.name })}</Label>
+          <Label htmlFor="secret-file" className="block break-all">
+            {t('fileLabel', { name: request.name })}
+          </Label>
           <input
             ref={fileInputRef}
             id="secret-file"

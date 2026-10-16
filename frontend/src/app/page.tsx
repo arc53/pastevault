@@ -50,7 +50,7 @@ import {
   serializeDraft,
 } from '@/lib/drafts'
 import { formatFingerprint, shortFingerprint } from '@/lib/fingerprint'
-import { AgentKeyCheck, checkAgentKey, localAgentFingerprint, savePin } from '@/lib/pins'
+import { AgentKeyCheck, checkAgentKey, localAgentFingerprint, pinsForAgent, savePin } from '@/lib/pins'
 import { sealToRecipient, wrapContext } from '@/lib/wrap'
 import { AgentSummary, FileShareManifest, PasteContent, ShareRecipientRequest } from '@/types'
 
@@ -462,8 +462,10 @@ export default function CreatePastePage() {
     agent: AgentSummary,
     check: Extract<AgentKeyCheck, { state: 'pinned' | 'unpinned' }>
   ) => {
-    if (check.state === 'unpinned' && userId) {
-      savePin(userId, agent.name, check.fingerprint, agent.public_key, 'tofu')
+    // Also record the agent id when only the name was pinned so far.
+    const pinnedById = pinsForAgent(agent).some((pin) => pin.agent_id === agent.id)
+    if ((check.state === 'unpinned' || !pinnedById) && userId) {
+      savePin(userId, agent, check.fingerprint, 'tofu')
       setPinVersion((version) => version + 1)
     }
     setSealedFor({ name: agent.name, fingerprint: check.fingerprint })
@@ -478,6 +480,8 @@ export default function CreatePastePage() {
 
     setIsCreating(true)
     setCreateError('')
+    // A stale "sealed for" from an earlier share must never label this one.
+    setSealedFor(null)
 
     try {
       const sealTarget = sealed ? resolveSealTarget() : null
@@ -563,6 +567,8 @@ export default function CreatePastePage() {
 
     setIsCreating(true)
     setCreateError('')
+    // A stale "sealed for" from an earlier share must never label this one.
+    setSealedFor(null)
 
     try {
       const sealTarget = sealed ? resolveSealTarget() : null

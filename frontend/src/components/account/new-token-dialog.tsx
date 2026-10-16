@@ -76,6 +76,22 @@ export function NewTokenDialog() {
     setOpen(nextOpen)
   }
 
+  // While a token is being created, or is on screen, the dialog only closes
+  // through its own buttons: an Esc or a stray click outside must not lose a
+  // token that is shown once (or create one the user never sees).
+  const locked = createToken.isPending || created !== null
+  const handleRadixOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && locked) {
+      return
+    }
+    handleOpenChange(nextOpen)
+  }
+  const preventWhileLocked = (event: Event) => {
+    if (locked) {
+      event.preventDefault()
+    }
+  }
+
   const toggleScope = (scope: ApiScope, checked: boolean) => {
     setScopes((current) =>
       checked ? TOKEN_SCOPES.filter((item) => item === scope || current.includes(item)) : current.filter((item) => item !== scope)
@@ -103,14 +119,21 @@ export function NewTokenDialog() {
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={handleRadixOpenChange}>
       <DialogTrigger asChild>
         <Button type="button" size="sm" className="shrink-0 whitespace-nowrap" data-testid="new-token-button">
           <Plus className="h-3.5 w-3.5" />
           {t('newToken')}
         </Button>
       </DialogTrigger>
-      <DialogContent closeLabel={tCommon('close')} data-testid="new-token-dialog">
+      <DialogContent
+        closeLabel={tCommon('close')}
+        hideClose={locked}
+        onEscapeKeyDown={preventWhileLocked}
+        onPointerDownOutside={preventWhileLocked}
+        onInteractOutside={preventWhileLocked}
+        data-testid="new-token-dialog"
+      >
         {created ? (
           <>
             <DialogHeader>
@@ -239,7 +262,12 @@ export function NewTokenDialog() {
               )}
             </DialogBody>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={createToken.isPending}
+                onClick={() => handleOpenChange(false)}
+              >
                 {tCommon('cancel')}
               </Button>
               <Button type="submit" disabled={!name.trim() || scopes.length === 0 || createToken.isPending}>

@@ -55,6 +55,9 @@ export function useCreateApiToken() {
 
   return useMutation({
     mutationFn: (data: CreateApiTokenRequest) => api.createApiToken(data),
+    // The response holds the token: drop it from the mutation cache as soon
+    // as the dialog resets, instead of the default five minutes.
+    gcTime: 0,
     onSettled: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['api-tokens'] }),

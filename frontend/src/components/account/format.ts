@@ -40,6 +40,31 @@ export function useDateFormat() {
   }, [locale])
 }
 
+// Only these get a translated label; anything else (a newer server's event,
+// or a value that happens to name a message namespace such as "share")
+// is shown as-is.
+const KNOWN_EVENTS = new Set([
+  'share.created',
+  'share.viewed',
+  'share.burned',
+  'share.download_granted',
+  'share.access_denied',
+  'share.expired',
+  'share.revoked',
+  'request.created',
+  'request.opened',
+  'request.fulfilled',
+  'request.delivered',
+  'request.declined',
+  'request.expired',
+  'request.cancelled',
+  'agent.registered',
+  'agent.revoked',
+  'token.created',
+  'token.revoked',
+])
+const KNOWN_DENY_REASONS = new Set(['anonymous', 'other_account', 'missing_scope', 'other_agent'])
+
 function asNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
@@ -55,8 +80,7 @@ export function useAuditEventText() {
   const t = useTranslations('account.audit')
 
   return (event: AuditEvent) => {
-    const eventKey = `events.${event.event}`
-    const label = t.has(eventKey) ? t(eventKey) : event.event
+    const label = KNOWN_EVENTS.has(event.event) ? t(`events.${event.event}`) : event.event
     const details = event.details ?? {}
 
     let detail: string | null = null
@@ -75,8 +99,7 @@ export function useAuditEventText() {
       case 'share.access_denied': {
         const reason = asString(details.reason)
         const attempts = asNumber(details.attempts)
-        const reasonKey = `denyReasons.${reason}`
-        const reasonText = reason ? (t.has(reasonKey) ? t(reasonKey) : reason) : null
+        const reasonText = reason ? (KNOWN_DENY_REASONS.has(reason) ? t(`denyReasons.${reason}`) : reason) : null
         detail = [reasonText, attempts && attempts > 1 ? t('detail.attempts', { count: attempts }) : null]
           .filter(Boolean)
           .join(' · ') || null
@@ -96,6 +119,11 @@ export function useAuditEventText() {
       case 'agent.revoked':
         detail = asString(details.name)
         break
+      default:
+        if (event.event.startsWith('request.')) {
+          // The secret's name and the request code; never a value.
+          detail = [asString(details.name), asString(details.code)].filter(Boolean).join(' · ') || null
+        }
     }
 
     const agentName = event.actor_agent?.name ?? null

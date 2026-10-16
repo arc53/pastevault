@@ -532,7 +532,8 @@
       "confirmDecline": "Refuser la demande",
       "send": "Chiffrer et envoyer",
       "sending": "Envoi...",
-      "e2eNote": "Chiffré dans ce navigateur avec la clé de la demande. Le serveur ne voit jamais la valeur, et rien n’est enregistré dans ce navigateur."
+      "e2eNote": "Chiffré dans ce navigateur avec la clé de la demande. Le serveur ne voit jamais la valeur, et rien n’est enregistré dans ce navigateur.",
+      "maskUnsupported": "Ce navigateur ne peut pas masquer ce que vous tapez ici : la valeur reste visible. Assurez-vous que personne ne voit votre écran."
     },
     "final": {
       "sentWaiting": "Envoyé. En attente de la récupération par {agent}…",
@@ -546,6 +547,8 @@
       "expired": "Cette demande a expiré",
       "expiredBody": "Demandez à {agent} une nouvelle demande s’il a encore besoin du secret.",
       "toAccount": "Aller à votre compte"
-    }
+    },
+    "refreshFailed": "Impossible d’actualiser cette demande. Nouvelle tentative…",
+    "expiring": "Cette demande est en train d’expirer…"
   }
 }

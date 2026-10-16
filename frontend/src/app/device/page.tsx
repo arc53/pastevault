@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { authClient, getAuthBaseUrl } from '@/lib/auth-client'
+import { signInHref } from '@/lib/redirects'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -268,7 +269,7 @@ function DeviceContent({ signupEnabled }: { signupEnabled: boolean }) {
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Button asChild>
-                    <Link href={`/account?redirectTo=${encodeURIComponent(redirectTarget)}`}>
+                    <Link href={signInHref(redirectTarget)}>
                       {signupEnabled ? 'Sign in or create account' : 'Sign in'}
                     </Link>
                   </Button>

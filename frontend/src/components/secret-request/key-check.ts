@@ -14,16 +14,24 @@ export type RequestKeyCheck =
   // The key is unusable, or differs from the server's own record. Blocking.
   | { state: 'invalid' }
 
-// "#fp=pvk1_…" → the value; "" when the link has no fp; null outside a browser.
-export function readLinkFingerprint(): string {
+// "#fp=pvk1_…" → the value (an empty "#fp=" gives ""); undefined when the
+// link has no fp at all.
+export function readLinkFingerprint(): string | undefined {
   if (typeof window === 'undefined') {
-    return ''
+    return undefined
   }
   const fragment = window.location.hash.replace(/^#/, '')
-  return new URLSearchParams(fragment).get('fp')?.trim() ?? ''
+  const params = new URLSearchParams(fragment)
+  return params.has('fp') ? (params.get('fp') ?? '') : undefined
 }
 
-export function checkRequestKey(publicKey: string, serverFingerprint: string, linkFingerprint: string): RequestKeyCheck {
+// A present but empty or malformed #fp= is a mismatch (blocking), never
+// "no fingerprint".
+export function checkRequestKey(
+  publicKey: string,
+  serverFingerprint: string,
+  linkFingerprint: string | undefined
+): RequestKeyCheck {
   let decoded: Uint8Array
   let fingerprint: string
   try {
@@ -33,7 +41,7 @@ export function checkRequestKey(publicKey: string, serverFingerprint: string, li
     return { state: 'invalid' }
   }
 
-  if (linkFingerprint) {
+  if (linkFingerprint !== undefined) {
     if (!isFingerprint(linkFingerprint) || linkFingerprint !== fingerprint) {
       return { state: 'mismatch', fingerprint, expected: linkFingerprint }
     }
