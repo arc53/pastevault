@@ -27,8 +27,8 @@
     "modePaste": "Paste",
     "modeFiles": "Files",
     "draft": {
-      "unsavedDraft": "У вас есть несохранённый черновик от {draftAge}",
-      "restore": "Восстановить"
+      "restored": "Черновик восстановлен",
+      "discard": "Удалить"
     }
   },
   "expiration": {

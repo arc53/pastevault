@@ -27,8 +27,8 @@
     "modePaste": "Paste",
     "modeFiles": "Files",
     "draft": {
-      "unsavedDraft": "您有一个 {draftAge} 前的未保存草稿",
-      "restore": "恢复"
+      "restored": "已恢复草稿",
+      "discard": "丢弃"
     }
   },
   "expiration": {

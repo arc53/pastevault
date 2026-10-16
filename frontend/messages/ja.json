@@ -27,8 +27,8 @@
     "modePaste": "Paste",
     "modeFiles": "Files",
     "draft": {
-      "unsavedDraft": "{draftAge}前の未保存の下書きがあります",
-      "restore": "復元"
+      "restored": "下書きを復元しました",
+      "discard": "破棄"
     }
   },
   "expiration": {
