@@ -28,6 +28,16 @@ export interface CreatePasteRequest {
   kdf_params?: string
   expires_in_hours?: number
   burn_after_read?: boolean
+  max_views?: number
+  recipient?: ShareRecipientRequest
+}
+
+// The content key sealed to an agent (PVWRAP1); see sealToRecipient in
+// lib/wrap.ts. A sealed share carries no salt.
+export interface ShareRecipientRequest {
+  agent_id?: string
+  fingerprint: string
+  wrapped_key: string
 }
 
 export interface CreatePasteResponse {
@@ -92,6 +102,8 @@ export interface CreateFileShareRequest {
   file_count: number
   total_size_bytes: number
   burn_after_read?: boolean
+  max_views?: number
+  recipient?: ShareRecipientRequest
 }
 
 export interface CreateFileShareResponse {
@@ -200,6 +212,99 @@ export interface AccountShare {
 export interface ListAccountSharesResponse {
   shares: AccountShare[]
   next_cursor?: string | null
+}
+
+export type ApiScope =
+  | 'shares:create'
+  | 'shares:read'
+  | 'shares:revoke'
+  | 'shares:receive'
+  | 'agents:read'
+  | 'agents:write'
+  | 'requests:create'
+  | 'audit:read'
+
+export interface AgentSummary {
+  id: string
+  name: string
+  kind: string
+  // X25519 public key, unpadded base64url. Always recompute the fingerprint
+  // from it; never trust `fingerprint`.
+  public_key: string
+  fingerprint: string
+  created_at: string
+  last_used_at: string | null
+  revoked_at: string | null
+}
+
+export interface ListAgentsResponse {
+  agents: AgentSummary[]
+}
+
+export interface RevokeAgentResponse {
+  agent: AgentSummary
+  tokens_revoked: number
+}
+
+export interface ApiTokenSummary {
+  id: string
+  name: string
+  prefix: string
+  scopes: ApiScope[]
+  agent: { id: string; name: string } | null
+  created_at: string
+  expires_at: string | null
+  last_used_at: string | null
+  revoked_at: string | null
+}
+
+export interface ListApiTokensResponse {
+  tokens: ApiTokenSummary[]
+}
+
+export interface CreateApiTokenRequest {
+  name: string
+  scopes?: ApiScope[]
+  // 1..365; null for a token that never expires.
+  expires_in_days?: number | null
+  agent_id?: string
+}
+
+// The only response that ever carries the token itself.
+export interface CreateApiTokenResponse {
+  id: string
+  token: string
+  name: string
+  prefix: string
+  scopes: ApiScope[]
+  agent_id: string | null
+  expires_at: string | null
+}
+
+export type AuditActorKind = 'owner' | 'recipient' | 'anonymous' | 'system'
+
+export interface AuditEvent {
+  id: string
+  subject_type: string
+  subject_id: string | null
+  slug: string | null
+  event: string
+  actor_kind: AuditActorKind | string
+  actor_agent: { id: string; name: string | null } | null
+  actor_token_id: string | null
+  client: string | null
+  ip_prefix: string | null
+  created_at: string
+  details: Record<string, unknown> | null
+}
+
+export interface ListAuditEventsResponse {
+  events: AuditEvent[]
+  next_cursor: string | null
+}
+
+export interface ListShareEventsResponse {
+  events: AuditEvent[]
 }
 
 export interface EncryptionResult {
