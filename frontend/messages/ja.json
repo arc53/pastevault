@@ -138,7 +138,16 @@
     "expiredTitle": "Files Expired",
     "expiredDesc": "This file share has expired and is no longer available.",
     "tooManyFiles": "Too many files selected. The current server limit is {count}.",
-    "shareTooLarge": "This selection exceeds the server limit of {size}."
+    "shareTooLarge": "This selection exceeds the server limit of {size}.",
+    "revealTitle": "閲覧後に削除",
+    "revealDescription": "これらのファイルは開くと削除されます。開いた後はこのタブからのみダウンロードでき、最後のダウンロードから 15 分でアクセスできなくなります。",
+    "revealPasswordDescription": "これらのファイルはパスワードで保護されており、開くと削除されます。パスワードを入力して表示してください。",
+    "reveal": "ファイルを表示",
+    "burnedNotice": "この共有はサーバーから削除されました。今すぐファイルをダウンロードしてください。このタブからのアクセスは、最後のダウンロードから 15 分で終了します。",
+    "passwordRetryHint": "共有は開かれましたが、パスワードが一致しませんでした。内容はこのタブにのみ保持されています。ページを再読み込みせずに再試行してください。",
+    "burnedTitle": "ファイルは削除されました",
+    "burnedDesc": "このファイル共有は閲覧後に削除される設定で、すでに開かれています。",
+    "revealFailed": "このブラウザーで復号キーを生成できませんでした。ファイルはまだ開かれていません。もう一度お試しください。"
   },
   "viewPaste": {
     "loadingPaste": "ペーストを読み込み中...",
@@ -157,7 +166,14 @@
     "expired": "期限切れ",
     "daysRemaining": "残り{days}日{hours}時間",
     "hoursRemaining": "残り{hours}時間{minutes}分",
-    "minutesRemaining": "残り{minutes}分"
+    "minutesRemaining": "残り{minutes}分",
+    "revealTitle": "閲覧後に削除",
+    "revealDescription": "このノートは表示すると削除されます。読む準備ができてから開いてください。",
+    "revealPasswordDescription": "このノートはパスワードで保護されており、表示すると削除されます。パスワードを入力して表示してください。",
+    "reveal": "ノートを表示",
+    "burnedNotice": "このノートはサーバーから削除されました。現在はこのタブにのみ残っているため、必要な内容は閉じる前にコピーしてください。",
+    "passwordRetryHint": "ノートは開かれましたが、パスワードが一致しませんでした。内容はこのタブにのみ保持されています。ページを再読み込みせずに再試行してください。",
+    "revealFailed": "このブラウザーで復号キーを生成できませんでした。ノートはまだ開かれていません。もう一度お試しください。"
   },
   "errors": {
     "pasteNotFound": "ペーストが見つかりません",

@@ -31,6 +31,8 @@ const configSchema = z.object({
   MAX_FILE_SHARE_FILES: z.string().default('25').transform(Number),
   FILE_CHUNK_SIZE_BYTES: z.string().default('8388608').transform(Number),
   CLEANUP_INTERVAL_MINUTES: z.string().default('60').transform(Number),
+  // Idle window for downloading a burned file share's chunks. Tests shorten it.
+  FILE_SHARE_DOWNLOAD_GRANT_SECONDS: z.string().default('900').transform(Number),
   S3_ENDPOINT: z.string().optional(),
   S3_REGION: z.string().default('us-east-1'),
   S3_BUCKET: z.string().optional(),

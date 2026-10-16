@@ -27,6 +27,7 @@ Usage:
 ```bash
 pastevault login
 pastevault put ./report.pdf
+pastevault put --burn-after-read --expires-hours 1 ./secret.txt
 pastevault get https://your-server.example/f/abc123#k=yourkey
 pastevault get abc123#k=yourkey
 pastevault whoami

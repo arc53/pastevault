@@ -138,7 +138,16 @@
     "expiredTitle": "Fichiers expirés",
     "expiredDesc": "Ce partage de fichiers a expiré et n’est plus disponible.",
     "tooManyFiles": "Trop de fichiers sélectionnés. La limite actuelle du serveur est de {count}.",
-    "shareTooLarge": "Cette sélection dépasse la limite serveur de {size}."
+    "shareTooLarge": "Cette sélection dépasse la limite serveur de {size}.",
+    "revealTitle": "Détruire après lecture",
+    "revealDescription": "Ces fichiers seront détruits dès que vous les aurez ouverts. Une fois ouverts, ils ne peuvent être téléchargés que depuis cet onglet, et l’accès prend fin 15 minutes après votre dernier téléchargement.",
+    "revealPasswordDescription": "Ces fichiers sont protégés par un mot de passe et seront détruits dès que vous les aurez ouverts. Saisissez le mot de passe pour les afficher.",
+    "reveal": "Afficher les fichiers",
+    "burnedNotice": "Ce partage a été détruit sur le serveur. Téléchargez vos fichiers maintenant : l’accès depuis cet onglet prend fin 15 minutes après votre dernier téléchargement.",
+    "passwordRetryHint": "Le partage a été ouvert, mais le mot de passe ne correspond pas. Il n’est conservé que dans cet onglet : réessayez sans recharger la page.",
+    "burnedTitle": "Fichiers détruits",
+    "burnedDesc": "Ce partage de fichiers devait être détruit après lecture et a déjà été ouvert.",
+    "revealFailed": "Impossible de dériver la clé de déchiffrement dans ce navigateur. Les fichiers n’ont pas été ouverts ; veuillez réessayer."
   },
   "viewPaste": {
     "loadingPaste": "Chargement du paste...",
@@ -157,7 +166,14 @@
     "expired": "Expiré",
     "daysRemaining": "{days}j {hours}h restantes",
     "hoursRemaining": "{hours}h {minutes}min restantes",
-    "minutesRemaining": "{minutes}min restantes"
+    "minutesRemaining": "{minutes}min restantes",
+    "revealTitle": "Détruire après lecture",
+    "revealDescription": "Cette note sera détruite dès que vous l’aurez affichée. Ouvrez-la seulement lorsque vous êtes prêt à la lire.",
+    "revealPasswordDescription": "Cette note est protégée par un mot de passe et sera détruite dès que vous l’aurez affichée. Saisissez le mot de passe pour l’afficher.",
+    "reveal": "Afficher la note",
+    "burnedNotice": "Cette note a été détruite sur le serveur. Elle n’existe plus que dans cet onglet : copiez ce dont vous avez besoin avant de partir.",
+    "passwordRetryHint": "La note a été ouverte, mais le mot de passe ne correspond pas. Elle n’est conservée que dans cet onglet : réessayez sans recharger la page.",
+    "revealFailed": "Impossible de dériver la clé de déchiffrement dans ce navigateur. La note n’a pas été ouverte ; veuillez réessayer."
   },
   "errors": {
     "pasteNotFound": "Paste introuvable",

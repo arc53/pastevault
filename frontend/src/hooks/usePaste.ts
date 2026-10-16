@@ -8,18 +8,31 @@ export function useCreatePaste() {
   })
 }
 
-export function useGetPaste(slug: string) {
+// Viewer queries must never refetch on their own: reading a share counts as a
+// view and may burn it, and a refetch after a burn would replace the revealed
+// content with a 410 error.
+const consumingQueryOptions = {
+  retry: false,
+  staleTime: Infinity,
+  refetchOnWindowFocus: false,
+  refetchOnReconnect: false,
+} as const
+
+export function useGetPasteMeta(slug: string) {
   return useQuery({
-    queryKey: ['paste', slug],
-    queryFn: () => api.getPaste(slug),
+    queryKey: ['paste-meta', slug],
+    queryFn: () => api.getPasteMeta(slug),
     enabled: !!slug,
-    retry: false,
+    ...consumingQueryOptions,
   })
 }
 
-export function useDeletePaste() {
-  return useMutation({
-    mutationFn: (slug: string) => api.deletePaste(slug),
+export function useGetPaste(slug: string, enabled = true) {
+  return useQuery({
+    queryKey: ['paste', slug],
+    queryFn: () => api.getPaste(slug),
+    enabled: !!slug && enabled,
+    ...consumingQueryOptions,
   })
 }
 
@@ -37,11 +50,20 @@ export function useCreateFileShare() {
   })
 }
 
-export function useGetFileShare(slug: string) {
+export function useGetFileShareMeta(slug: string) {
+  return useQuery({
+    queryKey: ['file-share-meta', slug],
+    queryFn: () => api.getFileShareMeta(slug),
+    enabled: !!slug,
+    ...consumingQueryOptions,
+  })
+}
+
+export function useGetFileShare(slug: string, enabled = true) {
   return useQuery({
     queryKey: ['file-share', slug],
     queryFn: () => api.getFileShare(slug),
-    enabled: !!slug,
-    retry: false,
+    enabled: !!slug && enabled,
+    ...consumingQueryOptions,
   })
 }

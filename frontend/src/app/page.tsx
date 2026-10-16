@@ -489,13 +489,14 @@ export default function CreatePastePage() {
         passwordProtected ? password : undefined
       )
 
-      await createFileShare.mutateAsync({
+      const { upload_token: uploadToken } = await createFileShare.mutateAsync({
         slug: clientSlug,
         expires_in_hours: expiresInHours,
         salt: encryption.salt,
         kdf_params: encryption.kdf_params,
         file_count: selectedFiles.length,
         total_size_bytes: totalSelectedFileSize,
+        burn_after_read: burnAfterRead,
       })
 
       const manifestFiles: FileShareManifest['files'] = []
@@ -532,6 +533,7 @@ export default function CreatePastePage() {
 
           await api.uploadFileShareChunk(
             clientSlug,
+            uploadToken,
             fileId,
             chunkIndex,
             encryptedChunk.ciphertext
@@ -609,7 +611,7 @@ export default function CreatePastePage() {
         clientSlug
       )
 
-      await api.completeFileShare(clientSlug, encryptedManifest)
+      await api.completeFileShare(clientSlug, uploadToken, encryptedManifest)
 
       setShareUrl(
         createFileShareUrl(
@@ -673,7 +675,6 @@ export default function CreatePastePage() {
 
     const nextFiles = Array.from(files)
     setCreateError('')
-    setBurnAfterRead(false)
     resetUploadTelemetry()
     setSelectedFiles((current) => {
       const currentKeys = new Set(current.map(getSelectedFileKey))
@@ -980,21 +981,19 @@ export default function CreatePastePage() {
                 {renderExpirySelect()}
               </div>
 
-              {!hasAttachedFiles && (
-                <label className="flex items-center justify-between rounded-sm border border-border/70 bg-muted/35 px-3 py-2 text-sm">
-                  <span className="flex items-center gap-2">
-                    <Flame className="h-4 w-4" />
-                    {tCreate('burnAfterReading')}
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={burnAfterRead}
-                    onChange={(event) => setBurnAfterRead(event.target.checked)}
-                    disabled={isCreating}
-                    className="h-4 w-4 rounded-sm border-border bg-background text-primary focus:ring-ring"
-                  />
-                </label>
-              )}
+              <label className="flex items-center justify-between rounded-sm border border-border/70 bg-muted/35 px-3 py-2 text-sm">
+                <span className="flex items-center gap-2">
+                  <Flame className="h-4 w-4" />
+                  {tCreate('burnAfterReading')}
+                </span>
+                <input
+                  type="checkbox"
+                  checked={burnAfterRead}
+                  onChange={(event) => setBurnAfterRead(event.target.checked)}
+                  disabled={isCreating}
+                  className="h-4 w-4 rounded-sm border-border bg-background text-primary focus:ring-ring"
+                />
+              </label>
 
               <div className="space-y-2">
                 <label className="flex items-center justify-between rounded-sm border border-border/70 bg-muted/35 px-3 py-2 text-sm">
@@ -1215,7 +1214,7 @@ export default function CreatePastePage() {
                   <span className="text-foreground">{t('password')}</span>
                 </span>
               )}
-              {!hasAttachedFiles && burnAfterRead && (
+              {burnAfterRead && (
                 <span className="text-orange-600 dark:text-orange-300">
                   <Flame className="h-3 w-3" />
                   {tCreate('burnAfterReading')}
@@ -1254,21 +1253,19 @@ export default function CreatePastePage() {
                   {renderExpirySelect()}
                 </div>
 
-                {!hasAttachedFiles && (
-                  <label className="flex items-center justify-between rounded-sm border border-border/70 bg-muted/35 px-3 py-2 text-sm">
-                    <span className="flex items-center gap-2">
-                      <Flame className="h-4 w-4" />
-                      {tCreate('burnAfterReading')}
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={burnAfterRead}
-                      onChange={(event) => setBurnAfterRead(event.target.checked)}
-                      disabled={isCreating}
-                      className="h-4 w-4 rounded-sm border-border bg-background text-primary focus:ring-ring"
-                    />
-                  </label>
-                )}
+                <label className="flex items-center justify-between rounded-sm border border-border/70 bg-muted/35 px-3 py-2 text-sm">
+                  <span className="flex items-center gap-2">
+                    <Flame className="h-4 w-4" />
+                    {tCreate('burnAfterReading')}
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={burnAfterRead}
+                    onChange={(event) => setBurnAfterRead(event.target.checked)}
+                    disabled={isCreating}
+                    className="h-4 w-4 rounded-sm border-border bg-background text-primary focus:ring-ring"
+                  />
+                </label>
 
                 <div className="space-y-2">
                   <label className="flex items-center justify-between rounded-sm border border-border/70 bg-muted/35 px-3 py-2 text-sm">

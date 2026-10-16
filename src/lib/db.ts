@@ -47,7 +47,7 @@ function normalizeDatabaseUrl(provider: 'postgresql' | 'sqlite', url: string) {
   return parsedUrl.toString()
 }
 
-function resolveDatabaseProvider() {
+export function resolveDatabaseProvider() {
   return process.env.DATABASE_PROVIDER === 'postgresql'
     ? 'postgresql'
     : config.DATABASE_PROVIDER
