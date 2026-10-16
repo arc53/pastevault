@@ -7,6 +7,7 @@ import {
   listExpiredOrAbandonedFileShares,
 } from './file-shares-db.js'
 import { deleteFileShareObjects } from './file-storage.js'
+import { cleanupSecretRequests } from './secret-requests.js'
 
 export async function cleanupExpiredPastes(): Promise<number> {
   const prisma = getPrisma()
@@ -68,6 +69,10 @@ export async function cleanupExpiredPastes(): Promise<number> {
   const deletedFileShares = await deleteFileSharesByIds(
     fileShares.map((share) => share.id)
   )
+
+  // Secret requests: expire due ones, wipe responses whose re-poll lease is
+  // over (normally done lazily or by a timer), drop old finished ones.
+  await cleanupSecretRequests(now)
 
   // Audit retention. Events are metadata only, but still don't keep them forever.
   await purgeAuditEventsOlderThan(

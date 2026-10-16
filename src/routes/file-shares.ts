@@ -150,15 +150,16 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
         chunk_size_bytes: config.FILE_CHUNK_SIZE_BYTES,
         burn_after_read: true,
       },
-      // secret_requests arrives in a later stage. Sealing to a raw public key
-      // needs no account; sealing to an account agent needs `agents`.
+      // Sealing to a raw public key needs no account; sealing to an account
+      // agent needs `agents`, and secret requests are between an account's
+      // agents and its signed-in human.
       features: {
         expires_in_minutes: true,
         max_views: true,
         api_tokens: accountsEnabled,
         agents: accountsEnabled,
         sealed_shares: true,
-        secret_requests: false,
+        secret_requests: accountsEnabled,
         audit: accountsEnabled,
       },
       limits: {

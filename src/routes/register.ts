@@ -33,16 +33,19 @@ export async function registerApiRoutes(fastify: FastifyInstance) {
       }
     })
 
-    const [{ authRoute }, { accountRoute }, { tokensRoute }, { agentsRoute }] = await Promise.all([
-      import('./auth.js'),
-      import('./account.js'),
-      import('./tokens.js'),
-      import('./agents.js'),
-    ])
+    const [{ authRoute }, { accountRoute }, { tokensRoute }, { agentsRoute }, { secretRequestsRoute }] =
+      await Promise.all([
+        import('./auth.js'),
+        import('./account.js'),
+        import('./tokens.js'),
+        import('./agents.js'),
+        import('./secret-requests.js'),
+      ])
     await fastify.register(authRoute, { prefix: '/api' })
     await fastify.register(accountRoute, { prefix: '/api' })
     await fastify.register(tokensRoute, { prefix: '/api' })
     await fastify.register(agentsRoute, { prefix: '/api' })
+    await fastify.register(secretRequestsRoute, { prefix: '/api' })
   }
 
   await fastify.register(pastesRoute, { prefix: '/api' })

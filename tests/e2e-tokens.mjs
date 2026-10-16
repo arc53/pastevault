@@ -196,7 +196,7 @@ await runSuite('e2e-tokens', { postgres: true }, async ({ startServer, createDat
     api_tokens: true,
     agents: true,
     sealed_shares: true,
-    secret_requests: false,
+    secret_requests: true,
     audit: true,
   })
   assert.equal(capabilities.body.limits.max_views, 1000)
@@ -798,6 +798,8 @@ await runSuite('e2e-tokens', { postgres: true }, async ({ startServer, createDat
     '/api/account/audit',
     `/api/account/shares/${limitedShare.id}/events`,
     '/api/agents',
+    '/api/account/secret-requests',
+    '/api/secret-requests/by-code/ABCD-EFGH',
   ]) {
     assert.equal((await request(anonymous.baseUrl, pathname)).response.status, 404, pathname)
   }

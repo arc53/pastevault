@@ -515,3 +515,46 @@ func SetDefaultAgent(server, name string) error {
 
 	return writePrivateJSON(path, settings)
 }
+
+// ResolveLocalAgent picks the local key for NAME, or the default agent
+// (PASTEVAULT_AGENT_KEY, PASTEVAULT_AGENT, the saved default, or the only
+// key on this machine).
+func ResolveLocalAgent(server, name string) (*AgentIdentity, error) {
+	if name == "" {
+		envIdentity, err := EnvAgentIdentity()
+		if err != nil || envIdentity != nil {
+			return envIdentity, err
+		}
+
+		name, _, err = DefaultAgentName(server)
+		if err != nil {
+			return nil, err
+		}
+		if name == "" {
+			locals, _, err := LocalAgentIdentities(server)
+			if err != nil {
+				return nil, err
+			}
+			var active []*AgentIdentity
+			for _, identity := range locals {
+				if !identity.Revoked() {
+					active = append(active, identity)
+				}
+			}
+			if len(active) == 1 {
+				return active[0], nil
+			}
+			return nil, UsageError("no default agent for %s: name one, set PASTEVAULT_AGENT, or run pastevault agent init", server)
+		}
+	}
+
+	identity, err := LoadAgentIdentity(server, name)
+	if err != nil {
+		return nil, err
+	}
+	if identity == nil {
+		return nil, NewError(ExitNotFound, CodeNotFound, "this machine has no key for agent %s on %s (pastevault agent list shows the account's agents)", name, server)
+	}
+
+	return identity, nil
+}

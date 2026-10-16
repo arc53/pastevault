@@ -37,6 +37,8 @@ The config directory also holds (all files `0600`, directories `0700`):
 | `agents/<server>/<name>.json` | An agent key: `{v:1, name, server, agent_id, public_key, private_key, fingerprint, created_at}`. `<server>` is the server URL made file-safe, e.g. `https_api.pastevault.dev`. After `agent revoke` the file moves to `agents/<server>/revoked/<name>-<time>.json` and is kept, so shares already sealed to it can still be opened. |
 | `known_agents.json` | Pinned agent keys: `{servers:{<server URL>:{<name>:{fingerprint, public_key, first_seen, source:"self"\|"tofu"\|"manual"}}}}`. |
 | `cli.json` | CLI settings: `{servers:{<server URL>:{default_agent}}}`. Separate from the updater's `config.json`, which stays in `<user config dir>/pastevault`. |
+| `store/<server>/<agent>/<NAME>.pvs` | A local secret, sealed to the agent key: `{v:1, name, kind, created_at, source:{type:"request"\|"share"\|"import", ref}, fingerprint, wrapped_key, nonce, ciphertext}`. `<agent>` is the agent name (for a bare `PASTEVAULT_AGENT_KEY` without a matching key file: its fingerprint). See [`secret`](#secret-the-local-store). |
+| `requests/<id>.json` | An open secret request: its poll token and ephemeral private key, name, `save_as`, server and expiry. Deleted once the answer is stored and acknowledged, or the request is declined, cancelled or expired. |
 
 Managing API tokens (`token create|list|revoke`) needs the **login session**. The server refuses token management with an API token, so a leaked token cannot mint new tokens or extend itself.
 
@@ -49,17 +51,26 @@ Managing API tokens (`token create|list|revoke`) needs the **login session**. Th
 | 2 | Usage or flag error; invalid request (HTTP 400); too large (413); missing key or password | `usage`, `invalid_request`, `too_large`, `key_required`, `password_required` |
 | 3 | Authentication: not logged in, 401, 403, missing scope, session required, a sealed share opened without the recipient account | `auth`, `not_logged_in`, `session_required` |
 | 4 | Not found (404). This includes shares their owner revoked: revoking deletes the share, so the server can no longer tell it from one that never existed | `not_found` |
-| 5 | Gone: burned or expired (410); a share that stops existing while `status --wait` waits | `gone` |
-| 6 | Request declined or cancelled (secret requests, future) | `declined` |
+| 5 | Gone: burned or expired (410); a share that stops existing while `status --wait` waits; a secret request that expired, or whose answer was already collected and wiped | `gone` |
+| 6 | Secret request declined or cancelled | `declined`, `cancelled` |
 | 7 | Decryption or integrity failure: wrong key or password, tampering, sealed share you cannot open, a link with a key that the server claims is sealed | `decrypt_failed`, `sealed_share`, `sealed_share_conflict` |
 | 8 | Fingerprint or pin mismatch: an agent's key differs from the pinned one or from this machine's key file, or the server's fingerprint for the agent differs | `fingerprint_mismatch` |
-| 9 | Timeout (`status --wait`, login code expiry) | `timeout` |
+| 9 | Timeout (`status --wait`, `request --wait`, `await`, login code expiry) | `timeout` |
 | 10 | Rate limited (429) | `rate_limited` |
 | 11 | Network or server error (5xx, connection failure, a redirect) | `network` |
 | 12 | Conflict (409) | `conflict` |
 | 13 | Local file exists, or a path cannot be used | `local_file` |
 | 14 | The server lacks a required feature (e.g. accounts are disabled for `list`/`status`/`revoke`/`audit`/`token`/`whoami`, or an old server without the audit log or API tokens) | `unsupported` |
 | 130 | Interrupted (Ctrl-C) | `interrupted` |
+
+`run` and `inject` add their own codes:
+
+| Code | Meaning |
+|---|---|
+| 125 | A handle could not be resolved (missing secret, a share with a view limit, bad `.env.pv` line, ...). Nothing was run. |
+| 126 | The command was found but could not be executed (permissions, not a program). |
+| 127 | The command was not found. |
+| other | `run` exits with the command's own exit code, or 128+N when it was killed by signal N. |
 
 ## Environment variables
 
@@ -71,7 +82,7 @@ Managing API tokens (`token create|list|revoke`) needs the **login session**. Th
 | `PASTEVAULT_PASSWORD` | Share password for `get`, and for `put --password` (instead of a prompt). |
 | `PASTEVAULT_CONFIG_DIR` | Directory for `auth.json`, agent keys, `known_agents.json` and `cli.json`. |
 | `PASTEVAULT_AGENT` | Default agent name (overrides `cli.json`). |
-| `PASTEVAULT_AGENT_KEY` | An agent private key (base64url, 32 bytes) used instead of key files, for CI and containers. `get` opens shares sealed to it. |
+| `PASTEVAULT_AGENT_KEY` | An agent private key (base64url, 32 bytes) used instead of key files, for CI and containers. `get` opens shares sealed to it; `request` and the local store use it as the default agent. |
 | `PASTEVAULT_JSON` | `1` turns on `--json` for every command. |
 | `PASTEVAULT_NO_UPDATE_CHECK` | Disables passive update checks. |
 
@@ -167,7 +178,8 @@ Sealed shares are opened with the local agent key whose fingerprint equals the s
 | `--stdout` | Write the content to stdout (pastes, or a file share with exactly one file). |
 | `-o F`, `--output F` | Write the paste, or the only file of a share, to the new file F (mode `0600`). |
 | `--out DIR` | Write into DIR. Pastes are named after their title when it is a plain file name (e.g. `.env`), else `<slug>.txt`/`.md`. File shares default to the current directory. |
-| `--overwrite` | Replace existing files. Without it, `-o` refuses an existing file (exit 13, checked before opening). With `--out`, file names are only known after the share is opened (and its view used), so a clash never fails: the file is saved as `name (1).ext` and stderr says so. |
+| `--overwrite` | Replace existing files. Without it, `-o` refuses an existing file (exit 13, checked before opening). With `--out`, file names are only known after the share is opened (and its view used), so a clash never fails: the file is saved as `name (1).ext` and stderr says so. With `--save`, replace an existing secret. |
+| `--save NAME` | Store the content in the local store as `NAME` (sealed to the default agent) instead of writing it anywhere, and print `pv://secret/NAME`. Works for pastes and file shares with exactly one file (at most 10 MiB). The name, the default agent and an existing secret are checked before opening. JSON adds `saved_as`. This is how a view-limited or burn-after-read share becomes usable by `run` and `inject`. |
 
 Pastes go to stdout by default. With `--json`, a paste needs an explicit destination: `--stdout` (the content is then included as `content`), `-o` or `--out`. This is checked before the paste is opened.
 
@@ -278,6 +290,128 @@ An agent is an X25519 key pair. The private key stays on its machine; the public
 - `trust` pins NAME's current server key after you verified FINGERPRINT out of band. It refuses (exit 8) when the server's key has another fingerprint.
 - `default` shows or sets the default agent for the server.
 
+## `request` and `await`: ask a human for a secret
+
+```
+pastevault request NAME [--why TEXT] [--ttl 10m] [--accept text|file|any] [--save-as NAME] [--agent NAME] [--overwrite] [--wait [--timeout D]]
+pastevault await <id|code> [--timeout D]
+pastevault request list [--status S]
+pastevault request cancel <id|code>...
+pastevault request fulfil <code|url> [--from-file F | --from-stdin] [--kind text|file] [--fingerprint FP]
+pastevault request decline <code|url>
+```
+
+An agent never asks for a secret in chat. It asks the human of its own account through PasteVault, and receives the answer sealed to a fresh key that only it holds:
+
+1. `request NAME` (as the default agent, or `--agent`) generates an ephemeral X25519 key pair for this request, creates the request on the server with its public key, and saves `requests/<id>.json` (poll token and private key, `0600`). It prints a link like `https://pastevault.dev/r/ABCD-EFGH#fp=pvk1_…` and the key's fingerprint.
+2. The human opens the link **signed in to the same account**. The page checks that the request key matches `#fp=`, shows the agent and the reason (as untrusted text), and seals the answer to the request key in the browser. Only the human's login session can answer; an API token (an agent) never can.
+3. `await` (or `request --wait`) polls, decrypts the answer, seals it into the local store as `--save-as` (default `NAME`), writes the store file, and only then acknowledges it, which wipes it from the server. It prints `pv://secret/NAME`. Use it with `run` or `inject`; the value is never printed.
+
+- `request` needs an agent key on this machine (`pastevault agent init`; exit 2 otherwise) and a credential with `requests:create` (default API tokens have it). The name must match `[A-Za-z_][A-Za-z0-9_.-]{0,127}`. A secret with the `--save-as` name must not exist yet (exit 13) unless `--overwrite`.
+- `--why` is shown to the human, labelled as a message from the agent that must not be trusted. At most 500 characters, no control characters.
+- `--ttl` is how long the request stays open: at least the server minimum (`limits.min_secret_request_ttl_seconds`, default 60s), at most 24h. Default 10m.
+- `--accept`: `text` (default), `file` or `any`.
+- `--wait` waits for the answer. `--timeout` limits the wait (default: until the request expires); a timeout exits 9 and keeps the request file, so `await` can resume. Ctrl-C (exit 130) does the same.
+- Outcomes: answered → exit 0 and the handle; declined or cancelled → exit 6; expired → exit 5; the answer was already collected elsewhere and wiped → exit 5.
+- Without `--wait` and `--json`, the link is printed on stdout and the instructions on stderr. With `--wait`, the instructions (including the link) go to stderr and the handle to stdout.
+- An account may have 20 pending requests and create 30 per hour (429, exit 10). Polling is limited to the server's interval (3s); `await` backs off on `slow_down` by itself.
+- If the CLI dies after receiving the answer but before acknowledging it, `await` within two minutes gets the same answer again. After two minutes (or the acknowledgement, or expiry) the server has deleted it.
+
+JSON (`request --json`, and with `--wait` or `await` once stored):
+
+```json
+{
+  "id": "6f0c…",
+  "code": "ABCD-EFGH",
+  "url": "https://pastevault.dev/r/ABCD-EFGH#fp=pvk1_…",
+  "fingerprint": "pvk1_…",
+  "name": "OPENAI_API_KEY",
+  "save_as": "OPENAI_API_KEY",
+  "agent": "laptop",
+  "expires_at": "2026-10-16T12:10:00.000Z",
+  "status": "pending",
+  "handle": "pv://secret/OPENAI_API_KEY"
+}
+```
+
+`status` is `pending` right after `request`, and `delivered` (with `handle`) once the answer is in the local store.
+
+- `request list` shows the account's requests (an API token bound to an agent sees only that agent's), newest first, with `local: true` when this machine holds the request file. Metadata only. JSON: `{"requests":[{id, code, name, reason, accept, fingerprint, status, requester:{agent:{id,name}}, response_kind, response_size, created_at, expires_at, opened_at, fulfilled_at, delivered_at, acked_at, closed_at, local}]}`.
+- `request cancel` withdraws pending (or answered but not yet collected) requests and deletes their request files. The requester's token or the session may cancel.
+- `request fulfil` answers a request from the command line, with the **login session** (`pastevault login`; exit 3 otherwise). Give the full link with `#fp=`, or the code plus `--fingerprint` (the full fingerprint or at least `pvk1_` plus 8 characters, as the agent showed it); the CLI recomputes the fingerprint from the request's public key and refuses with exit 8 if it differs, before reading the value. The value comes from `--from-file`, `--from-stdin`, or a hidden prompt on a terminal. For `text`, one trailing newline from a file or stdin is dropped. `--kind file` sends the bytes as a file (name from `--from-file` or `--filename`). The sealed answer may be at most `max_bytes` (the server's `MAX_SECRET_REQUEST_BYTES`).
+- `request decline` declines a pending request (session only); the agent's `await` then exits 6.
+
+## `secret`: the local store
+
+```
+pastevault secret list [--agent NAME]
+pastevault secret import NAME (--from-file F | --from-stdin) [--kind text|file] [--overwrite]
+pastevault secret rm NAME...
+pastevault secret reveal NAME
+```
+
+Secrets in the local store are sealed to the default agent's key (the same PVWRAP1 wrap as sealed shares, context `store:<NAME>`), one file per secret under `store/<server>/<agent>/` (`0600`, directories `0700`). They are referenced as `pv://secret/NAME`. `request`/`await` and `get --save` add them; `import` adds one from a file or stdin (for `text`, one trailing newline is dropped; content that isn't UTF-8 becomes a `file`). Nothing here contacts the server.
+
+- `list` never shows values. JSON: `{"agent":"laptop","secrets":[{name, handle, kind, created_at, source:{type, ref}}]}`.
+- `reveal` prints a secret only when both stdin and stdout are a terminal (exit 2 otherwise). That is friction against an agent capturing it, **not** a security boundary: any program running as your user can read the store and the agent key.
+- After `agent init --force` or `agent revoke`, older secrets stay readable with the retired key.
+
+## `run`: a command with secrets in its environment
+
+```
+pastevault run [--env-file .env.pv]... [--no-mask] [--no-inherit] -- COMMAND [ARGS...]
+```
+
+`run` starts COMMAND with the current environment plus the variables from each `--env-file` (later files win). Every value that is a `pv://` handle is resolved first, from the env files and from the inherited environment (`OPENAI_API_KEY=pv://secret/OPENAI_API_KEY pastevault run -- …` works too). If any handle can't be resolved, nothing runs (exit 125).
+
+- `PASTEVAULT_TOKEN`, `PASTEVAULT_PASSWORD` and `PASTEVAULT_AGENT_KEY` are removed from the inherited environment, so the command never sees the CLI's own credentials. (An `--env-file` may still set them explicitly.)
+- `--no-inherit` starts from an empty environment, keeping only `PATH`, `HOME`, `USER`, `LOGNAME`, the temp directory variables and Windows system variables.
+- stdin is passed through. Signals (SIGINT, SIGTERM, SIGHUP, SIGQUIT, SIGUSR1/2) are forwarded to the command; Ctrl-C on a terminal reaches it directly. The exit code is the command's (128+N if it was killed by signal N), or 125/126/127 (see [Exit codes](#exit-codes)).
+- The command's stdout and stderr are **masked**: every resolved value is replaced by `[masked:VAR]`. Because of that they are pipes, not a terminal (programs may turn off colours or prompts). `--no-mask` passes them through untouched.
+- Share handles must point at a paste **without a view limit**: `run` would otherwise use up (or burn) a view on every run. A view-limited, burn-after-read, password-protected or file share is refused with exit 125 and the hint `pastevault get <ref> --save NAME`; then use `pv://secret/NAME`.
+
+### Handles and `.env.pv`
+
+```
+pv://secret/NAME[?agent=AGENT&var=KEY&server=URL]   a secret in the local store (default agent of --server)
+pv://share/SLUG[?server=URL&var=KEY][#k=KEY]         a paste on the server
+https://host/p/SLUG#k=KEY                            a paste link (inject templates only)
+```
+
+`var=KEY` treats the content as a dotenv file and takes `KEY` from it, so one stored `.env` can feed several variables.
+
+`.env.pv` files use dotenv syntax: `KEY=value`, an optional `export ` prefix, `#` comments (also after an unquoted value, preceded by a space), double quotes with `\n \r \t \\ \" \$` escapes, and single quotes for literal text. Quoted values may span lines. There is no `$VAR` interpolation. Values that are not `pv://` handles pass through literally, so the file can be committed:
+
+```
+# .env.pv
+OPENAI_API_KEY=pv://secret/OPENAI_API_KEY
+DATABASE_URL=pv://secret/prod-env?var=DATABASE_URL
+LOG_LEVEL=debug
+```
+
+### What masking does and does not do
+
+Masking keeps secrets out of **transcripts**: terminal scrollback, CI logs, and the context of an agent that runs the command. It is not a security boundary. The command can read its own environment and can always get a secret out some other way.
+
+For each value, the masker looks for the value itself, its standard and URL-safe base64 (padded, unpadded, and inside a longer base64 stream at each of the three byte alignments), lower and upper case hex, URL query and path escaping, and JSON string escaping. It replaces leftmost-longest matches. Output that ends in what could be the start of a secret is held back until more output arrives or the command exits; there is no timer, so a partial secret is never printed early, but a prompt that happens to end that way appears late.
+
+It does **not** catch:
+
+- values shorter than 6 bytes (`run` warns and does not mask them);
+- line-wrapped encodings (`base64` wraps at 76 characters, so values longer than 57 bytes), other encodings, compression, encryption, or a value split up or reversed;
+- a few bits at the edges of base64 inside a longer stream (the characters next to `[masked:…]` can depend on the neighbouring bytes);
+- anything written to files, sockets or other processes instead of stdout/stderr.
+
+If two variables hold the same value, the replacement names one of them.
+
+## `inject`: fill a template
+
+```
+pastevault inject -i TEMPLATE [-o OUT [--overwrite] | --stdout]
+```
+
+Replaces every `{{ pv://… }}` (or `{{ https://host/p/…#k=… }}`) placeholder in TEMPLATE (`-` for stdin) with the secret it names, with the same rules as `run`. Other `{{ … }}` text is left alone. `-o` writes a new file `0600` (exit 13 if it exists, checked before anything is resolved, unless `--overwrite`); `--stdout` writes to stdout. Any unresolvable placeholder exits 125 and writes nothing. JSON (with `-o`): `{"written_to":"…","placeholders":N}`.
+
 ## `login`, `whoami`, `logout`
 
 ```
@@ -305,11 +439,15 @@ pastevault logout [--revoke]
 - The server lists agents' public keys and could substitute its own. The CLI always computes fingerprints itself and pins keys, so a substituted key fails with exit 8 instead of being used. Compare fingerprints out of band before `agent trust`.
 - **Sealed shares protect confidentiality, not sender authenticity.** Only the recipient's private key can decrypt a sealed share, but PVWRAP1 is anonymous public-key encryption: anyone who knows the recipient's public key (including the server, or whoever can write to its database) can seal content to it. A malicious server can therefore replace a sealed share's content and key with its own, and the recipient cannot tell. Treat sealed content as coming from "someone who knows the agent's public key", not from a verified sender. A normal `#k=` link does protect integrity against the server, because the key never reaches it. Sender signatures are a possible follow-up.
 - Sealed shares without a recipient account (`--to-key`, or `DISABLE_AUTH`) can be consumed or burned by anyone who has the link, without being decrypted.
+- Secret requests: the server sees the request's name, reason, agent and timing, but only ever stores the answer encrypted to the request's own key, and deletes it on acknowledgement, two minutes after delivery, or at expiry. The `#fp=` check (web) and `request fulfil`'s fingerprint check stop a server from swapping in its own key. The request's private key and poll token live only in `requests/<id>.json` and are deleted with it. A request's reason is untrusted text written by the agent; the CLI prints it quoted.
+- The local store and agent keys protect secrets from transcripts and from the server, not from code running as your user. `run` masking is a transcript guard too (see [`run`](#run-a-command-with-secrets-in-its-environment)).
 
 ## Formats and test vectors
 
 Pastes use the web format: plaintext `{"title","body","render_mode","language_hint"?}` (JSON), XChaCha20-Poly1305 with a 24-byte nonce and AAD `pastevault:<slug>:v1`. File shares use per-chunk AAD `pastevault:file-share:chunk:<slug>:<file_id>:<index>:v1` and manifest AAD `pastevault:file-share:manifest:<slug>:v1`.
 
-Sealed shares keep these formats and wrap the 32-byte share key with **PVWRAP1**: an ephemeral X25519 key, HKDF-SHA256 (`salt = e_pk || recipient_pk`, `info = "pastevault:wrap:v1"`), then XChaCha20-Poly1305 with AAD `pastevault:wrap:v1:<context>:<recipient fingerprint>`. The envelope is `0x01 || e_pk(32) || nonce(24) || ciphertext(48)`, 105 bytes or 140 base64url characters. Contexts are `paste:<slug>` and `file-share:<slug>`. Fingerprints are `pvk1_` + base32 (lowercase, unpadded) of the first 20 bytes of `SHA-256("pastevault:agent-key:v1" || 0x00 || public_key)`. Low-order public keys (all-zero shared secret) and non-canonical ones (top bit set, or u ≥ 2^255−19) are refused, and keys and envelopes must use canonical base64url (no padding bits set).
+Secret request answers and local store entries are a JSON payload, `{"v":1,"name":"…","kind":"text","value":"…"}` or `{"v":1,"name":"…","kind":"file","filename":"…","content_type":"…","data":"<base64url>"}`, encrypted with a random 32-byte key and 24-byte nonce (XChaCha20-Poly1305) under AAD `pastevault:request:<request id>:v1` or `pastevault:store:<NAME>:v1`; the key is wrapped with PVWRAP1 (below) for context `request:<request id>` (to the request's ephemeral key) or `store:<NAME>` (to the agent key).
+
+Sealed shares keep these formats and wrap the 32-byte share key with **PVWRAP1**: an ephemeral X25519 key, HKDF-SHA256 (`salt = e_pk || recipient_pk`, `info = "pastevault:wrap:v1"`), then XChaCha20-Poly1305 with AAD `pastevault:wrap:v1:<context>:<recipient fingerprint>`. The envelope is `0x01 || e_pk(32) || nonce(24) || ciphertext(48)`, 105 bytes or 140 base64url characters. Contexts are `paste:<slug>`, `file-share:<slug>`, `request:<id>` and `store:<NAME>`. Fingerprints are `pvk1_` + base32 (lowercase, unpadded) of the first 20 bytes of `SHA-256("pastevault:agent-key:v1" || 0x00 || public_key)`. Low-order public keys (all-zero shared secret) and non-canonical ones (top bit set, or u ≥ 2^255−19) are refused, and keys and envelopes must use canonical base64url (no padding bits set).
 
 `testdata/crypto/vectors.json` is generated from the web app's code by `node scripts/crypto-vectors.mjs` and checked with `--check` in CI. It includes fingerprint and wrap vectors and negative wrap cases (wrong context, wrong recipient, wrong fingerprint in the AAD, tampering, low-order and non-canonical keys). The Go tests and `frontend/src/lib/__tests__/crypto-vectors.test.ts` both read it; `npm run test:crypto` runs all three.

@@ -61,8 +61,7 @@ type command struct {
 	run     func(ctx context.Context, a *app, args []string) error
 }
 
-// commands is the dispatch table. Later features (agents, requests, secrets,
-// run, inject, mcp) add their entries here.
+// commands is the dispatch table.
 var commands = []command{
 	{"put", "Share text, a .env file or files", runPut},
 	{"get", "Open a share", runGet},
@@ -72,6 +71,11 @@ var commands = []command{
 	{"audit", "Show the account audit log", runAudit},
 	{"token", "Create, list and revoke API tokens", runToken},
 	{"agent", "Create and manage agent keys for sealed shares", runAgent},
+	{"request", "Ask your account's human for a secret (and list, cancel, fulfil requests)", runRequest},
+	{"await", "Wait for a secret request's answer and store it", runAwait},
+	{"secret", "List, import, remove or reveal secrets in the local store", runSecret},
+	{"run", "Run a command with secrets from pv:// handles in its environment", runRun},
+	{"inject", "Fill {{ pv://... }} placeholders in a template", runInject},
 	{"login", "Link this CLI to an account (browser approval or --with-token)", runLogin},
 	{"whoami", "Show the account and credential in use", runWhoAmI},
 	{"logout", "Forget (and revoke) stored credentials", runLogout},
@@ -122,6 +126,14 @@ func (a *app) run(ctx context.Context, args []string) int {
 		}
 	}
 
+	// run and inject keep their own exit codes (125/126/127, the child's).
+	var exit *commandExit
+	if errors.As(err, &exit) {
+		if exit.err != nil {
+			a.reportErrorWithExit(exit.err, exit.code)
+		}
+		return exit.code
+	}
 	if errors.Is(err, errHelpShown) {
 		if a.jsonMode {
 			_ = writeJSON(a.stdout, map[string]string{"usage": a.helpText.String()})
@@ -141,21 +153,48 @@ func (a *app) run(ctx context.Context, args []string) int {
 // reportError prints err (one line on stderr; with --json also the error
 // object on stdout) and returns its exit code.
 func (a *app) reportError(err error) int {
+	return a.reportErrorWithExit(err, 0)
+}
+
+// reportErrorWithExit is reportError with the exit code overridden (unless
+// exit is 0).
+func (a *app) reportErrorWithExit(err error, exit int) int {
 	cliErr := pv.Classify(err)
+	if exit == 0 {
+		exit = cliErr.Exit
+	}
 	message := strings.TrimSpace(cliErr.Error())
 	if a.jsonMode {
 		payload := map[string]any{
 			"error": map[string]any{
 				"code":      cliErr.Code,
 				"message":   message,
-				"exit_code": cliErr.Exit,
+				"exit_code": exit,
 			},
 		}
 		_ = writeJSON(a.stdout, payload)
 	}
 	fmt.Fprintf(a.stderr, "Error: %s\n", message)
 
-	return cliErr.Exit
+	return exit
+}
+
+// commandExit ends a command with a fixed exit code: run's 125/126/127 and
+// the child's own status. err (optional) is reported first.
+type commandExit struct {
+	code int
+	err  error
+}
+
+func (e *commandExit) Error() string {
+	if e.err != nil {
+		return e.err.Error()
+	}
+	return fmt.Sprintf("exit status %d", e.code)
+}
+
+func (e *commandExit) Unwrap() error {
+	return e.err
 }
 
 func envJSONEnabled() bool {
@@ -352,6 +391,8 @@ Environment:
   PASTEVAULT_CONFIG_DIR      Directory for stored credentials, agent keys and pins
   PASTEVAULT_AGENT           Default agent name
   PASTEVAULT_AGENT_KEY       Agent private key (base64url) instead of a key file
+                             (run strips PASTEVAULT_TOKEN, _PASSWORD and _AGENT_KEY
+                             from the command's environment)
   PASTEVAULT_JSON            Set to 1 for JSON output
   PASTEVAULT_NO_UPDATE_CHECK Disable passive update checks
 
@@ -365,6 +406,8 @@ Examples:
   pastevault token create --name ci
   pastevault agent init --name laptop
   pastevault put .env --to build-bot
+  pastevault request OPENAI_API_KEY --why "run the evals" --wait
+  pastevault run --env-file .env.pv -- npm test
 
 Run 'pastevault <command> --help' for a command's flags.
 Exit codes and JSON shapes: docs/cli-reference.md

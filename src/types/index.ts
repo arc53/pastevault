@@ -330,3 +330,106 @@ export interface RevokeAgentResponse {
   agent: AgentSummary
   tokens_revoked: number
 }
+
+// Secret requests (spec §2.6). An agent asks its account's human for a
+// secret; the browser (or `pastevault request fulfil`) seals the answer to the
+// request's ephemeral public key, so the server only ever stores ciphertext.
+export type SecretRequestStatus =
+  | 'pending'
+  | 'fulfilled'
+  | 'delivered'
+  | 'declined'
+  | 'expired'
+  | 'cancelled'
+
+export type SecretRequestAccept = 'text' | 'file' | 'any'
+export type SecretRequestResponseKind = 'text' | 'file'
+
+export interface CreateSecretRequestRequest {
+  name: string
+  reason?: string
+  ttl_seconds?: number
+  accept?: SecretRequestAccept
+  public_key: string
+  fingerprint: string
+  agent_id: string
+}
+
+export interface CreateSecretRequestResponse {
+  id: string
+  // Formatted "ABCD-EFGH".
+  code: string
+  url_path: string
+  expires_at: Date
+  poll_token: string
+  interval: number
+}
+
+// GET /api/secret-requests/by-code/:code (session of the same account only).
+export interface SecretRequestByCodeResponse {
+  id: string
+  code: string
+  name: string
+  // Untrusted text written by the agent.
+  reason: string | null
+  accept: SecretRequestAccept
+  // The request's ephemeral X25519 key. Clients recompute the fingerprint.
+  public_key: string
+  fingerprint: string
+  // Limit on the decoded ciphertext of the fulfilment.
+  max_bytes: number
+  requester: {
+    agent: { id: string; name: string | null; fingerprint: string | null }
+    token_name: string | null
+  }
+  status: SecretRequestStatus
+  created_at: Date
+  expires_at: Date
+  opened_at: Date | null
+  fulfilled_at: Date | null
+  delivered_at: Date | null
+  closed_at: Date | null
+}
+
+export interface FulfillSecretRequestRequest {
+  kind: SecretRequestResponseKind
+  ciphertext: string
+  nonce: string
+  wrapped_key: string
+}
+
+export type PollSecretRequestResponse =
+  | { status: Exclude<SecretRequestStatus, 'fulfilled'>; interval: number }
+  | {
+      status: 'fulfilled'
+      interval: number
+      kind: SecretRequestResponseKind
+      ciphertext: string
+      nonce: string
+      wrapped_key: string
+    }
+
+// GET /api/account/secret-requests: metadata only, never response payloads.
+export interface SecretRequestSummary {
+  id: string
+  code: string
+  name: string
+  reason: string | null
+  accept: SecretRequestAccept
+  fingerprint: string
+  status: SecretRequestStatus
+  requester: { agent: { id: string; name: string | null } }
+  response_kind: SecretRequestResponseKind | null
+  response_size: number | null
+  created_at: Date
+  expires_at: Date
+  opened_at: Date | null
+  fulfilled_at: Date | null
+  delivered_at: Date | null
+  acked_at: Date | null
+  closed_at: Date | null
+}
+
+export interface ListSecretRequestsResponse {
+  requests: SecretRequestSummary[]
+}

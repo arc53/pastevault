@@ -1,27 +1,33 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	pv "github.com/arc53/pastevault/internal/pastevault"
+	"github.com/arc53/pastevault/internal/store"
 )
 
 // getOutput is the --json result of get. Content is only included with
 // --stdout (pastes), so secrets don't end up in logs by accident.
 type getOutput struct {
-	Slug           string        `json:"slug"`
-	Kind           string        `json:"kind"`
-	Title          *string       `json:"title,omitempty"`
-	RenderMode     string        `json:"render_mode,omitempty"`
-	LanguageHint   string        `json:"language_hint,omitempty"`
-	SizeBytes      int64         `json:"size_bytes"`
-	WrittenTo      string        `json:"written_to,omitempty"`
+	Slug         string  `json:"slug"`
+	Kind         string  `json:"kind"`
+	Title        *string `json:"title,omitempty"`
+	RenderMode   string  `json:"render_mode,omitempty"`
+	LanguageHint string  `json:"language_hint,omitempty"`
+	SizeBytes    int64   `json:"size_bytes"`
+	WrittenTo    string  `json:"written_to,omitempty"`
+	// SavedAs is the pv://secret handle of a share saved with --save.
+	SavedAs        string        `json:"saved_as,omitempty"`
 	Files          []getFileInfo `json:"files,omitempty"`
 	ViewCount      int           `json:"view_count"`
 	MaxViews       *int          `json:"max_views"`
@@ -47,6 +53,9 @@ type getOptions struct {
 	password  pv.PasswordSource
 	// sealedTo is the local agent key a sealed share is opened with.
 	sealedTo *pv.AgentIdentity
+	// saveAs stores the content in the local store (--save NAME).
+	saveAs    string
+	saveStore *store.Store
 }
 
 // shareMeta is what get learns before it consumes a view.
@@ -61,6 +70,7 @@ type shareMeta struct {
 	// requiresRecipientAuth: only the recipient agent's account may open it.
 	requiresRecipientAuth bool
 	fileCount             int
+	totalSizeBytes        int64
 	// lookupErr is the 404 from the meta endpoints when known is false.
 	lookupErr error
 }
@@ -77,7 +87,8 @@ func runGet(ctx context.Context, a *app, args []string) error {
 	outFile := fs.String("o", "", "Write the paste (or the only file of a share) to this file (mode 0600)")
 	fs.StringVar(outFile, "output", "", "Same as -o")
 	outDir := fs.String("out", "", "Write into this directory (file shares default to the current directory)")
-	overwrite := fs.Bool("overwrite", false, "Replace existing files")
+	overwrite := fs.Bool("overwrite", false, "Replace existing files (or, with --save, an existing secret)")
+	saveAs := fs.String("save", "", "Save the content in the local store as NAME (use it as pv://secret/NAME with run and inject)")
 
 	positional, err := parseArgs(fs, args)
 	if err != nil {
@@ -94,15 +105,33 @@ func runGet(ctx context.Context, a *app, args []string) error {
 		outDir:    *outDir,
 		overwrite: *overwrite,
 		password:  pv.PasswordSource{Prompt: *passwordPrompt, File: *passwordFile},
+		saveAs:    *saveAs,
 	}
 	destinations := 0
-	for _, set := range []bool{options.toStdout, options.outFile != "", options.outDir != ""} {
+	for _, set := range []bool{options.toStdout, options.outFile != "", options.outDir != "", options.saveAs != ""} {
 		if set {
 			destinations++
 		}
 	}
 	if destinations > 1 {
-		return pv.UsageError("use only one of --stdout, -o and --out")
+		return pv.UsageError("use only one of --stdout, -o, --out and --save")
+	}
+	if options.saveAs != "" {
+		// The store belongs to the default agent of the configured server.
+		// Checked before anything is opened.
+		if !pv.ValidSecretName(options.saveAs) {
+			return pv.UsageError("invalid --save name %q (letters, digits, _ . -, starting with a letter or _, at most 128)", options.saveAs)
+		}
+		identity, err := resolveLocalAgent(common.server, "")
+		if err != nil {
+			return err
+		}
+		if options.saveStore, err = store.Open(common.server, identity); err != nil {
+			return err
+		}
+		if err := options.saveStore.CheckWritable(options.saveAs, options.overwrite); err != nil {
+			return err
+		}
 	}
 
 	ref, err := pv.ParseShareReference(positional[0], common.server, pv.ResolvePublicBaseURL(common.server))
@@ -305,6 +334,7 @@ func lookupShareMeta(ctx context.Context, client *pv.Client, ref pv.ShareReferen
 			viewsRemaining:    fileMeta.ViewsRemaining,
 			recipient:         fileMeta.Recipient,
 			fileCount:         fileMeta.FileCount,
+			totalSizeBytes:    parseSize(fileMeta.TotalSizeBytes),
 
 			requiresRecipientAuth: fileMeta.RequiresRecipientAuth,
 		}, nil
@@ -320,14 +350,23 @@ func lookupShareMeta(ctx context.Context, client *pv.Client, ref pv.ShareReferen
 }
 
 func checkGetDestination(meta shareMeta, options getOptions) error {
-	if meta.kind == pv.ShareKindFileShare && (options.toStdout || options.outFile != "") {
+	if meta.kind == pv.ShareKindFileShare && (options.toStdout || options.outFile != "" || options.saveAs != "") {
 		flagName := "--stdout"
-		if options.outFile != "" {
+		switch {
+		case options.outFile != "":
 			flagName = "-o"
+		case options.saveAs != "":
+			flagName = "--save"
 		}
 		if meta.known && meta.fileCount != 1 {
 			return pv.UsageError("%s needs a share with exactly one file; this one has %d (use --out DIR)", flagName, meta.fileCount)
 		}
+	}
+	if options.saveAs != "" {
+		if meta.totalSizeBytes > store.MaxValueBytes {
+			return pv.UsageError("--save takes at most %d bytes; this share has %d (use -o FILE)", store.MaxValueBytes, meta.totalSizeBytes)
+		}
+		return nil
 	}
 
 	switch {
@@ -426,6 +465,14 @@ func deliverPaste(a *app, out *output, ref pv.ShareReference, paste pv.GetPasteR
 	}
 
 	switch {
+	case options.saveAs != "":
+		payload, err := pv.NewTextPayload(options.saveAs, []byte(content.Body))
+		if err != nil {
+			return err
+		}
+		if result.SavedAs, err = saveToStore(options, payload, ref.Slug); err != nil {
+			return err
+		}
 	case options.outFile != "":
 		if err := pv.WritePrivateFile(options.outFile, []byte(content.Body), options.overwrite); err != nil {
 			return err
@@ -457,8 +504,50 @@ func deliverPaste(a *app, out *output, ref pv.ShareReference, paste pv.GetPasteR
 	if result.WrittenTo != "" {
 		out.infof("Saved paste %s to %s", result.Slug, result.WrittenTo)
 	}
+	if result.SavedAs != "" {
+		reportSaved(a, out, result.SavedAs)
+	}
 
 	return nil
+}
+
+// saveToStore seals payload into the local store (get --save). source never
+// carries the share key.
+func saveToStore(options getOptions, payload pv.SecretPayload, slug string) (string, error) {
+	entry, err := options.saveStore.Put(options.saveAs, payload, store.Source{Type: store.SourceShare, Ref: slug}, options.overwrite)
+	if err != nil {
+		return "", err
+	}
+
+	return entry.Handle(), nil
+}
+
+func reportSaved(a *app, out *output, handle string) {
+	out.infof("Saved in the local store; use it with pastevault run or inject:")
+	fmt.Fprintln(a.stdout, handle)
+}
+
+func parseSize(value string) int64 {
+	size, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
+	if err != nil {
+		return 0
+	}
+
+	return size
+}
+
+// limitedBuffer collects at most limit bytes and fails beyond that.
+type limitedBuffer struct {
+	bytes.Buffer
+	limit int
+}
+
+func (b *limitedBuffer) Write(p []byte) (int, error) {
+	if b.Len()+len(p) > b.limit {
+		return 0, pv.NewError(pv.ExitUsage, pv.CodeTooLarge, "the file is larger than %d bytes, the --save limit", b.limit)
+	}
+
+	return b.Buffer.Write(p)
 }
 
 // choosePasteTarget picks dir/name, or "name (1)" etc. when it exists and
@@ -530,7 +619,7 @@ func getFileShare(
 		Recipient:      sealedRecipientOutput(options.sealedTo),
 	}
 
-	if options.toStdout || options.outFile != "" {
+	if options.toStdout || options.outFile != "" || options.saveAs != "" {
 		if len(manifest.Files) != 1 {
 			return pv.UsageError("the share has %d files; use --out DIR", len(manifest.Files))
 		}
@@ -541,7 +630,23 @@ func getFileShare(
 		result.Files = []getFileInfo{{Name: fileEntry.Name, Size: fileEntry.Size}}
 		result.SizeBytes = fileEntry.Size
 
-		if options.outFile != "" {
+		if options.saveAs != "" {
+			buffer := &limitedBuffer{limit: store.MaxValueBytes}
+			if err := pv.DownloadFileTo(ctx, client, fileEntry, key, share.Metadata.Slug, share.DownloadGrant, buffer); err != nil {
+				return err
+			}
+			contentType := mime.TypeByExtension(filepath.Ext(fileEntry.Name))
+			if contentType == "" {
+				contentType = "application/octet-stream"
+			}
+			payload := pv.NewFilePayload(options.saveAs, fileEntry.Name, contentType, buffer.Bytes())
+			if result.SavedAs, err = saveToStore(options, payload, ref.Slug); err != nil {
+				return err
+			}
+			if !out.json() {
+				reportSaved(a, out, result.SavedAs)
+			}
+		} else if options.outFile != "" {
 			target, err := downloadToFile(ctx, out, client, fileEntry, key, share, options)
 			if err != nil {
 				return err

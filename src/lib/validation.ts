@@ -236,3 +236,77 @@ export const listAgentsQuerySchema = z.object({
 export const agentParamsSchema = z.object({
   agentId: z.string().min(1).max(128),
 })
+
+// Secret requests (spec §2.6).
+export const SECRET_REQUEST_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_.-]{0,127}$/
+export const SECRET_REQUEST_MAX_TTL_SECONDS = 86_400
+export const SECRET_REQUEST_DEFAULT_TTL_SECONDS = 600
+// Request codes: 8 characters without look-alikes (0/O, 1/I), shown as ABCD-EFGH.
+export const SECRET_REQUEST_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+
+// The reason is shown to a human as untrusted text. Control characters other
+// than tab and newline, and bidirectional overrides, could disguise it.
+const reasonSchema = z
+  .string()
+  .max(500)
+  .refine(
+    (value) => !/[\u0000-\u0008\u000b-\u001f\u007f‪-‮⁦-⁩]/.test(value),
+    'reason must not contain control or bidirectional-override characters'
+  )
+
+export const createSecretRequestSchema = z
+  .object({
+    name: z
+      .string()
+      .regex(
+        SECRET_REQUEST_NAME_PATTERN,
+        'name must be 1-128 characters of A-Z, a-z, 0-9, "_", "." or "-", starting with a letter or "_"'
+      ),
+    reason: reasonSchema.optional(),
+    ttl_seconds: z
+      .number()
+      .int()
+      .min(config.SECRET_REQUEST_MIN_TTL_SECONDS)
+      .max(SECRET_REQUEST_MAX_TTL_SECONDS)
+      .default(SECRET_REQUEST_DEFAULT_TTL_SECONDS),
+    accept: z.enum(['text', 'file', 'any']).default('text'),
+    public_key: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{43}$/, 'public_key must be a 32-byte X25519 key in unpadded base64url'),
+    fingerprint: z
+      .string()
+      .regex(/^pvk1_[a-z2-7]{32}$/, 'Fingerprint must look like pvk1_ followed by 32 base32 characters'),
+    agent_id: z.string().min(1).max(128),
+  })
+  .strict()
+
+export const secretRequestParamsSchema = z.object({
+  requestId: z.string().min(1).max(128),
+})
+
+// Accepts "ABCD-EFGH", "abcdefgh" and similar; normalised to 8 upper-case
+// characters by normalizeRequestCode.
+export const secretRequestCodeParamsSchema = z.object({
+  code: z.string().min(8).max(16),
+})
+
+export const fulfillSecretRequestSchema = z
+  .object({
+    kind: z.enum(['text', 'file']),
+    ciphertext: z.string().min(1).regex(/^[A-Za-z0-9_-]+$/, 'ciphertext must be unpadded base64url'),
+    nonce: z.string().regex(/^[A-Za-z0-9_-]{32}$/, 'nonce must be 24 bytes of unpadded base64url'),
+    wrapped_key: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{140}$/, 'wrapped_key must be a 105-byte base64url PVWRAP1 envelope'),
+  })
+  .strict()
+
+export const pollSecretRequestSchema = z
+  .object({
+    poll_token: z.string().min(1).max(128),
+  })
+  .strict()
+
+export const listSecretRequestsQuerySchema = z.object({
+  status: z.enum(['pending', 'fulfilled', 'delivered', 'declined', 'expired', 'cancelled']).optional(),
+})

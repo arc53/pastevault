@@ -478,47 +478,10 @@ func runAgentList(ctx context.Context, a *app, args []string) error {
 	return table.Flush()
 }
 
-// resolveLocalAgent picks the local key for NAME, or the default agent
-// (PASTEVAULT_AGENT_KEY, PASTEVAULT_AGENT, the saved default, or the only
-// key on this machine).
+// resolveLocalAgent picks the local key for NAME, or the default agent (see
+// pv.ResolveLocalAgent).
 func resolveLocalAgent(server, name string) (*pv.AgentIdentity, error) {
-	if name == "" {
-		envIdentity, err := pv.EnvAgentIdentity()
-		if err != nil || envIdentity != nil {
-			return envIdentity, err
-		}
-
-		name, _, err = pv.DefaultAgentName(server)
-		if err != nil {
-			return nil, err
-		}
-		if name == "" {
-			locals, _, err := pv.LocalAgentIdentities(server)
-			if err != nil {
-				return nil, err
-			}
-			var active []*pv.AgentIdentity
-			for _, identity := range locals {
-				if !identity.Revoked() {
-					active = append(active, identity)
-				}
-			}
-			if len(active) == 1 {
-				return active[0], nil
-			}
-			return nil, pv.UsageError("no default agent for %s: name one, set PASTEVAULT_AGENT, or run pastevault agent init", server)
-		}
-	}
-
-	identity, err := pv.LoadAgentIdentity(server, name)
-	if err != nil {
-		return nil, err
-	}
-	if identity == nil {
-		return nil, pv.NewError(pv.ExitNotFound, pv.CodeNotFound, "this machine has no key for agent %s on %s (pastevault agent list shows the account's agents)", name, server)
-	}
-
-	return identity, nil
+	return pv.ResolveLocalAgent(server, name)
 }
 
 func runAgentShow(ctx context.Context, a *app, args []string) error {
