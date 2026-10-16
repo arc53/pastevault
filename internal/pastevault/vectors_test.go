@@ -390,8 +390,8 @@ func TestWrapNegativeVectors(t *testing.T) {
 				}
 			case "wrap":
 				_, err := WrapKey(mustDecode(t, vector.ContentKey), mustDecode(t, vector.RecipientPublicKey), vector.Context)
-				if !errors.Is(err, ErrLowOrderKey) {
-					t.Fatalf("wrap err = %v, want ErrLowOrderKey: %s", err, vector.Reason)
+				if !errors.Is(err, ErrLowOrderKey) && !errors.Is(err, ErrNonCanonicalKey) {
+					t.Fatalf("wrap err = %v, want ErrLowOrderKey or ErrNonCanonicalKey: %s", err, vector.Reason)
 				}
 				if _, err := DecodeAgentPublicKey(vector.RecipientPublicKey); err == nil {
 					t.Fatalf("DecodeAgentPublicKey accepted a low-order key")

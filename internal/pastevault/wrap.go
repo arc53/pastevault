@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/base64"
 	"errors"
 	"fmt"
 
@@ -42,6 +43,10 @@ var (
 	// ErrLowOrderKey means a public key is not usable for X25519: the shared
 	// secret would be all zero (a low-order point), so nothing would be secret.
 	ErrLowOrderKey = errors.New("the X25519 public key is a low-order point")
+	// ErrNonCanonicalKey means a public key is not the canonical encoding of
+	// a field element (top bit set, or u >= 2^255-19). X25519 would silently
+	// reduce it, so two encodings would name one key with two fingerprints.
+	ErrNonCanonicalKey = errors.New("the X25519 public key is not canonically encoded")
 	// ErrUnwrapFailed covers every way an envelope can fail to open: wrong
 	// recipient key, wrong context, tampering. They are deliberately not
 	// told apart.
@@ -91,7 +96,7 @@ func AgentKeyPairFromPrivate(privateKeyBytes []byte) (AgentKeyPair, error) {
 // DecodeAgentPublicKey decodes a base64url public key and rejects anything
 // that is not a usable 32-byte X25519 key (including low-order points).
 func DecodeAgentPublicKey(value string) ([]byte, error) {
-	publicKey, err := DecodeBase64URL(value)
+	publicKey, err := decodeStrictBase64URL(value)
 	if err != nil || len(publicKey) != X25519KeySize {
 		return nil, fmt.Errorf("a public key must be %d bytes of unpadded base64url", X25519KeySize)
 	}
@@ -104,7 +109,7 @@ func DecodeAgentPublicKey(value string) ([]byte, error) {
 
 // DecodeAgentPrivateKey decodes a base64url X25519 private key.
 func DecodeAgentPrivateKey(value string) (AgentKeyPair, error) {
-	privateKey, err := DecodeBase64URL(value)
+	privateKey, err := decodeStrictBase64URL(value)
 	if err != nil || len(privateKey) != X25519KeySize {
 		return AgentKeyPair{}, fmt.Errorf("a private key must be %d bytes of unpadded base64url", X25519KeySize)
 	}
@@ -123,9 +128,41 @@ func checkUsablePublicKey(publicKey []byte) error {
 	return err
 }
 
+// strictBase64URL refuses non-canonical encodings (set padding bits), so a
+// key or envelope has exactly one text form.
+var strictBase64URL = base64.RawURLEncoding.Strict()
+
+func decodeStrictBase64URL(value string) ([]byte, error) {
+	return strictBase64URL.DecodeString(value)
+}
+
+// IsCanonicalX25519PublicKey reports whether publicKey is the canonical
+// little-endian encoding of a u-coordinate: the top bit clear and the value
+// below p = 2^255 - 19.
+func IsCanonicalX25519PublicKey(publicKey []byte) bool {
+	if len(publicKey) != X25519KeySize || publicKey[31]&0x80 != 0 {
+		return false
+	}
+	// With the top bit clear, u >= p only for 0x7f ff…ff followed by a low
+	// byte >= 0xed.
+	if publicKey[31] != 0x7f || publicKey[0] < 0xed {
+		return true
+	}
+	for _, b := range publicKey[1:31] {
+		if b != 0xff {
+			return true
+		}
+	}
+
+	return false
+}
+
 func x25519SharedSecret(privateKey *ecdh.PrivateKey, publicKeyBytes []byte) ([]byte, error) {
 	if len(publicKeyBytes) != X25519KeySize {
 		return nil, fmt.Errorf("a public key must be %d bytes", X25519KeySize)
+	}
+	if !IsCanonicalX25519PublicKey(publicKeyBytes) {
+		return nil, ErrNonCanonicalKey
 	}
 	publicKey, err := ecdh.X25519().NewPublicKey(publicKeyBytes)
 	if err != nil {
@@ -219,7 +256,7 @@ func wrapKeyWith(contentKey, recipientPublicKey []byte, context string, ephemera
 // recipient's fingerprint in the AAD is computed from its own public key, so
 // an envelope made for another key or another context fails.
 func UnwrapKey(envelope string, recipientPrivateKey []byte, context string) ([]byte, error) {
-	data, err := DecodeBase64URL(envelope)
+	data, err := decodeStrictBase64URL(envelope)
 	if err != nil || len(data) != WrapEnvelopeSize || data[0] != wrapVersion {
 		return nil, ErrUnwrapFailed
 	}

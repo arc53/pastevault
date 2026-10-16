@@ -197,10 +197,10 @@ func runPut(ctx context.Context, a *app, args []string) error {
 		}
 	}
 
-	// Resolved (and the key pinned or checked) before anything is uploaded.
+	// Resolved and checked against pins before anything is uploaded.
 	switch {
 	case options.to != "":
-		options.recipient, err = resolveRecipientAgent(ctx, client, out, options.to)
+		options.recipient, err = resolveRecipientAgent(ctx, client, options.to)
 	case options.toKey != "":
 		options.recipient, err = recipientFromKey(options.toKey)
 	}
@@ -236,6 +236,8 @@ func runPut(ctx context.Context, a *app, args []string) error {
 	if options.keyOut != "" {
 		result.KeyFile = options.keyOut
 	}
+	// Only now that the share exists is a first-use key pinned.
+	options.recipient.commitPin(out)
 
 	return printPutResult(out, result, encryption, options)
 }

@@ -21,6 +21,11 @@ type sealedServer struct {
 	views    map[string]int
 	consumed int
 	creates  int
+	// failCreate, when set, is the status and body POST /api/pastes answers.
+	failCreate *struct {
+		status int
+		body   map[string]any
+	}
 }
 
 func newSealedServer(t *testing.T) *sealedServer {
@@ -48,6 +53,10 @@ func newSealedServer(t *testing.T) *sealedServer {
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		server.mu.Lock()
 		defer server.mu.Unlock()
+		if server.failCreate != nil {
+			writeTestJSON(w, server.failCreate.status, server.failCreate.body)
+			return
+		}
 		slug, _ := body["slug"].(string)
 		server.pastes[slug] = body
 		server.creates++
@@ -71,9 +80,11 @@ func newSealedServer(t *testing.T) *sealedServer {
 		if recipient != nil {
 			recipientMeta = map[string]any{"fingerprint": recipient["fingerprint"]}
 		}
+		salt, _ := body["salt"].(string)
 		writeTestJSON(w, 200, map[string]any{
 			"slug": r.PathValue("slug"), "max_views": 1, "views_remaining": 1,
 			"recipient": recipientMeta, "requires_recipient_auth": requiresAuth,
+			"password_protected": salt != "", "salt": salt, "kdf_params": body["kdf_params"],
 		})
 	})
 	mux.HandleFunc("GET /api/pastes/{slug}", func(w http.ResponseWriter, r *http.Request) {
@@ -86,6 +97,9 @@ func newSealedServer(t *testing.T) *sealedServer {
 			return
 		}
 		recipient, requiresAuth := recipientOf(body)
+		if recipient == nil {
+			recipient = map[string]any{}
+		}
 		if requiresAuth && r.Header.Get("Authorization") == "" {
 			writeTestJSON(w, 403, map[string]any{"error": "recipient_auth_required"})
 			return
@@ -228,10 +242,10 @@ func TestPutToSwappedKeyExitsWithPinMismatch(t *testing.T) {
 		t.Fatal("a share was created despite the pin mismatch")
 	}
 
-	// A fingerprint prefix still checks the pin; the full fingerprint is
-	// itself the verification.
-	if result := runCLI(t, "third", false, "put", "-", "--to", pv.ShortFingerprint(substitute.Fingerprint)); result.exit != pv.ExitFingerprint {
-		t.Fatalf("prefix with swapped key: exit %d\n%s", result.exit, result.stderr)
+	// A fingerprint prefix only resolves to an already trusted key: the
+	// substitute isn't, so the full fingerprint is required (exit 2).
+	if result := runCLI(t, "third", false, "put", "-", "--to", pv.ShortFingerprint(substitute.Fingerprint)); result.exit != pv.ExitUsage || !strings.Contains(result.stderr, "full fingerprint") {
+		t.Fatalf("prefix of an untrusted key: exit %d\n%s", result.exit, result.stderr)
 	}
 	if result := runCLI(t, "x", false, "agent", "trust", "bot", bot.Fingerprint); result.exit != pv.ExitFingerprint {
 		t.Fatalf("trusting a fingerprint the server's key lacks: exit %d\n%s", result.exit, result.stderr)
@@ -261,5 +275,107 @@ func TestPutToNeedsServerSupport(t *testing.T) {
 	}
 	if result := runCLI(t, "x", false, "put", "-", "--to-key", pv.EncodeBase64URL(keys.PublicKey), "--password"); result.exit != pv.ExitUsage {
 		t.Fatalf("--to-key with --password: exit %d\n%s", result.exit, result.stderr)
+	}
+}
+
+func TestPutToPrefixNeedsTrustedKey(t *testing.T) {
+	server := newSealedServer(t)
+	isolateAgents(t, server.URL)
+	bot := mustKeyPair(t)
+	server.addAgent("bot", bot)
+	prefix := pv.ShortFingerprint(bot.Fingerprint)
+
+	// Never seen: a 40-bit prefix is not enough to trust a key.
+	if result := runCLI(t, "x", false, "put", "-", "--to", prefix); result.exit != pv.ExitUsage {
+		t.Fatalf("untrusted prefix: exit %d\n%s", result.exit, result.stderr)
+	}
+	if server.creates != 0 {
+		t.Fatal("a share was created for an untrusted prefix")
+	}
+	// After the full fingerprint (which pins it), the prefix resolves.
+	if result := runCLI(t, "x", false, "put", "-", "--to", bot.Fingerprint, "-q"); result.exit != 0 {
+		t.Fatalf("full fingerprint: exit %d\n%s", result.exit, result.stderr)
+	}
+	if result := runCLI(t, "x", false, "put", "-", "--to", prefix, "-q"); result.exit != 0 {
+		t.Fatalf("trusted prefix: exit %d\n%s", result.exit, result.stderr)
+	}
+}
+
+func TestPutToPinsOnlyAfterCreate(t *testing.T) {
+	server := newSealedServer(t)
+	isolateAgents(t, server.URL)
+	bot := mustKeyPair(t)
+	server.addAgent("bot", bot)
+
+	server.failCreate = &struct {
+		status int
+		body   map[string]any
+	}{500, map[string]any{"error": "Internal server error"}}
+	if result := runCLI(t, "x", false, "put", "-", "--to", "bot"); result.exit != pv.ExitNetwork {
+		t.Fatalf("failed create: exit %d\n%s", result.exit, result.stderr)
+	}
+	if pins, err := pv.LoadPins(server.URL); err != nil || len(pins) != 0 {
+		t.Fatalf("a failed put pinned the key: %v %v", pins, err)
+	}
+
+	// The server's own fingerprint check maps to exit 8.
+	server.failCreate.status = 400
+	server.failCreate.body = map[string]any{"error": "recipient.fingerprint does not match the agent", "code": "recipient_fingerprint_mismatch"}
+	if result := runCLI(t, "x", false, "put", "-", "--to", "bot"); result.exit != pv.ExitFingerprint {
+		t.Fatalf("server fingerprint mismatch: exit %d\n%s", result.exit, result.stderr)
+	}
+
+	server.failCreate = nil
+	if result := runCLI(t, "x", false, "put", "-", "--to", "bot"); result.exit != 0 || !strings.Contains(result.stderr, "Pinned bot") {
+		t.Fatalf("successful put: exit %d\n%s", result.exit, result.stderr)
+	}
+	if pins, _ := pv.LoadPins(server.URL); pins["bot"].Fingerprint != bot.Fingerprint || pins["bot"].Source != pv.PinSourceTOFU {
+		t.Fatalf("pin after success: %+v", pins)
+	}
+}
+
+// A malicious server turns a normal #k= link into a "sealed" one with
+// content it wrapped to the reader's agent key. get must refuse.
+func TestGetRefusesSealedClaimOnLinkWithKey(t *testing.T) {
+	server := newSealedServer(t)
+	isolateAgents(t, server.URL)
+	bot := mustKeyPair(t)
+	t.Setenv(pv.EnvAgentKey, pv.EncodeBase64URL(bot.PrivateKey))
+
+	created := runCLI(t, "the real content", false, "put", "-", "--json")
+	if created.exit != 0 {
+		t.Fatalf("put: exit %d\n%s", created.exit, created.stderr)
+	}
+	output := decodeJSON(t, created.stdout)
+	url, _ := output["url"].(string)
+	slug, _ := output["slug"].(string)
+	if !strings.Contains(url, "#k=") {
+		t.Fatalf("a normal link carries its key: %s", url)
+	}
+
+	// The server swaps in forged content sealed to the bot's key.
+	forgedKey := make([]byte, 32)
+	forgedKey[0] = 1
+	ciphertext, nonce, err := pv.EncryptPaste(pv.PasteContent{Body: "forged", RenderMode: "plain"}, forgedKey, slug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrapped, err := pv.WrapKey(forgedKey, bot.PublicKey, pv.PasteWrapContext(slug))
+	if err != nil {
+		t.Fatal(err)
+	}
+	server.mu.Lock()
+	server.pastes[slug]["ciphertext"] = ciphertext
+	server.pastes[slug]["nonce"] = nonce
+	server.pastes[slug]["recipient"] = map[string]any{"agent_id": "agent-bot", "fingerprint": bot.Fingerprint, "wrapped_key": wrapped}
+	server.mu.Unlock()
+
+	result := runCLI(t, "", false, "get", url, "--stdout", "--json")
+	if result.exit != pv.ExitDecrypt || strings.Contains(result.stdout, "forged") {
+		t.Fatalf("get of a tampered link: exit %d\n%s\n%s", result.exit, result.stdout, result.stderr)
+	}
+	errorObject, _ := decodeJSON(t, result.stdout)["error"].(map[string]any)
+	if errorObject["code"] != pv.CodeSealedConflict || server.consumed != 0 {
+		t.Fatalf("error %v, consumed %d", errorObject, server.consumed)
 	}
 }

@@ -50,7 +50,9 @@ export function decodeAgentPublicKey(value: string): Buffer | null {
   }
 
   const publicKey = Buffer.from(value, 'base64url')
-  if (publicKey.length !== 32) {
+  // Canonical text (no padding bits set) and a canonical u-coordinate, so a
+  // key has exactly one encoding and one fingerprint.
+  if (publicKey.length !== 32 || publicKey.toString('base64url') !== value || !isCanonicalX25519(publicKey)) {
     return null
   }
 
@@ -68,6 +70,17 @@ export function decodeAgentPublicKey(value: string): Buffer | null {
   }
 
   return publicKey
+}
+
+// Top bit clear and u < p = 2^255 - 19 (little-endian).
+export function isCanonicalX25519(publicKey: Uint8Array) {
+  if (publicKey.length !== 32 || (publicKey[31]! & 0x80) !== 0) {
+    return false
+  }
+  if (publicKey[31] !== 0x7f || publicKey[0]! < 0xed) {
+    return true
+  }
+  return publicKey.subarray(1, 31).some((byte) => byte !== 0xff)
 }
 
 type AgentRow = NonNullable<Awaited<ReturnType<typeof findAgentForUser>>>
@@ -216,6 +229,14 @@ export async function revokeAgent(principal: Principal, id: string, request: Fas
   if (!existing) {
     return null
   }
+  // A token bound to an agent acts as that agent only: it may revoke itself
+  // but not the account's other agents (and their tokens).
+  if (principal.agent_id && principal.agent_id !== existing.id) {
+    throw new HttpError(403, {
+      error: 'other_agent',
+      message: 'This API token is bound to another agent and can only manage its own agent',
+    })
+  }
   if (existing.revoked_at) {
     return { agent: existing, tokensRevoked: 0 }
   }
@@ -324,7 +345,7 @@ export async function resolveShareRecipient(
   }
 }
 
-function recipientDenial(
+export function recipientDenial(
   principal: Principal | null,
   share: { recipient_user_id: string | null; recipient_agent_id: string | null }
 ) {

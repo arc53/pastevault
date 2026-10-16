@@ -33,26 +33,29 @@ const (
 
 // Machine-readable error codes, paired with the exit codes above.
 const (
-	CodeInternal        = "internal"
-	CodeUsage           = "usage"
-	CodeInvalidRequest  = "invalid_request"
-	CodeTooLarge        = "too_large"
-	CodeAuth            = "auth"
-	CodeNotFound        = "not_found"
-	CodeGone            = "gone"
-	CodeDeclined        = "declined"
-	CodeDecrypt         = "decrypt_failed"
-	CodeFingerprint     = "fingerprint_mismatch"
-	CodeTimeout         = "timeout"
-	CodeRateLimited     = "rate_limited"
-	CodeNetwork         = "network"
-	CodeConflict        = "conflict"
-	CodeLocalFile       = "local_file"
-	CodeUnsupported     = "unsupported"
-	CodeInterrupted     = "interrupted"
-	CodeKeyRequired     = "key_required"
-	CodePasswordNeeded  = "password_required"
-	CodeSealedShare     = "sealed_share"
+	CodeInternal       = "internal"
+	CodeUsage          = "usage"
+	CodeInvalidRequest = "invalid_request"
+	CodeTooLarge       = "too_large"
+	CodeAuth           = "auth"
+	CodeNotFound       = "not_found"
+	CodeGone           = "gone"
+	CodeDeclined       = "declined"
+	CodeDecrypt        = "decrypt_failed"
+	CodeFingerprint    = "fingerprint_mismatch"
+	CodeTimeout        = "timeout"
+	CodeRateLimited    = "rate_limited"
+	CodeNetwork        = "network"
+	CodeConflict       = "conflict"
+	CodeLocalFile      = "local_file"
+	CodeUnsupported    = "unsupported"
+	CodeInterrupted    = "interrupted"
+	CodeKeyRequired    = "key_required"
+	CodePasswordNeeded = "password_required"
+	CodeSealedShare    = "sealed_share"
+	// CodeSealedConflict: the server says a share is sealed, but the link
+	// has a key (or the share a password); possible tampering.
+	CodeSealedConflict  = "sealed_share_conflict"
 	CodeNotLoggedIn     = "not_logged_in"
 	CodeSessionRequired = "session_required"
 )
@@ -134,6 +137,11 @@ func Classify(err error) *CLIError {
 
 	var apiErr *APIRequestError
 	if errors.As(err, &apiErr) {
+		// The server's stored fingerprint for an agent differs from the one
+		// this CLI computed from the key it was given.
+		if apiErr.Code == "recipient_fingerprint_mismatch" || apiErr.Code == "fingerprint_mismatch" {
+			return &CLIError{Exit: ExitFingerprint, Code: CodeFingerprint, Message: describeAPIError(apiErr), Err: err}
+		}
 		exit, code := ExitCodeForStatus(apiErr.StatusCode)
 		return &CLIError{Exit: exit, Code: code, Message: describeAPIError(apiErr), Err: err}
 	}

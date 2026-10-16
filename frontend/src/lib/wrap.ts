@@ -54,13 +54,32 @@ function base64urlEncode(bytes: Uint8Array): string {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
+// Strict: only the canonical unpadded encoding is accepted (no padding bits
+// set), so a key or envelope has exactly one text form.
 function base64urlDecode(value: string): Uint8Array {
-  if (!/^[A-Za-z0-9_-]*$/.test(value)) {
+  if (!/^[A-Za-z0-9_-]*$/.test(value) || value.length % 4 === 1) {
     throw new WrapError('Invalid base64url')
   }
   const base64 = value.replace(/-/g, '+').replace(/_/g, '/')
   const binary = atob(base64 + '='.repeat((4 - (base64.length % 4)) % 4))
-  return Uint8Array.from(binary, (character) => character.charCodeAt(0))
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0))
+  if (base64urlEncode(bytes) !== value) {
+    throw new WrapError('Invalid base64url')
+  }
+  return bytes
+}
+
+// The canonical encoding of an X25519 u-coordinate: top bit clear and
+// u < p = 2^255 - 19. X25519 would silently reduce anything else, giving one
+// key several encodings (and fingerprints).
+export function isCanonicalX25519PublicKey(publicKey: Uint8Array): boolean {
+  if (publicKey.length !== X25519_KEY_BYTES || (publicKey[31]! & 0x80) !== 0) {
+    return false
+  }
+  if (publicKey[31] !== 0x7f || publicKey[0]! < 0xed) {
+    return true
+  }
+  return publicKey.subarray(1, 31).some((byte) => byte !== 0xff)
 }
 
 function concatBytes(...parts: Uint8Array[]): Uint8Array {
@@ -79,6 +98,9 @@ function sharedSecret(secretKey: Uint8Array, publicKey: Uint8Array): Uint8Array 
   if (publicKey.length !== X25519_KEY_BYTES) {
     throw new WrapError('An X25519 public key must be 32 bytes')
   }
+  if (!isCanonicalX25519PublicKey(publicKey)) {
+    throw new WrapError('The X25519 public key is not canonically encoded')
+  }
 
   let shared: Uint8Array
   try {
@@ -86,7 +108,12 @@ function sharedSecret(secretKey: Uint8Array, publicKey: Uint8Array): Uint8Array 
   } catch {
     throw new WrapError('The X25519 public key is a low-order point')
   }
-  if (shared.every((byte) => byte === 0)) {
+  // Constant-time OR-reduce (noble already throws on this).
+  let accumulated = 0
+  for (const byte of shared) {
+    accumulated |= byte
+  }
+  if (accumulated === 0) {
     throw new WrapError('The X25519 public key is a low-order point')
   }
   return shared

@@ -345,6 +345,10 @@ async function wrapNegativeVectors({ wrap, fingerprint }) {
   badVersion[0] = 0x02
   const zeroEphemeral = Buffer.from(raw)
   zeroEphemeral.fill(0, 1, 33)
+  // X25519 ignores the top bit, so without a canonical-encoding check this
+  // would reach the same shared secret.
+  const nonCanonicalEphemeral = Buffer.from(raw)
+  nonCanonicalEphemeral[32] |= 0x80
 
   const otherPublicKey = x25519.getPublicKey(WRAP_CASES[1].recipientSecretKey)
   const wrongFingerprint = manualWrap({
@@ -356,6 +360,11 @@ async function wrapNegativeVectors({ wrap, fingerprint }) {
   // Low-order points: u = 0, and a point of order 8.
   const zeroPoint = new Uint8Array(32)
   const orderEightPoint = Buffer.from('e0eb7a7c3b41b8ae1656e3faf19fc46ada098deb9c32b1fd866205165f49b800', 'hex')
+  // Non-canonical encodings of usable keys: the recipient key with the top
+  // bit set, and p + 9 (a second encoding of the base point u = 9).
+  const topBitKey = Buffer.from(recipientPublicKey)
+  topBitKey[31] |= 0x80
+  const basePointPlusP = Buffer.from('f6ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f', 'hex')
 
   const unwrapCase = (name, reason, value, secretKey = base.recipientSecretKey, context = base.context) => ({
     name,
@@ -383,8 +392,11 @@ async function wrapNegativeVectors({ wrap, fingerprint }) {
     unwrapCase('unwrap-bad-version', 'unknown envelope version byte', b64url(badVersion)),
     unwrapCase('unwrap-truncated', 'envelope shorter than 105 bytes', b64url(raw.subarray(0, 104))),
     unwrapCase('unwrap-zero-ephemeral', 'low-order ephemeral key gives an all-zero shared secret', b64url(zeroEphemeral)),
+    unwrapCase('unwrap-noncanonical-ephemeral', 'ephemeral key with the top bit set', b64url(nonCanonicalEphemeral)),
     wrapCase('wrap-zero-public-key', 'all-zero shared secret', zeroPoint),
     wrapCase('wrap-low-order-public-key', 'point of order 8 gives an all-zero shared secret', orderEightPoint),
+    wrapCase('wrap-noncanonical-top-bit', 'public key with the top bit set (not a canonical encoding)', topBitKey),
+    wrapCase('wrap-noncanonical-u-ge-p', 'public key u >= 2^255-19 (p + 9, the base point encoded twice)', basePointPlusP),
   ]
 
   for (const vector of vectors) {

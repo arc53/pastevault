@@ -147,6 +147,15 @@ func runGet(ctx context.Context, a *app, args []string) error {
 	}
 
 	if meta.recipient != nil {
+		// A sealed link never carries a key and never has a password (put
+		// prints neither, the server refuses salt with a recipient). A server
+		// claiming that a link with a key is sealed could otherwise make this
+		// agent accept content wrapped to it by anyone, instead of content
+		// that only the link's key decrypts: refuse before consuming.
+		if len(ref.Key) > 0 || options.password.Requested() || meta.passwordProtected {
+			return pv.NewError(pv.ExitDecrypt, pv.CodeSealedConflict, "the server claims this share is sealed to agent key %s, but the link carries a key or the share a password; a sealed share has neither. Refusing to open it (possible tampering); nothing was opened", meta.recipient.Fingerprint)
+		}
+
 		// Only the agent holding the matching private key can open it. That
 		// is checked here, before a view is consumed.
 		identity, err := pv.FindIdentityByFingerprint(ref.Server, meta.recipient.Fingerprint)
@@ -159,11 +168,7 @@ func runGet(ctx context.Context, a *app, args []string) error {
 		if meta.requiresRecipientAuth && !client.HasAuthToken() {
 			return pv.NewError(pv.ExitAuth, pv.CodeAuth, "this share is sealed to agent %s of an account and can only be opened signed in to that account: run pastevault login, or set PASTEVAULT_TOKEN (scope shares:receive); nothing was opened", pv.ShortFingerprint(identity.Fingerprint))
 		}
-		if len(ref.Key) > 0 || options.password.Requested() {
-			out.warnf("the share is sealed to an agent key; the given key or password is not used")
-		}
 		options.sealedTo = identity
-		ref.Key = nil
 	}
 
 	if meta.kind == pv.ShareKindPaste && out.json() && destinations == 0 {

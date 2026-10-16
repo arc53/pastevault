@@ -204,7 +204,9 @@ async function recordCoalescedShareEvent(
   event: AuditEventName,
   actor: AuditActor,
   merge: (previous: Record<string, unknown> | null) => Record<string, unknown>,
-  request?: FastifyRequest
+  request?: FastifyRequest,
+  // Only events whose details pass this are folded into (e.g. same reason).
+  sameGroup?: (details: Record<string, unknown> | null) => boolean
 ) {
   if (config.DISABLE_AUTH) {
     return
@@ -213,7 +215,7 @@ async function recordCoalescedShareEvent(
   try {
     await ensureAccountSystemSchema()
     const prisma = getPrisma()
-    const recent = await prisma.auditEvent.findFirst({
+    const candidates = await prisma.auditEvent.findMany({
       where: {
         user_id: share.user_id,
         subject_id: share.id,
@@ -223,7 +225,9 @@ async function recordCoalescedShareEvent(
         created_at: { gte: new Date(Date.now() - VIEW_COALESCE_WINDOW_MS) },
       },
       orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+      take: 20,
     })
+    const recent = candidates.find((candidate) => !sameGroup || sameGroup(parseDetails(candidate.details)))
 
     if (recent) {
       // Approximate under concurrency (read-modify-write); it's a counter in a
@@ -274,7 +278,7 @@ export async function recordShareView(
 
 // share.access_denied: a consuming GET of a sealed share without the
 // recipient's credentials. No view was consumed. Repeated attempts by the same
-// actor are folded: details.attempts counts them.
+// actor for the same reason are folded: details.attempts counts them.
 export async function recordShareAccessDenied(
   share: ShareRef,
   actor: AuditActor,
@@ -293,7 +297,8 @@ export async function recordShareAccessDenied(
             last_attempt_at: new Date(),
           }
         : { reason, attempts: 1 },
-    request
+    request,
+    (details) => details?.reason === reason
   )
 }
 

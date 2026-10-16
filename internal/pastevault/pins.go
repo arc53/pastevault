@@ -130,11 +130,12 @@ func PinMismatchError(name, pinned, current string) *CLIError {
 		name, current, pinned, name, name, current)
 }
 
-// VerifyAgentKey checks a public key the server lists for agent name
-// against what this machine already knows: its own key file for that name,
-// then the pin. An agent seen for the first time is pinned (trust on first
-// use) and newlyPinned is true. A different key is a PinMismatchError.
-func VerifyAgentKey(server, name string, publicKey []byte) (newlyPinned bool, err error) {
+// CheckAgentKey checks a public key the server lists for agent name against
+// what this machine already knows: its own key file for that name, then the
+// pin. A different key is a PinMismatchError. unpinned is true when nothing
+// is known about the name yet (the caller may pin it on first use). Nothing
+// is written.
+func CheckAgentKey(server, name string, publicKey []byte) (unpinned bool, err error) {
 	fingerprint := Fingerprint(publicKey)
 
 	local, err := LoadAgentIdentity(server, name)
@@ -156,6 +157,16 @@ func VerifyAgentKey(server, name string, publicKey []byte) (newlyPinned bool, er
 		return false, nil
 	}
 
+	return local == nil, nil
+}
+
+// VerifyAgentKey is CheckAgentKey followed by pinning an unknown agent
+// (trust on first use); newlyPinned reports that.
+func VerifyAgentKey(server, name string, publicKey []byte) (newlyPinned bool, err error) {
+	unpinned, err := CheckAgentKey(server, name, publicKey)
+	if err != nil || !unpinned {
+		return false, err
+	}
 	if _, err := PinAgent(server, name, publicKey, PinSourceTOFU); err != nil {
 		return false, err
 	}

@@ -219,7 +219,15 @@ func runAgentInit(ctx context.Context, a *app, args []string) error {
 		}
 	}()
 
+	// The name must be free before the new key can take it, so --force
+	// revokes first. If registering then fails, the old key is retired
+	// locally too, so this machine never keeps an active-looking key for a
+	// revoked agent.
+	revokedOld := false
 	if *force {
+		revokedOld = true
+		// On failure here the old agent may still be active; its local key
+		// stays as it is.
 		if err := revokeAgentsNamed(ctx, client, out, *name, existing); err != nil {
 			return err
 		}
@@ -231,6 +239,9 @@ func runAgentInit(ctx context.Context, a *app, args []string) error {
 		Fingerprint: identity.Fingerprint,
 	})
 	if err != nil {
+		if revokedOld {
+			retireAfterFailedForce(server, *name, existing, out)
+		}
 		if pv.IsStatus(err, 409) {
 			return pv.WrapError(pv.ExitConflict, pv.CodeConflict, err, "could not register agent %s (if the name belongs to an agent on another machine, pick another --name, or use --force to replace it)", *name)
 		}
@@ -295,6 +306,23 @@ func runAgentInit(ctx context.Context, a *app, args []string) error {
 	}
 	out.infof("Others in your account can now share with it: pastevault put --to %s FILE", *name)
 	return nil
+}
+
+// retireAfterFailedForce keeps local state consistent when agent init
+// --force revoked the old agent but couldn't register the new one: the old
+// key is retired like after agent revoke.
+func retireAfterFailedForce(server, name string, existing *pv.AgentIdentity, out *output) {
+	if existing == nil {
+		return
+	}
+	if _, err := pv.RetireAgentIdentity(existing); err != nil {
+		out.warnf("could not retire the previous key for %s: %v", name, err)
+		return
+	}
+	if current, source, err := pv.DefaultAgentName(server); err == nil && current == name && source == pv.DefaultAgentSettings {
+		_ = pv.SetDefaultAgent(server, "")
+	}
+	out.warnf("the previous agent %s was revoked and its key retired; run pastevault agent init --name %s again", name, name)
 }
 
 // revokeAgentsNamed revokes the active server agent called name (and the old
@@ -813,6 +841,24 @@ type shareRecipient struct {
 	agentID     string
 	publicKey   []byte
 	fingerprint string
+	server      string
+	// pinSource is set when the key should be pinned once the share exists
+	// (first use, or verified by a full fingerprint).
+	pinSource string
+}
+
+// commitPin records the recipient's key after the share was created.
+func (recipient *shareRecipient) commitPin(out *output) {
+	if recipient == nil || recipient.pinSource == "" {
+		return
+	}
+	if _, err := pv.PinAgent(recipient.server, recipient.name, recipient.publicKey, recipient.pinSource); err != nil {
+		out.warnf("could not pin agent %s: %v", recipient.name, err)
+		return
+	}
+	if recipient.pinSource == pv.PinSourceTOFU {
+		out.infof("Pinned %s %s (first use). Compare it with `pastevault agent show %s` on the agent's machine.", recipient.name, pv.FormatFingerprint(recipient.fingerprint), recipient.name)
+	}
 }
 
 // request seals key for one share.
@@ -844,78 +890,126 @@ func recipientFromKey(value string) (*shareRecipient, error) {
 }
 
 // resolveRecipientAgent is put --to: an agent of the account, by name, full
-// fingerprint, or a unique fingerprint prefix (pvk1_ plus at least 8
-// characters). Keys come from the server's listing but fingerprints are
-// recomputed here, and a key named by anything less than its full
-// fingerprint must match this machine's pin (or is pinned on first use), so
-// a server can't swap in its own key without exit 8.
-func resolveRecipientAgent(ctx context.Context, client *pv.Client, out *output, to string) (*shareRecipient, error) {
+// fingerprint, or a fingerprint prefix (pvk1_ plus at least 8 characters).
+// Keys come from the server's listing but fingerprints are recomputed here.
+//   - A full fingerprint is itself the verification.
+//   - A name must match this machine's own key file or pin; an unknown name
+//     is trusted on first use, pinned once the share has been created.
+//   - A prefix (as little as 40 bits) only resolves to a key this machine
+//     already trusts (pinned or held locally); otherwise the full
+//     fingerprint is required, so a server can't grind a matching key.
+//
+// Nothing is written here: the caller pins (commitPin) after the share was
+// created, so a failed put leaves no pin behind.
+func resolveRecipientAgent(ctx context.Context, client *pv.Client, to string) (*shareRecipient, error) {
 	server := client.BaseURL()
 	agents, err := fetchServerAgents(ctx, client, false)
 	if err != nil {
 		return nil, err
 	}
 
-	var match *serverAgent
+	recipientFor := func(agent *serverAgent) *shareRecipient {
+		return &shareRecipient{name: agent.Name, agentID: agent.ID, publicKey: agent.publicKey, fingerprint: agent.fingerprint, server: server}
+	}
+
 	switch {
 	case pv.IsFingerprint(to):
 		for index := range agents {
 			if agents[index].keyErr == nil && agents[index].fingerprint == to {
-				match = &agents[index]
-				break
+				recipient := recipientFor(&agents[index])
+				// Verified by the full fingerprint; remember it if new.
+				if pins, err := pv.LoadPins(server); err == nil {
+					if _, pinned := pins[recipient.name]; !pinned {
+						recipient.pinSource = pv.PinSourceManual
+					}
+				}
+				return recipient, nil
 			}
 		}
-		if match == nil {
-			return nil, pv.NewError(pv.ExitNotFound, pv.CodeNotFound, "no active agent with fingerprint %s in this account", to)
-		}
-		recipient := &shareRecipient{name: match.Name, agentID: match.ID, publicKey: match.publicKey, fingerprint: match.fingerprint}
-		// The full fingerprint was given, so the key is verified; remember it.
-		if pins, err := pv.LoadPins(server); err == nil {
-			if _, pinned := pins[match.Name]; !pinned {
-				_, _ = pv.PinAgent(server, match.Name, match.publicKey, pv.PinSourceManual)
-			}
-		}
-		return recipient, nil
+		return nil, pv.NewError(pv.ExitNotFound, pv.CodeNotFound, "no active agent with fingerprint %s in this account", to)
 
 	case strings.HasPrefix(to, pv.FingerprintPrefix):
 		if !pv.IsFingerprintPrefix(to) {
 			return nil, pv.UsageError("--to %s: a fingerprint prefix needs at least %d characters after %s", to, pv.ShortFingerprintChars, pv.FingerprintPrefix)
 		}
+		trusted, err := trustedFingerprints(server)
+		if err != nil {
+			return nil, err
+		}
 		var candidates []*serverAgent
+		untrusted := 0
 		for index := range agents {
-			if agents[index].keyErr == nil && strings.HasPrefix(agents[index].fingerprint, to) {
-				candidates = append(candidates, &agents[index])
+			agent := &agents[index]
+			if agent.keyErr != nil || !strings.HasPrefix(agent.fingerprint, to) {
+				continue
+			}
+			if trusted[agent.fingerprint] {
+				candidates = append(candidates, agent)
+			} else {
+				untrusted++
 			}
 		}
-		switch len(candidates) {
-		case 0:
-			return nil, pv.NewError(pv.ExitNotFound, pv.CodeNotFound, "no active agent with a fingerprint starting %s in this account", to)
-		case 1:
-			match = candidates[0]
-		default:
+		switch {
+		case len(candidates) == 1:
+			match := candidates[0]
+			unpinned, err := pv.CheckAgentKey(server, match.Name, match.publicKey)
+			if err != nil {
+				return nil, err
+			}
+			recipient := recipientFor(match)
+			if unpinned {
+				recipient.pinSource = pv.PinSourceTOFU
+			}
+			return recipient, nil
+		case len(candidates) > 1:
 			return nil, pv.UsageError("--to %s matches %d agents; give more of the fingerprint or the agent name", to, len(candidates))
+		case untrusted > 0:
+			return nil, pv.UsageError("--to %s matches no agent key pinned on this machine; a short prefix could match a substituted key, so give the agent's full fingerprint (from pastevault agent show on its machine) or its name", to)
+		default:
+			return nil, pv.NewError(pv.ExitNotFound, pv.CodeNotFound, "no active agent with a fingerprint starting %s in this account", to)
 		}
 
 	default:
 		if !pv.ValidAgentName(to) {
 			return nil, pv.UsageError("--to %q is neither an agent name nor a pvk1_ fingerprint", to)
 		}
-		match = findActiveAgentByName(agents, to)
+		match := findActiveAgentByName(agents, to)
 		if match == nil {
 			return nil, pv.NewError(pv.ExitNotFound, pv.CodeNotFound, "no agent named %s in this account (pastevault agent list)", to)
 		}
 		if match.keyErr != nil {
 			return nil, pv.NewError(pv.ExitFingerprint, pv.CodeFingerprint, "the server lists an unusable public key for agent %s; nothing was shared", to)
 		}
+		unpinned, err := pv.CheckAgentKey(server, match.Name, match.publicKey)
+		if err != nil {
+			return nil, err
+		}
+		recipient := recipientFor(match)
+		if unpinned {
+			recipient.pinSource = pv.PinSourceTOFU
+		}
+		return recipient, nil
 	}
+}
 
-	newlyPinned, err := pv.VerifyAgentKey(server, match.Name, match.publicKey)
+// trustedFingerprints are the agent keys this machine already trusts for
+// server: pinned ones and its own key files.
+func trustedFingerprints(server string) (map[string]bool, error) {
+	trusted := map[string]bool{}
+	pins, err := pv.LoadPins(server)
 	if err != nil {
 		return nil, err
 	}
-	if newlyPinned {
-		out.infof("Pinned %s %s (first use). Compare it with `pastevault agent show %s` on the agent's machine.", match.Name, pv.FormatFingerprint(match.fingerprint), match.Name)
+	for _, pin := range pins {
+		trusted[pin.Fingerprint] = true
+	}
+	locals, _, err := pv.LocalAgentIdentities(server)
+	if err != nil {
+		return nil, err
+	}
+	for _, identity := range locals {
+		trusted[identity.Fingerprint] = true
 	}
 
-	return &shareRecipient{name: match.Name, agentID: match.ID, publicKey: match.publicKey, fingerprint: match.fingerprint}, nil
+	return trusted, nil
 }

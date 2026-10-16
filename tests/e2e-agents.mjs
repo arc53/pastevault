@@ -216,6 +216,25 @@ await runSuite('agents', { postgres: true }, async ({ startServer, temporaryRoot
     assert.equal(second.response.status, 409)
     assert.equal(second.body.code, 'token_already_bound')
 
+    // A token bound to gamma manages gamma only: it can't revoke alpha.
+    const crossRevoke = await request(baseUrl, `/api/agents/${alpha.id}`, { method: 'DELETE', headers: writerHeaders })
+    assert.equal(crossRevoke.response.status, 403)
+    assert.equal(crossRevoke.body.error, 'other_agent')
+    const stillActive = await request(baseUrl, '/api/agents', { headers: owner.headers })
+    assert(stillActive.body.agents.some((agent) => agent.id === alpha.id && !agent.revoked_at))
+
+    // Non-canonical keys are refused: top bit set, and non-canonical base64url.
+    const topBit = Buffer.from(other, 'base64url')
+    topBit[31] |= 0x80
+    const nonCanonical = await jsonRequest(baseUrl, '/api/agents', { name: 'epsilon', public_key: topBit.toString('base64url'), fingerprint: agentFingerprint(topBit) }, owner.headers)
+    assert.equal(nonCanonical.response.status, 400)
+    assert.equal(nonCanonical.body.code, 'invalid_public_key')
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+    const paddingBits = other.slice(0, -1) + alphabet[alphabet.indexOf(other.at(-1)) + 1]
+    const badEncoding = await jsonRequest(baseUrl, '/api/agents', { name: 'epsilon', public_key: paddingBits, fingerprint: agentFingerprint(Buffer.from(paddingBits, 'base64url')) }, owner.headers)
+    assert.equal(badEncoding.response.status, 400)
+    assert.equal(badEncoding.body.code, 'invalid_public_key')
+
     // Revoking the agent revokes the token bound to it.
     const revoked = await request(baseUrl, `/api/agents/${registered.body.agent.id}`, { method: 'DELETE', headers: owner.headers })
     assert.equal(revoked.response.status, 200)
@@ -285,7 +304,9 @@ await runSuite('agents', { postgres: true }, async ({ startServer, temporaryRoot
     assert.equal(await viewCount('Paste', sealed.slug), 0)
     const denied = await auditEvents(owner.headers, 'share.access_denied')
     const deniedForSlug = denied.filter((event) => event.slug === sealed.slug)
-    assert(deniedForSlug.some((event) => event.actor_kind === 'anonymous'))
+    // Different reasons are never folded into one event.
+    assert(deniedForSlug.some((event) => event.actor_kind === 'anonymous' && event.details.reason === 'anonymous'))
+    assert(deniedForSlug.some((event) => event.actor_kind === 'anonymous' && event.details.reason === 'other_account'))
     assert(deniedForSlug.some((event) => event.actor_kind === 'owner' && event.details.reason === 'missing_scope'))
 
     // An anonymous reader without credentials gets exit 3 before consuming.
@@ -346,6 +367,36 @@ await runSuite('agents', { postgres: true }, async ({ startServer, temporaryRoot
     assert.equal(opened.files[0].name, 'report.txt')
     assert.equal(readFileSync(path.join(outDirectory, 'report.txt'), 'utf8'), 'quarterly numbers\n'.repeat(100))
     assert.equal(await viewCount('FileShare', shared.slug), 1)
+
+    // After that non-final view, chunks still need the recipient account.
+    const chunkPath = `/api/file-shares/${shared.slug}/chunks/someFileId/0`
+    const anonymousChunk = await request(baseUrl, chunkPath)
+    assert.equal(anonymousChunk.response.status, 403)
+    assert.equal(anonymousChunk.body.error, 'recipient_auth_required')
+    const ownerChunk = await request(baseUrl, chunkPath, { headers: owner.headers })
+    assert.notEqual(ownerChunk.response.status, 403, 'the recipient account passes recipient auth for chunks')
+  }
+
+  // ── a server that relabels a #k= link as sealed is refused ──────────
+  {
+    // A normal share from A, then the database is edited as a malicious
+    // server would: content replaced and "sealed" to beta, whose key B holds.
+    const normal = cliJson(['put', '-'], { input: 'the real content', config: configA })
+    assert.equal(normal.key_in_url, true)
+    const { encryptPaste } = await importFrontend('lib/crypto.ts')
+    const { wrapKey, wrapContext } = await importFrontend('lib/wrap.ts')
+    const forged = await encryptPaste({ title: '', body: 'forged by the server', render_mode: 'plain' }, normal.slug)
+    const wrapped = wrapKey(forged.key, Buffer.from(beta.public_key, 'base64url'), wrapContext.paste(normal.slug))
+    await database.query(
+      'UPDATE "Paste" SET "ciphertext" = $1, "nonce" = $2, "recipient_fingerprint" = $3, "recipient_agent_id" = $4, "recipient_user_id" = $5, "wrapped_key" = $6 WHERE "slug" = $7',
+      forged.ciphertext, forged.nonce, beta.fingerprint, beta.id, owner.user.id, wrapped, normal.slug
+    )
+
+    const tampered = cli(['get', normal.url, '--stdout', '--json'], { config: configB })
+    expectExit(tampered, 7, 'get of a #k= link the server claims is sealed')
+    assert.equal(json(tampered).error.code, 'sealed_share_conflict')
+    assert(!tampered.stdout.includes('forged'))
+    assert.equal(await viewCount('Paste', normal.slug), 0)
   }
 
   // ── --to-key: sealed to a raw public key, no recipient auth ─────────
@@ -401,7 +452,7 @@ await runSuite('agents', { postgres: true }, async ({ startServer, temporaryRoot
 
     const revoked = cliJson(['agent', 'revoke', 'beta'], { config: configB })
     assert.equal(revoked.tokens_revoked, 1)
-    assert.match(revoked.agent.key_file, /beta\.revoked-\d+\.json$/)
+    assert.match(revoked.agent.key_file, /revoked[\\/]beta-\d+\.json$/)
     expectExit(cli(['whoami'], { config: keyOnly, env: { PASTEVAULT_TOKEN: created.token } }), 3, 'token of a revoked agent')
     const tokens = cliJson(['token', 'list'], { config: configA }).tokens
     assert(tokens.find((token) => token.name === 'beta-bot').revoked_at)

@@ -20,9 +20,10 @@ import (
 //	{v:1, name, server, agent_id, public_key, private_key, fingerprint, created_at}
 //
 // The server dir is the server URL made filesystem-safe (ServerDirName). A
-// revoked agent's file is renamed to <name>.revoked-<unix>.json: its key can
-// still open shares sealed to it before the revoke, and the name is free for
-// a new agent.
+// revoked agent's file moves to revoked/<name>-<unix>.json in that dir: its
+// key can still open shares sealed to it before the revoke, and the name is
+// free for a new agent. (A subdirectory, so no agent name can collide with a
+// retired file.)
 //
 // PASTEVAULT_AGENT_KEY supplies a private key (base64url) instead of a file,
 // for CI and containers. PASTEVAULT_AGENT selects the default agent by name.
@@ -31,6 +32,7 @@ const (
 	EnvAgentKey = "PASTEVAULT_AGENT_KEY"
 
 	identityFileVersion = 1
+	revokedDirName      = "revoked"
 	// IdentitySourceFile and IdentitySourceEnv say where a key came from.
 	IdentitySourceFile = "file"
 	IdentitySourceEnv  = "env"
@@ -207,8 +209,14 @@ func LoadAgentIdentity(server, name string) (*AgentIdentity, error) {
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
 	}
+	if err != nil {
+		return nil, err
+	}
+	if identity.Name != name || identity.Revoked() {
+		return nil, fmt.Errorf("agent key file %s holds agent %q, not %q", path, identity.Name, name)
+	}
 
-	return identity, err
+	return identity, nil
 }
 
 // EnvAgentIdentity returns the identity given by PASTEVAULT_AGENT_KEY, or nil.
@@ -257,6 +265,14 @@ func readIdentityDir(dir string) ([]*AgentIdentity, []string, error) {
 	var identities []*AgentIdentity
 	var warnings []string
 	for _, entry := range entries {
+		if entry.IsDir() && entry.Name() == revokedDirName {
+			retired, retiredWarnings, err := readIdentityDir(filepath.Join(dir, revokedDirName))
+			if err == nil {
+				identities = append(identities, retired...)
+				warnings = append(warnings, retiredWarnings...)
+			}
+			continue
+		}
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
 			continue
 		}
@@ -352,7 +368,7 @@ func RetireAgentIdentity(identity *AgentIdentity) (string, error) {
 	}
 
 	identity.RevokedAt = time.Now().UTC().Format(time.RFC3339)
-	target := strings.TrimSuffix(identity.Path, ".json") + fmt.Sprintf(".revoked-%d.json", time.Now().Unix())
+	target := filepath.Join(filepath.Dir(identity.Path), revokedDirName, fmt.Sprintf("%s-%d.json", identity.Name, time.Now().UnixNano()))
 	if err := writePrivateJSON(target, identity); err != nil {
 		return "", WrapError(ExitLocalFile, CodeLocalFile, err, "could not retire the agent key file")
 	}

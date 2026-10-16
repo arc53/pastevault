@@ -235,6 +235,14 @@
       "context": "paste:Vb3kq9TQx_2Z"
     },
     {
+      "name": "unwrap-noncanonical-ephemeral",
+      "operation": "unwrap",
+      "reason": "ephemeral key with the top bit set",
+      "envelope": "AbUOrUo0mwnYj9YfSh5swDXHK8dKyvlIlp3UwzX_ULayWmFob3Z9hIuSmaCnrrW8w8rR2N_m7fT7jjLt4XbozgMYKsQ0v17LKqxJ3SLwiZ5gw1y5qSswseO-VzKhoGy23cA4cP5EXZg-",
+      "recipient_secret_key": "oKeutbzDytHY3-bt9PsCCRAXHiUsMzpBSE9WXWRrcnk",
+      "context": "paste:Vb3kq9TQx_2Z"
+    },
+    {
       "name": "wrap-zero-public-key",
       "operation": "wrap",
       "reason": "all-zero shared secret",
@@ -247,6 +255,22 @@
       "operation": "wrap",
       "reason": "point of order 8 gives an all-zero shared secret",
       "recipient_public_key": "4Ot6fDtBuK4WVuP68Z_EatoJjeucMrH9hmIFFl9JuAA",
+      "content_key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o",
+      "context": "paste:Vb3kq9TQx_2Z"
+    },
+    {
+      "name": "wrap-noncanonical-top-bit",
+      "operation": "wrap",
+      "reason": "public key with the top bit set (not a canonical encoding)",
+      "recipient_public_key": "PkXO4Od6KPwV6XHFkojF-hulYuZjDPpjfyZ4PCDUdrE",
+      "content_key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o",
+      "context": "paste:Vb3kq9TQx_2Z"
+    },
+    {
+      "name": "wrap-noncanonical-u-ge-p",
+      "operation": "wrap",
+      "reason": "public key u >= 2^255-19 (p + 9, the base point encoded twice)",
+      "recipient_public_key": "9v_______________________________________38",
       "content_key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o",
       "context": "paste:Vb3kq9TQx_2Z"
     }

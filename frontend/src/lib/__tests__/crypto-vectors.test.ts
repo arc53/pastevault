@@ -15,6 +15,7 @@ import {
   agentKeyPairFromSecret,
   decodeAgentPublicKey,
   generateAgentKeyPair,
+  isCanonicalX25519PublicKey,
   sealToRecipient,
   unwrapKey,
   wrapContext,
@@ -177,4 +178,24 @@ test('low-order public keys are refused (libsodium blocklist)', () => {
     assert.throws(() => wrapKey(contentKey, publicKey, wrapContext.paste('x')), WrapError, point)
     assert.throws(() => decodeAgentPublicKey(Buffer.from(publicKey).toString('base64url')), WrapError, point)
   }
+})
+
+test('non-canonical keys and base64url are refused', () => {
+  const recipient = generateAgentKeyPair()
+  const topBit = Uint8Array.from(recipient.publicKey)
+  topBit[31]! |= 0x80
+  const basePointPlusP = new Uint8Array(Buffer.from('f6ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f', 'hex'))
+  for (const publicKey of [topBit, basePointPlusP]) {
+    assert.equal(isCanonicalX25519PublicKey(publicKey), false)
+    assert.throws(() => wrapKey(new Uint8Array(32), publicKey, wrapContext.paste('x')), WrapError)
+  }
+  assert.equal(isCanonicalX25519PublicKey(recipient.publicKey), true)
+
+  // The last character of a 32-byte key carries 2 padding bits; setting one
+  // gives another string for the same bytes, which must be refused.
+  const encoded = Buffer.from(recipient.publicKey).toString('base64url')
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+  const last = alphabet.indexOf(encoded[encoded.length - 1]!)
+  const mangled = encoded.slice(0, -1) + alphabet[last + 1]
+  assert.throws(() => decodeAgentPublicKey(mangled), WrapError)
 })

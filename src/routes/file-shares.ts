@@ -5,7 +5,7 @@ import {
   recordOwnedShareView,
 } from '../lib/account-shares.js'
 import { ensureAccountSystemSchema } from '../lib/account-schema.js'
-import { requireRecipientAccess, resolveShareRecipient } from '../lib/agents.js'
+import { recipientDenial, requireRecipientAccess, resolveShareRecipient } from '../lib/agents.js'
 import { auditActorFor, recordShareEvent, recordShareView } from '../lib/audit.js'
 import { config } from '../lib/config.js'
 import {
@@ -44,6 +44,7 @@ import {
   createFileShareSchema,
   fileShareChunkParamsSchema,
   getFileShareParamsSchema,
+  HttpError,
   MAX_VIEWS_LIMIT,
   validationErrorHandler,
 } from '../lib/validation.js'
@@ -616,6 +617,14 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
     if (share.expires_at && isExpired(share.expires_at)) {
       await expireShare(share)
       return reply.code(410).send({ error: 'File share has expired' })
+    }
+
+    // Chunks of a share sealed to an account agent need the same recipient
+    // credentials as opening it: after a non-final view they are otherwise
+    // served without a grant. (Still ciphertext; this stops strangers
+    // fetching it at all.)
+    if (share.recipient_user_id && recipientDenial(await getPrincipal(request), share)) {
+      throw new HttpError(403, { error: 'recipient_auth_required' })
     }
 
     const viewLimited = effectiveMaxViews(share) !== null

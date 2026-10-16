@@ -101,8 +101,8 @@ func TestWrapRejectsZeroSharedSecret(t *testing.T) {
 
 	for _, point := range lowOrderPoints {
 		publicKey, _ := hex.DecodeString(point)
-		if _, err := WrapKey(contentKey, publicKey, "paste:x"); !errors.Is(err, ErrLowOrderKey) {
-			t.Errorf("wrap to %s: err = %v, want ErrLowOrderKey", point[:8], err)
+		if _, err := WrapKey(contentKey, publicKey, "paste:x"); !isUnusableKey(err) {
+			t.Errorf("wrap to %s: err = %v, want ErrLowOrderKey or ErrNonCanonicalKey", point[:8], err)
 		}
 		if _, err := DecodeAgentPublicKey(EncodeBase64URL(publicKey)); err == nil {
 			t.Errorf("DecodeAgentPublicKey accepted %s", point[:8])
@@ -284,12 +284,26 @@ func TestAgentIdentityFiles(t *testing.T) {
 		t.Fatalf("find across servers: %v %v", found, err)
 	}
 	retired, err := RetireAgentIdentity(loaded)
-	if err != nil || !strings.Contains(filepath.Base(retired), "build-bot.revoked-") {
+	if err != nil || !strings.Contains(retired, filepath.Join("revoked", "build-bot-")) {
 		t.Fatalf("retire: %s %v", retired, err)
 	}
 	if again, _ := LoadAgentIdentity(server, "build-bot"); again != nil {
 		t.Fatal("a retired key still answers to its name")
 	}
+	if listed, _, _ := LocalAgentIdentities(server); len(listed) != 1 || !listed[0].Revoked() {
+		t.Fatalf("the retired key is listed as revoked: %+v", listed)
+	}
+
+	// A file whose content names another agent is not that agent's key.
+	impostor := NewAgentIdentity(server, "other", newKeyPair(t))
+	impostorPath, _ := AgentKeyPath(server, "renamed")
+	if err := SaveAgentIdentity(impostor, impostorPath, false); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := LoadAgentIdentity(server, "renamed"); err == nil || got != nil {
+		t.Fatalf("a key file for another name was accepted: %v", err)
+	}
+	_ = os.Remove(impostorPath)
 	found, err = FindIdentityByFingerprint(server, keys.Fingerprint)
 	if err != nil || found == nil || !found.Revoked() {
 		t.Fatalf("retired key is still found by fingerprint: %v %v", found, err)
@@ -354,3 +368,48 @@ func TestServerDirName(t *testing.T) {
 		}
 	}
 }
+
+func isUnusableKey(err error) bool {
+	return errors.Is(err, ErrLowOrderKey) || errors.Is(err, ErrNonCanonicalKey)
+}
+
+func TestNonCanonicalPublicKeys(t *testing.T) {
+	recipient := newKeyPair(t)
+	contentKey := bytes.Repeat([]byte{9}, ContentKeySize)
+
+	topBit := bytes.Clone(recipient.PublicKey)
+	topBit[31] |= 0x80
+	// p + 9 is a second encoding of the base point u = 9.
+	basePointPlusP, _ := hex.DecodeString("f6ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f")
+	for name, publicKey := range map[string][]byte{"top bit": topBit, "u >= p": basePointPlusP} {
+		if IsCanonicalX25519PublicKey(publicKey) {
+			t.Errorf("%s: reported canonical", name)
+		}
+		if _, err := WrapKey(contentKey, publicKey, "paste:x"); !errors.Is(err, ErrNonCanonicalKey) {
+			t.Errorf("%s: wrap err = %v", name, err)
+		}
+		if _, err := DecodeAgentPublicKey(EncodeBase64URL(publicKey)); err == nil {
+			t.Errorf("%s: DecodeAgentPublicKey accepted it", name)
+		}
+	}
+	if !IsCanonicalX25519PublicKey(recipient.PublicKey) {
+		t.Error("a generated key is not canonical")
+	}
+	almostP, _ := hex.DecodeString("ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f")
+	if !IsCanonicalX25519PublicKey(almostP) {
+		t.Error("p - 1 is canonical (though low order)")
+	}
+
+	// Non-canonical base64url (padding bits set) is refused for keys and
+	// envelopes.
+	encoded := EncodeBase64URL(recipient.PublicKey)
+	last := strings.IndexByte(strictAlphabet, encoded[len(encoded)-1])
+	if last%4 == 0 {
+		mangled := encoded[:len(encoded)-1] + string(strictAlphabet[last+1])
+		if _, err := DecodeAgentPublicKey(mangled); err == nil {
+			t.Error("a key with padding bits set was accepted")
+		}
+	}
+}
+
+const strictAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
