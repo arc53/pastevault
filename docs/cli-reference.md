@@ -434,14 +434,16 @@ Replaces every `{{ pv://… }}` (or `{{ https://host/p/…#k=… }}`) placeholde
 ## `mcp`: the MCP server for agents
 
 ```
-pastevault mcp [--agent NAME] [--root DIR]... [--allow-plaintext] [--server URL]
+pastevault mcp [--agent NAME] [--root DIR]... [--allow-plaintext] [--allow-any-host] [--allow-home-root] [--server URL]
 ```
 
 Serves the Model Context Protocol on stdin/stdout for agent harnesses (Claude Code, Codex, Gemini CLI, Cursor, ...). stdout carries only protocol messages; diagnostics go to stderr. It uses the same credentials, agent keys, pins and local store as the other commands. Setup per harness, the tools and their schemas: [agents.md](agents.md#mcp-server).
 
 - Tools: `send_text`, `send_file`, `receive`, `request_secret`, `request_status`, `list_secrets`, `share_status`, `audit`, `revoke_share`. None returns a stored secret's value.
 - `--agent` acts as that agent (default: the default agent); it cannot be combined with `PASTEVAULT_AGENT_KEY`.
-- `--root DIR` (repeatable) allows `send_file` and `receive` to use DIR. The client's MCP roots are allowed too; without either, the working directory (unless it is the home directory or `/`).
+- `--root DIR` (repeatable) allows `send_file` and `receive` to use DIR. The client's MCP roots are allowed too; without either, the working directory. The home directory, `/` and ancestors of the home directory are refused as roots (and dropped from client roots) unless `--allow-home-root` is given. Credential locations (`.git`, `~/.ssh`, `~/.aws`, harness login files, shell histories, ...) are never readable, even inside a root.
+- `receive` writes to `output_path`, or to `pastevault-received/` in the first root. Sender-chosen names that agents or tools load (dot files, `.mcp.json`, `CLAUDE.md`, `package.json`, scripts, ...) are saved as `received-<slug>-<name>`; it never writes into `.git`, `.github`, `.claude` and similar directories, and `overwrite` only replaces files it wrote earlier in the same session.
+- `receive` only opens shares on the configured server (or its public URL) unless `--allow-any-host` is given.
 - `--allow-plaintext` lets `receive` return share content when the call sets `allow_plaintext` and the content does not look like a secret.
 - Tool errors carry the CLI's error object as text: `{"error":{"code","message","exit_code"}}`, with the exit codes above.
 
