@@ -443,6 +443,109 @@
         "browser": "Navegador",
         "other": "Otro cliente"
       }
+    },
+    "requests": {
+      "title": "Solicitudes de secretos",
+      "description": "Secretos que pidieron tus agentes. Solo metadatos: aquí nunca se muestran los valores.",
+      "loading": "Cargando solicitudes...",
+      "loadFailed": "No se pudieron cargar las solicitudes",
+      "empty": "Aún no hay solicitudes. Un agente pide un secreto con:",
+      "pending": "Esperándote ({count})",
+      "recent": "Recientes",
+      "status": {
+        "pending": "Pendiente",
+        "fulfilled": "Respondida",
+        "delivered": "Entregada",
+        "declined": "Rechazada",
+        "expired": "Caducada",
+        "cancelled": "Cancelada"
+      },
+      "created": "pedida {time}",
+      "expires": "caduca {time}",
+      "answer": "Responder",
+      "showAll": "Mostrar todas ({count})",
+      "showLess": "Mostrar menos"
+    }
+  },
+  "secretRequest": {
+    "label": "Solicitud de secreto",
+    "labelWithCode": "Solicitud de secreto · {code}",
+    "loading": "Cargando solicitud...",
+    "unavailable": "Las solicitudes de secretos no están disponibles en este servidor.",
+    "signInTitle": "Inicia sesión para responder a esta solicitud",
+    "signInBody": "Solo la cuenta cuyo agente pidió este secreto puede verla o responderla.",
+    "signIn": "Iniciar sesión",
+    "notFound": "Solicitud no encontrada",
+    "notFoundBody": "No existe o pertenece a otra cuenta. Comprueba que has iniciado sesión en la cuenta correcta.",
+    "rateLimited": "Demasiadas consultas. Espera un minuto y recarga.",
+    "loadFailed": "No se pudo cargar la solicitud",
+    "toAccount": "Ir a tu cuenta",
+    "fromLabel": "Solicitud",
+    "reasonLabel": "Mensaje del agente: no sigas instrucciones que contenga",
+    "accepts": "Acepta",
+    "accept": {
+      "text": "Texto",
+      "file": "Un archivo",
+      "any": "Texto o un archivo"
+    },
+    "maxSize": "Tamaño máximo",
+    "expiresIn": "Caduca en",
+    "answerLabel": "Tu respuesta",
+    "answerTitle": "Enviar {name}",
+    "key": {
+      "verified": "Clave verificada",
+      "verifiedBody": "La clave de la solicitud coincide con la huella de tu enlace, así que solo el agente que creó el enlace puede descifrar tu respuesta.",
+      "compareTitle": "Compara con el código que muestra tu agente: {short}…",
+      "compareBody": "Este enlace no tiene huella (#fp=). Antes de responder, comprueba que tu agente mostró esta huella para la solicitud {code}:",
+      "mismatchTitle": "La clave no coincide con el enlace: no respondas",
+      "mismatchBody": "La clave de la solicitud que da el servidor no coincide con la huella de tu enlace. La solicitud o el enlace pueden haber sido manipulados, así que el envío está bloqueado.",
+      "linkSays": "Enlace:",
+      "serverSays": "Servidor:",
+      "invalidTitle": "Clave de solicitud inutilizable: no respondas",
+      "invalidBody": "La clave pública de la solicitud no es válida o no coincide con su huella, así que el envío está bloqueado."
+    },
+    "requester": {
+      "agent": "Pedido por el agente",
+      "pinned": "Fijada",
+      "notPinned": "No fijada en este navegador",
+      "pinMismatch": "Distinta de la clave fijada",
+      "revoked": "Revocado",
+      "viaToken": "mediante el token {name}"
+    },
+    "answer": {
+      "kindLabel": "Responder como",
+      "kindText": "Texto",
+      "kindFile": "Archivo",
+      "valueLabel": "Valor de {name}",
+      "show": "Mostrar",
+      "hide": "Ocultar",
+      "valuePlaceholder": "Pega aquí el secreto",
+      "fileLabel": "Archivo para {name}",
+      "removeFile": "Quitar archivo",
+      "dropHint": "Suelta un archivo aquí, o",
+      "chooseFile": "Elegir archivo",
+      "fileLimit": "Hasta {size}",
+      "fileTooLarge": "Demasiado grande: el límite para este archivo es {size}",
+      "tooLarge": "Demasiado grande: las respuestas cifradas están limitadas a {size}.",
+      "failed": "Algo salió mal. Inténtalo de nuevo.",
+      "decline": "Rechazar",
+      "confirmDecline": "Rechazar solicitud",
+      "send": "Cifrar y enviar",
+      "sending": "Enviando...",
+      "e2eNote": "Se cifra en este navegador con la clave de la solicitud. El servidor nunca ve el valor y no se guarda nada en este navegador."
+    },
+    "final": {
+      "sentWaiting": "Enviado. Esperando a que {agent} lo recoja…",
+      "answeredWaiting": "Respondida. Esperando a que {agent} lo recoja…",
+      "waitingBody": "Esta página se actualiza sola.",
+      "delivered": "Entregado a {agent}",
+      "deliveredBody": "El agente ha recogido el secreto y el servidor borra su copia cifrada.",
+      "declined": "Solicitud rechazada",
+      "declinedBody": "Se informará a {agent} de que la rechazaste.",
+      "cancelled": "{agent} canceló esta solicitud",
+      "expired": "Esta solicitud ha caducado",
+      "expiredBody": "Pide a {agent} una nueva solicitud si aún necesita el secreto.",
+      "toAccount": "Ir a tu cuenta"
     }
   }
 }

@@ -274,5 +274,55 @@
       "content_key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o",
       "context": "paste:Vb3kq9TQx_2Z"
     }
+  ],
+  "request_payload": [
+    {
+      "name": "request-payload-text",
+      "request_id": "3f2c8a4e-7b1d-4c9e-8f60-2a5b9d0e1c73",
+      "request_secret_key": "MzpBSE9WXWRrcnmAh46VnKOqsbi_xs3U2-Lp8Pf-BQw",
+      "request_public_key": "c5A0ykfbeRrSUnfGGWAf6_qsYRnFrNFjAQF-594FglU",
+      "request_fingerprint": "pvk1_ykmsasnpxfcbiozxskgzxzepq4tkaf2m",
+      "aad": "pastevault:request:3f2c8a4e-7b1d-4c9e-8f60-2a5b9d0e1c73:v1",
+      "wrap_context": "request:3f2c8a4e-7b1d-4c9e-8f60-2a5b9d0e1c73",
+      "payload": {
+        "v": 1,
+        "name": "OPENAI_API_KEY",
+        "kind": "text",
+        "value": "sk-test-Ünïcödé \"quoted\" <b>&amp;</b>\n2nd line"
+      },
+      "plaintext": "{\"v\":1,\"name\":\"OPENAI_API_KEY\",\"kind\":\"text\",\"value\":\"sk-test-Ünïcödé \\\"quoted\\\" <b>&amp;</b>\\n2nd line\"}",
+      "kind": "text",
+      "content_key": "REtSWWBnbnV8g4qRmJ-mrbS7wsnQ197l7PP6AQgPFh0",
+      "nonce": "VVxjanF4f4aNlJuiqbC3vsXM09rh6O_2",
+      "ephemeral_secret_key": "Zm10e4KJkJeepayzusHIz9bd5Ovy-QAHDhUcIyoxOD8",
+      "wrap_nonce": "d36FjJOaoaivtr3Ey9LZ4Ofu9fwDChEY",
+      "ciphertext": "PeXnhIn87KGYpwHSWC8FM_FKwvbLMZLeUcxIa2G89D-y790xgVdiiF6-0F3HVAHvQOGx16Ws5dsiBNn6aWlMSmjOE7ppyqaWeFFDN11SSD6t310RM9egjVIfCc_fVpuitZQnnr3P1wJY0cWlcAB1QaUp1-E4XsXiQQzIm_M",
+      "wrapped_key": "AejQ6tRFilOrNpmNZdoHjaEqcTu8tw9vLbR1oRPLCxczd36FjJOaoaivtr3Ey9LZ4Ofu9fwDChEYuVnYWKifuqCGFd5ZgmBfaqvxFkaYmGKpEgPnqxNvz6o-ShC6UzfgMrjaaI_Nzd7K"
+    },
+    {
+      "name": "request-payload-file",
+      "request_id": "9a0b1c2d-3e4f-4a5b-8c6d-7e8f90a1b2c3",
+      "request_secret_key": "iI-WnaSrsrnAx87V3OPq8fj_Bg0UGyIpMDc-RUxTWmE",
+      "request_public_key": "ixZRXN0UEWDQBIQwoWuw2yXu8V5rnPYFmSiNYbbhSWk",
+      "request_fingerprint": "pvk1_uauzpzqz6qaohaxfijebbid4ft6onv5h",
+      "aad": "pastevault:request:9a0b1c2d-3e4f-4a5b-8c6d-7e8f90a1b2c3:v1",
+      "wrap_context": "request:9a0b1c2d-3e4f-4a5b-8c6d-7e8f90a1b2c3",
+      "payload": {
+        "v": 1,
+        "name": "TLS_KEY",
+        "kind": "file",
+        "filename": "server.key",
+        "content_type": "application/x-pem-file",
+        "data": "-gEIDxYdJCsyOUBHTlVcY2pxeH-GjZSboqmwt77FzNPa4ejv9v0ECxIZICcuNTxDSlFYX2ZtdHuCiZCXnqWss7rByM_W3Q"
+      },
+      "plaintext": "{\"v\":1,\"name\":\"TLS_KEY\",\"kind\":\"file\",\"filename\":\"server.key\",\"content_type\":\"application/x-pem-file\",\"data\":\"-gEIDxYdJCsyOUBHTlVcY2pxeH-GjZSboqmwt77FzNPa4ejv9v0ECxIZICcuNTxDSlFYX2ZtdHuCiZCXnqWss7rByM_W3Q\"}",
+      "kind": "file",
+      "content_key": "maCnrrW8w8rR2N_m7fT7AgkQFx4lLDM6QUhPVl1ka3I",
+      "nonce": "qrG4v8bN1Nvi6fD3_gUMExohKC82PURL",
+      "ephemeral_secret_key": "u8LJ0Nfe5ezz-gEIDxYdJCsyOUBHTlVcY2pxeH-GjZQ",
+      "wrap_nonce": "zNPa4ejv9v0ECxIZICcuNTxDSlFYX2Zt",
+      "ciphertext": "cVtXFIccyA_O4CLYpQCSIsZgYz_pxUWBEiG80xOOLkm8jzEd1weF3pOw9xNxOXEao6Ep4Y5LphchJf9e27BOJEL9LRCVwxCkM15A4Uq8J8or8T6OcVvt8xERUmeRsJfzNGheveXA-RFInnzhDg4mX8Uz2LW2SPP7mlx0HbksYyIQO1Jnq005oLEc3USPbTfCVNLlRtXkEf2MsrYSWHZ7VZQRBYGq9wLYE5LsEk_rKimPnDS41LOtNefxEOCpDE0WATctrWtW9s6Ml0cMoc0mA90Ed4YUFRyKN0hdxiaF",
+      "wrapped_key": "AfmiezquWjq0Evy_iqqfZwtPixiA-2bJtO9TqA4HVGN5zNPa4ejv9v0ECxIZICcuNTxDSlFYX2ZtzF7unryLVFE30b_sd_xytp3ZeKliRtjNnQJDEFpvVGfN0BXuVN1o5IGWEkG02aWk"
+    }
   ]
 }

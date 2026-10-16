@@ -352,3 +352,74 @@ export interface FileShareManifest {
   paste?: PasteContent
   files: FileShareManifestFile[]
 }
+
+// Secret requests (spec §2.6, §6). An agent asks for a secret; this browser
+// seals the answer to the request's ephemeral key (lib/secret-requests.ts).
+export type SecretRequestStatus =
+  | 'pending'
+  | 'fulfilled'
+  | 'delivered'
+  | 'declined'
+  | 'expired'
+  | 'cancelled'
+
+export type SecretRequestAccept = 'text' | 'file' | 'any'
+
+// GET /api/secret-requests/by-code/:code (a session of the same account).
+export interface SecretRequestDetails {
+  id: string
+  code: string
+  name: string
+  // Written by the agent: untrusted, plain text only.
+  reason: string | null
+  accept: SecretRequestAccept
+  // The request's ephemeral key. Recompute its fingerprint; compare with #fp=.
+  public_key: string
+  fingerprint: string
+  // Limit on the decoded ciphertext (payload JSON + 16-byte tag).
+  max_bytes: number
+  requester: {
+    // The agent's identity (not the request key).
+    agent: { id: string; name: string | null; fingerprint: string | null }
+    token_name: string | null
+  }
+  status: SecretRequestStatus
+  created_at: string
+  expires_at: string
+  opened_at: string | null
+  fulfilled_at: string | null
+  delivered_at: string | null
+  closed_at: string | null
+}
+
+export interface FulfillSecretRequestBody {
+  kind: 'text' | 'file'
+  ciphertext: string
+  nonce: string
+  wrapped_key: string
+}
+
+// GET /api/account/secret-requests: metadata only.
+export interface SecretRequestSummary {
+  id: string
+  code: string
+  name: string
+  reason: string | null
+  accept: SecretRequestAccept
+  fingerprint: string
+  status: SecretRequestStatus
+  requester: { agent: { id: string; name: string | null } }
+  response_kind: 'text' | 'file' | null
+  response_size: number | null
+  created_at: string
+  expires_at: string
+  opened_at: string | null
+  fulfilled_at: string | null
+  delivered_at: string | null
+  acked_at: string | null
+  closed_at: string | null
+}
+
+export interface ListSecretRequestsResponse {
+  requests: SecretRequestSummary[]
+}

@@ -22,6 +22,13 @@ import {
   WrapError,
   wrapKey,
 } from '../wrap'
+import {
+  openSecretPayload,
+  requestPayloadAAD,
+  sealedSize,
+  sealSecretPayload,
+  SecretPayload,
+} from '../secret-requests'
 
 interface FingerprintVector {
   name: string
@@ -55,12 +62,32 @@ interface WrapNegativeVector {
   context: string
 }
 
+interface RequestPayloadVector {
+  name: string
+  request_id: string
+  request_secret_key: string
+  request_public_key: string
+  request_fingerprint: string
+  aad: string
+  wrap_context: string
+  payload: SecretPayload
+  plaintext: string
+  kind: string
+  content_key: string
+  nonce: string
+  ephemeral_secret_key: string
+  wrap_nonce: string
+  ciphertext: string
+  wrapped_key: string
+}
+
 const vectors = JSON.parse(
   readFileSync(new URL('../../../../testdata/crypto/vectors.json', import.meta.url), 'utf8')
 ) as {
   fingerprint: FingerprintVector[]
   wrap: WrapVector[]
   wrap_negative: WrapNegativeVector[]
+  request_payload: RequestPayloadVector[]
 }
 
 const decode = (value: string) => new Uint8Array(Buffer.from(value, 'base64url'))
@@ -95,6 +122,7 @@ test('vectors file has agent-key sections', () => {
   assert(vectors.fingerprint.length > 0)
   assert(vectors.wrap.length > 0)
   assert(vectors.wrap_negative.length > 0)
+  assert(vectors.request_payload.length > 0)
 })
 
 for (const vector of vectors.fingerprint) {
@@ -199,3 +227,29 @@ test('non-canonical keys and base64url are refused', () => {
   const mangled = encoded.slice(0, -1) + alphabet[last + 1]
   assert.throws(() => decodeAgentPublicKey(mangled), WrapError)
 })
+
+for (const vector of vectors.request_payload) {
+  test(`request payload: ${vector.name}`, () => {
+    const publicKey = decodeAgentPublicKey(vector.request_public_key)
+    assert.equal(agentFingerprint(publicKey), vector.request_fingerprint)
+    assert.equal(requestPayloadAAD(vector.request_id), vector.aad)
+    assert.equal(wrapContext.request(vector.request_id), vector.wrap_context)
+    assert.equal(JSON.stringify(vector.payload), vector.plaintext)
+
+    const sealed = withRandom(
+      [decode(vector.content_key), decode(vector.nonce), decode(vector.ephemeral_secret_key), decode(vector.wrap_nonce)],
+      () => sealSecretPayload(vector.payload, vector.request_id, publicKey)
+    )
+    assert.deepEqual(sealed, {
+      kind: vector.kind,
+      ciphertext: vector.ciphertext,
+      nonce: vector.nonce,
+      wrapped_key: vector.wrapped_key,
+    })
+    assert.equal(sealedSize(vector.payload), decode(vector.ciphertext).length)
+
+    const secretKey = decode(vector.request_secret_key)
+    assert.deepEqual(openSecretPayload(sealed, secretKey, vector.request_id), vector.payload)
+    assert.throws(() => openSecretPayload(sealed, secretKey, '00000000-0000-4000-8000-000000000000'))
+  })
+}

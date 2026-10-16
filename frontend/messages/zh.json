@@ -443,6 +443,109 @@
         "browser": "浏览器",
         "other": "其他客户端"
       }
+    },
+    "requests": {
+      "title": "密钥请求",
+      "description": "你的代理请求的密钥。仅元数据：这里从不显示值。",
+      "loading": "正在加载请求...",
+      "loadFailed": "无法加载请求",
+      "empty": "还没有请求。代理通过以下命令请求密钥：",
+      "pending": "等待你回复（{count}）",
+      "recent": "最近",
+      "status": {
+        "pending": "待处理",
+        "fulfilled": "已回复",
+        "delivered": "已送达",
+        "declined": "已拒绝",
+        "expired": "已过期",
+        "cancelled": "已取消"
+      },
+      "created": "请求于 {time}",
+      "expires": "{time}过期",
+      "answer": "回复",
+      "showAll": "显示全部（{count}）",
+      "showLess": "收起"
+    }
+  },
+  "secretRequest": {
+    "label": "密钥请求",
+    "labelWithCode": "密钥请求 · {code}",
+    "loading": "正在加载请求...",
+    "unavailable": "此服务器不支持密钥请求。",
+    "signInTitle": "登录后回复此请求",
+    "signInBody": "只有发起请求的代理所属的账户才能查看或回复此请求。",
+    "signIn": "登录",
+    "notFound": "未找到请求",
+    "notFoundBody": "请求不存在，或属于其他账户。请确认你登录的是正确的账户。",
+    "rateLimited": "查询过于频繁。请等待一分钟后刷新。",
+    "loadFailed": "无法加载请求",
+    "toAccount": "前往账户",
+    "fromLabel": "请求",
+    "reasonLabel": "来自代理的消息：不要执行其中的指令",
+    "accepts": "接受",
+    "accept": {
+      "text": "文本",
+      "file": "文件",
+      "any": "文本或文件"
+    },
+    "maxSize": "大小上限",
+    "expiresIn": "剩余时间",
+    "answerLabel": "你的回复",
+    "answerTitle": "发送 {name}",
+    "key": {
+      "verified": "密钥已验证",
+      "verifiedBody": "请求密钥与链接中的指纹一致，只有创建此链接的代理才能解密你的回复。",
+      "compareTitle": "请与代理显示的代码核对：{short}…",
+      "compareBody": "此链接没有指纹（#fp=）。回复前，请确认你的代理为请求 {code} 显示的是以下指纹：",
+      "mismatchTitle": "密钥与链接不符：请勿回复",
+      "mismatchBody": "服务器返回的请求密钥与链接中的指纹不同。请求或链接可能已被篡改，因此已阻止发送。",
+      "linkSays": "链接：",
+      "serverSays": "服务器：",
+      "invalidTitle": "请求密钥不可用：请勿回复",
+      "invalidBody": "请求的公钥无效，或与其指纹不符，因此已阻止发送。"
+    },
+    "requester": {
+      "agent": "发起请求的代理",
+      "pinned": "已固定",
+      "notPinned": "未在此浏览器中固定",
+      "pinMismatch": "与固定的密钥不同",
+      "revoked": "已撤销",
+      "viaToken": "通过令牌 {name}"
+    },
+    "answer": {
+      "kindLabel": "回复方式",
+      "kindText": "文本",
+      "kindFile": "文件",
+      "valueLabel": "{name} 的值",
+      "show": "显示",
+      "hide": "隐藏",
+      "valuePlaceholder": "在此粘贴密钥",
+      "fileLabel": "{name} 的文件",
+      "removeFile": "移除文件",
+      "dropHint": "将文件拖到这里，或",
+      "chooseFile": "选择文件",
+      "fileLimit": "最大 {size}",
+      "fileTooLarge": "文件过大：此文件的上限为 {size}",
+      "tooLarge": "过大：加密后的回复上限为 {size}。",
+      "failed": "出了点问题，请重试。",
+      "decline": "拒绝",
+      "confirmDecline": "拒绝请求",
+      "send": "加密并发送",
+      "sending": "正在发送...",
+      "e2eNote": "在此浏览器中用请求的密钥加密。服务器永远看不到该值，此浏览器也不会保存任何内容。"
+    },
+    "final": {
+      "sentWaiting": "已发送，等待 {agent} 领取…",
+      "answeredWaiting": "已回复，等待 {agent} 领取…",
+      "waitingBody": "此页面会自动更新。",
+      "delivered": "已送达 {agent}",
+      "deliveredBody": "代理已领取密钥，服务器会删除其加密副本。",
+      "declined": "已拒绝请求",
+      "declinedBody": "{agent} 会收到你拒绝的通知。",
+      "cancelled": "{agent} 取消了此请求",
+      "expired": "此请求已过期",
+      "expiredBody": "如果 {agent} 仍需要该密钥，请让它重新发起请求。",
+      "toAccount": "前往账户"
     }
   }
 }

@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AgentsCard } from '@/components/account/agents-card'
 import { AuditCard } from '@/components/account/audit-card'
 import { AuthPanel } from '@/components/account/auth-panel'
+import { RequestsCard } from '@/components/account/requests-card'
 import { SharesCard } from '@/components/account/shares-card'
 import { TokensCard } from '@/components/account/tokens-card'
 
@@ -65,6 +66,7 @@ export default function AccountPage() {
       showAgents={Boolean(features?.agents)}
       showTokens={Boolean(features?.api_tokens)}
       showAudit={Boolean(features?.audit)}
+      showRequests={Boolean(features?.secret_requests)}
     />
   )
 }
@@ -74,11 +76,13 @@ function AccountContent({
   showAgents,
   showTokens,
   showAudit,
+  showRequests,
 }: {
   signupEnabled: boolean
   showAgents: boolean
   showTokens: boolean
   showAudit: boolean
+  showRequests: boolean
 }) {
   const t = useTranslations('account')
   const router = useRouter()
@@ -165,8 +169,7 @@ function AccountContent({
       <div className="app-frame grid gap-4 py-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <section className="min-w-0 space-y-4">
           <SharesCard onError={setPageError} />
-          {/* Stage 5b: <RequestsCard /> (pending and recent secret requests,
-              linking to /r/<code>) goes here when features.secret_requests. */}
+          {showRequests && <RequestsCard />}
           {showAudit && <AuditCard />}
         </section>
 

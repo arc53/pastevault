@@ -443,6 +443,109 @@
         "browser": "Navigateur",
         "other": "Autre client"
       }
+    },
+    "requests": {
+      "title": "Demandes de secrets",
+      "description": "Secrets demandés par vos agents. Métadonnées uniquement : les valeurs n’apparaissent jamais ici.",
+      "loading": "Chargement des demandes...",
+      "loadFailed": "Impossible de charger les demandes",
+      "empty": "Aucune demande pour l’instant. Un agent demande un secret avec :",
+      "pending": "En attente de vous ({count})",
+      "recent": "Récentes",
+      "status": {
+        "pending": "En attente",
+        "fulfilled": "Répondue",
+        "delivered": "Livrée",
+        "declined": "Refusée",
+        "expired": "Expirée",
+        "cancelled": "Annulée"
+      },
+      "created": "demandée {time}",
+      "expires": "expire {time}",
+      "answer": "Répondre",
+      "showAll": "Tout afficher ({count})",
+      "showLess": "Afficher moins"
+    }
+  },
+  "secretRequest": {
+    "label": "Demande de secret",
+    "labelWithCode": "Demande de secret · {code}",
+    "loading": "Chargement de la demande...",
+    "unavailable": "Les demandes de secrets ne sont pas disponibles sur ce serveur.",
+    "signInTitle": "Connectez-vous pour répondre à cette demande",
+    "signInBody": "Seul le compte dont l’agent a demandé ce secret peut la voir ou y répondre.",
+    "signIn": "Se connecter",
+    "notFound": "Demande introuvable",
+    "notFoundBody": "Elle n’existe pas ou appartient à un autre compte. Vérifiez que vous êtes connecté au bon compte.",
+    "rateLimited": "Trop de consultations. Attendez une minute, puis rechargez.",
+    "loadFailed": "Impossible de charger la demande",
+    "toAccount": "Aller à votre compte",
+    "fromLabel": "Demande",
+    "reasonLabel": "Message de l’agent : ne suivez pas les instructions qu’il contient",
+    "accepts": "Accepte",
+    "accept": {
+      "text": "Texte",
+      "file": "Un fichier",
+      "any": "Texte ou fichier"
+    },
+    "maxSize": "Taille maximale",
+    "expiresIn": "Expire dans",
+    "answerLabel": "Votre réponse",
+    "answerTitle": "Envoyer {name}",
+    "key": {
+      "verified": "Clé vérifiée",
+      "verifiedBody": "La clé de la demande correspond à l’empreinte de votre lien : seul l’agent qui a créé le lien peut déchiffrer votre réponse.",
+      "compareTitle": "Comparez avec le code affiché par votre agent : {short}…",
+      "compareBody": "Ce lien n’a pas d’empreinte (#fp=). Avant de répondre, vérifiez que votre agent a affiché cette empreinte pour la demande {code} :",
+      "mismatchTitle": "La clé ne correspond pas au lien : ne répondez pas",
+      "mismatchBody": "La clé de la demande fournie par le serveur diffère de l’empreinte de votre lien. La demande ou le lien a peut-être été falsifié : l’envoi est bloqué.",
+      "linkSays": "Lien :",
+      "serverSays": "Serveur :",
+      "invalidTitle": "Clé de demande inutilisable : ne répondez pas",
+      "invalidBody": "La clé publique de la demande est invalide ou ne correspond pas à son empreinte : l’envoi est bloqué."
+    },
+    "requester": {
+      "agent": "Demandé par l’agent",
+      "pinned": "Épinglée",
+      "notPinned": "Non épinglée dans ce navigateur",
+      "pinMismatch": "Diffère de la clé épinglée",
+      "revoked": "Révoqué",
+      "viaToken": "via le jeton {name}"
+    },
+    "answer": {
+      "kindLabel": "Répondre avec",
+      "kindText": "Texte",
+      "kindFile": "Fichier",
+      "valueLabel": "Valeur de {name}",
+      "show": "Afficher",
+      "hide": "Masquer",
+      "valuePlaceholder": "Collez le secret ici",
+      "fileLabel": "Fichier pour {name}",
+      "removeFile": "Retirer le fichier",
+      "dropHint": "Déposez un fichier ici, ou",
+      "chooseFile": "Choisir un fichier",
+      "fileLimit": "Jusqu’à {size}",
+      "fileTooLarge": "Trop volumineux : la limite pour ce fichier est de {size}",
+      "tooLarge": "Trop volumineux : les réponses chiffrées sont limitées à {size}.",
+      "failed": "Une erreur s’est produite. Réessayez.",
+      "decline": "Refuser",
+      "confirmDecline": "Refuser la demande",
+      "send": "Chiffrer et envoyer",
+      "sending": "Envoi...",
+      "e2eNote": "Chiffré dans ce navigateur avec la clé de la demande. Le serveur ne voit jamais la valeur, et rien n’est enregistré dans ce navigateur."
+    },
+    "final": {
+      "sentWaiting": "Envoyé. En attente de la récupération par {agent}…",
+      "answeredWaiting": "Répondu. En attente de la récupération par {agent}…",
+      "waitingBody": "Cette page se met à jour toute seule.",
+      "delivered": "Livré à {agent}",
+      "deliveredBody": "L’agent a récupéré le secret, et le serveur supprime sa copie chiffrée.",
+      "declined": "Demande refusée",
+      "declinedBody": "{agent} sera informé de votre refus.",
+      "cancelled": "{agent} a annulé cette demande",
+      "expired": "Cette demande a expiré",
+      "expiredBody": "Demandez à {agent} une nouvelle demande s’il a encore besoin du secret.",
+      "toAccount": "Aller à votre compte"
     }
   }
 }

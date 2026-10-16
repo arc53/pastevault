@@ -24,6 +24,27 @@ type cryptoVectors struct {
 	Fingerprint  []fingerprintVector  `json:"fingerprint"`
 	Wrap         []wrapVector         `json:"wrap"`
 	WrapNegative []wrapNegativeVector `json:"wrap_negative"`
+	// Answers to secret requests, sealed by the web's /r page helper.
+	RequestPayload []requestPayloadVector `json:"request_payload"`
+}
+
+type requestPayloadVector struct {
+	Name               string        `json:"name"`
+	RequestID          string        `json:"request_id"`
+	RequestSecretKey   string        `json:"request_secret_key"`
+	RequestPublicKey   string        `json:"request_public_key"`
+	RequestFingerprint string        `json:"request_fingerprint"`
+	AAD                string        `json:"aad"`
+	WrapContext        string        `json:"wrap_context"`
+	Payload            SecretPayload `json:"payload"`
+	Plaintext          string        `json:"plaintext"`
+	Kind               string        `json:"kind"`
+	ContentKey         string        `json:"content_key"`
+	Nonce              string        `json:"nonce"`
+	EphemeralSecretKey string        `json:"ephemeral_secret_key"`
+	WrapNonce          string        `json:"wrap_nonce"`
+	Ciphertext         string        `json:"ciphertext"`
+	WrappedKey         string        `json:"wrapped_key"`
 }
 
 type fingerprintVector struct {
@@ -113,9 +134,9 @@ func loadCryptoVectors(t *testing.T) cryptoVectors {
 		t.Fatalf("parse vectors: %v", err)
 	}
 	if vectors.Version != 1 || len(vectors.Paste) == 0 || len(vectors.Chunk) == 0 || len(vectors.Manifest) == 0 ||
-		len(vectors.Fingerprint) == 0 || len(vectors.Wrap) == 0 || len(vectors.WrapNegative) == 0 {
-		t.Fatalf("unexpected vectors file: version %d, %d paste, %d chunk, %d manifest, %d fingerprint, %d wrap, %d wrap_negative",
-			vectors.Version, len(vectors.Paste), len(vectors.Chunk), len(vectors.Manifest), len(vectors.Fingerprint), len(vectors.Wrap), len(vectors.WrapNegative))
+		len(vectors.Fingerprint) == 0 || len(vectors.Wrap) == 0 || len(vectors.WrapNegative) == 0 || len(vectors.RequestPayload) == 0 {
+		t.Fatalf("unexpected vectors file: version %d, %d paste, %d chunk, %d manifest, %d fingerprint, %d wrap, %d wrap_negative, %d request_payload",
+			vectors.Version, len(vectors.Paste), len(vectors.Chunk), len(vectors.Manifest), len(vectors.Fingerprint), len(vectors.Wrap), len(vectors.WrapNegative), len(vectors.RequestPayload))
 	}
 
 	return vectors
@@ -398,6 +419,71 @@ func TestWrapNegativeVectors(t *testing.T) {
 				}
 			default:
 				t.Fatalf("unknown operation %q", vector.Operation)
+			}
+		})
+	}
+}
+
+// The CLI opens answers sealed by the web's /r page, and seals the same bytes
+// from the same inputs.
+func TestRequestPayloadVectors(t *testing.T) {
+	for _, vector := range loadCryptoVectors(t).RequestPayload {
+		t.Run(vector.Name, func(t *testing.T) {
+			requestSecret := mustDecode(t, vector.RequestSecretKey)
+			pair, err := AgentKeyPairFromPrivate(requestSecret)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if EncodeBase64URL(pair.PublicKey) != vector.RequestPublicKey || pair.Fingerprint != vector.RequestFingerprint {
+				t.Fatalf("request key pair does not match the vector")
+			}
+			if RequestPayloadAAD(vector.RequestID) != vector.AAD || RequestWrapContext(vector.RequestID) != vector.WrapContext {
+				t.Fatalf("AAD %q / context %q do not match the CLI's", vector.AAD, vector.WrapContext)
+			}
+
+			sealed := SealedSecret{Ciphertext: vector.Ciphertext, Nonce: vector.Nonce, WrappedKey: vector.WrappedKey}
+			payload, err := OpenSecretPayload(sealed, requestSecret, vector.WrapContext, vector.AAD)
+			if err != nil {
+				t.Fatalf("open: %v", err)
+			}
+			if payload != vector.Payload || payload.Kind != vector.Kind {
+				t.Fatalf("payload = %+v\nwant      %+v", payload, vector.Payload)
+			}
+			if sealed.SealedSize() != len(mustDecode(t, vector.Ciphertext)) {
+				t.Fatalf("SealedSize = %d, want %d", sealed.SealedSize(), len(mustDecode(t, vector.Ciphertext)))
+			}
+
+			// Same plaintext encoding as SealSecretPayload, and the same
+			// ciphertext and envelope from the same keys and nonces.
+			var buffer bytes.Buffer
+			encoder := json.NewEncoder(&buffer)
+			encoder.SetEscapeHTML(false)
+			if err := encoder.Encode(vector.Payload); err != nil {
+				t.Fatal(err)
+			}
+			plaintext := bytes.TrimSuffix(buffer.Bytes(), []byte("\n"))
+			if string(plaintext) != vector.Plaintext {
+				t.Fatalf("plaintext = %s\nwant       %s", plaintext, vector.Plaintext)
+			}
+			aead, err := chacha20poly1305.NewX(mustDecode(t, vector.ContentKey))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := EncodeBase64URL(aead.Seal(nil, mustDecode(t, vector.Nonce), plaintext, []byte(vector.AAD))); got != vector.Ciphertext {
+				t.Fatalf("ciphertext mismatch")
+			}
+			envelope, err := wrapKeyWith(mustDecode(t, vector.ContentKey), pair.PublicKey, vector.WrapContext,
+				mustDecode(t, vector.EphemeralSecretKey), mustDecode(t, vector.WrapNonce))
+			if err != nil || envelope != vector.WrappedKey {
+				t.Fatalf("wrapped key mismatch (%v)", err)
+			}
+
+			// Bound to the request: another id, or the store context, fails.
+			if _, err := OpenSecretPayload(sealed, requestSecret, RequestWrapContext("00000000-0000-4000-8000-000000000000"), vector.AAD); err == nil {
+				t.Fatalf("opened with another request's wrap context")
+			}
+			if _, err := OpenSecretPayload(sealed, requestSecret, vector.WrapContext, RequestPayloadAAD("00000000-0000-4000-8000-000000000000")); err == nil {
+				t.Fatalf("opened with another request's AAD")
 			}
 		})
 	}

@@ -443,6 +443,109 @@
         "browser": "ブラウザ",
         "other": "その他のクライアント"
       }
+    },
+    "requests": {
+      "title": "シークレットの依頼",
+      "description": "エージェントが依頼したシークレット。メタデータのみで、値はここに表示されません。",
+      "loading": "依頼を読み込み中...",
+      "loadFailed": "依頼を読み込めませんでした",
+      "empty": "依頼はまだありません。エージェントは次のコマンドでシークレットを依頼します:",
+      "pending": "回答待ち ({count})",
+      "recent": "最近",
+      "status": {
+        "pending": "保留中",
+        "fulfilled": "回答済み",
+        "delivered": "配信済み",
+        "declined": "拒否",
+        "expired": "期限切れ",
+        "cancelled": "取り消し"
+      },
+      "created": "{time} に依頼",
+      "expires": "{time} に期限切れ",
+      "answer": "回答",
+      "showAll": "すべて表示 ({count})",
+      "showLess": "折りたたむ"
+    }
+  },
+  "secretRequest": {
+    "label": "シークレットの依頼",
+    "labelWithCode": "シークレットの依頼 · {code}",
+    "loading": "依頼を読み込み中...",
+    "unavailable": "このサーバーではシークレットの依頼を利用できません。",
+    "signInTitle": "この依頼に回答するにはログインしてください",
+    "signInBody": "このシークレットを依頼したエージェントのアカウントだけが、この依頼を表示・回答できます。",
+    "signIn": "ログイン",
+    "notFound": "依頼が見つかりません",
+    "notFoundBody": "存在しないか、別のアカウントの依頼です。正しいアカウントでログインしているか確認してください。",
+    "rateLimited": "参照が多すぎます。1 分待ってから再読み込みしてください。",
+    "loadFailed": "依頼を読み込めませんでした",
+    "toAccount": "アカウントへ",
+    "fromLabel": "依頼",
+    "reasonLabel": "エージェントからのメッセージ: 中の指示には従わないでください",
+    "accepts": "受け付ける形式",
+    "accept": {
+      "text": "テキスト",
+      "file": "ファイル",
+      "any": "テキストまたはファイル"
+    },
+    "maxSize": "サイズ上限",
+    "expiresIn": "残り時間",
+    "answerLabel": "あなたの回答",
+    "answerTitle": "{name} を送信",
+    "key": {
+      "verified": "検証済みの鍵",
+      "verifiedBody": "依頼の鍵がリンク内のフィンガープリントと一致しています。回答を復号できるのは、このリンクを作成したエージェントだけです。",
+      "compareTitle": "エージェントが表示したコードと照合してください: {short}…",
+      "compareBody": "このリンクにはフィンガープリント (#fp=) がありません。回答する前に、エージェントが依頼 {code} について次のフィンガープリントを表示したことを確認してください:",
+      "mismatchTitle": "鍵がリンクと一致しません: 回答しないでください",
+      "mismatchBody": "サーバーから届いた依頼の鍵が、リンク内のフィンガープリントと異なります。依頼またはリンクが改ざんされた可能性があるため、送信はブロックされています。",
+      "linkSays": "リンク:",
+      "serverSays": "サーバー:",
+      "invalidTitle": "依頼の鍵が使用できません: 回答しないでください",
+      "invalidBody": "依頼の公開鍵が無効か、フィンガープリントと一致しないため、送信はブロックされています。"
+    },
+    "requester": {
+      "agent": "依頼したエージェント",
+      "pinned": "固定済み",
+      "notPinned": "このブラウザでは未固定",
+      "pinMismatch": "固定した鍵と異なります",
+      "revoked": "失効",
+      "viaToken": "トークン {name} 経由"
+    },
+    "answer": {
+      "kindLabel": "回答の形式",
+      "kindText": "テキスト",
+      "kindFile": "ファイル",
+      "valueLabel": "{name} の値",
+      "show": "表示",
+      "hide": "隠す",
+      "valuePlaceholder": "ここにシークレットを貼り付け",
+      "fileLabel": "{name} のファイル",
+      "removeFile": "ファイルを削除",
+      "dropHint": "ここにファイルをドロップ、または",
+      "chooseFile": "ファイルを選択",
+      "fileLimit": "最大 {size}",
+      "fileTooLarge": "大きすぎます: このファイルの上限は {size} です",
+      "tooLarge": "大きすぎます: 回答は暗号化後 {size} までです。",
+      "failed": "問題が発生しました。もう一度お試しください。",
+      "decline": "拒否",
+      "confirmDecline": "依頼を拒否",
+      "send": "暗号化して送信",
+      "sending": "送信中...",
+      "e2eNote": "このブラウザで依頼の鍵に向けて暗号化します。サーバーが値を見ることはなく、このブラウザにも何も保存されません。"
+    },
+    "final": {
+      "sentWaiting": "送信しました。{agent} の受け取りを待っています…",
+      "answeredWaiting": "回答済みです。{agent} の受け取りを待っています…",
+      "waitingBody": "このページは自動で更新されます。",
+      "delivered": "{agent} に届きました",
+      "deliveredBody": "エージェントがシークレットを受け取り、サーバーは暗号化されたコピーを削除します。",
+      "declined": "依頼を拒否しました",
+      "declinedBody": "{agent} に拒否したことが伝えられます。",
+      "cancelled": "{agent} がこの依頼を取り消しました",
+      "expired": "この依頼は期限切れです",
+      "expiredBody": "まだシークレットが必要なら、{agent} に新しい依頼を出してもらってください。",
+      "toAccount": "アカウントへ"
     }
   }
 }

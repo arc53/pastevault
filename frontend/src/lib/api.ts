@@ -9,6 +9,9 @@ import {
   ListShareEventsResponse,
   RevokeAgentResponse,
   ApiTokenSummary,
+  FulfillSecretRequestBody,
+  ListSecretRequestsResponse,
+  SecretRequestDetails,
   CompleteFileShareRequest,
   CreateFileShareRequest,
   CreateFileShareResponse,
@@ -238,6 +241,28 @@ export const api = {
     return apiRequest(`/account/tokens/${encodeURIComponent(tokenId)}`, {
       method: 'DELETE',
     })
+  },
+
+  // The first lookup marks the request as opened. Session only.
+  async getSecretRequestByCode(code: string): Promise<SecretRequestDetails> {
+    return apiRequest(`/secret-requests/by-code/${encodeURIComponent(code)}`)
+  },
+
+  async fulfillSecretRequest(requestId: string, body: FulfillSecretRequestBody): Promise<{ status: string }> {
+    return apiRequest(`/secret-requests/${encodeURIComponent(requestId)}/fulfill`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  },
+
+  async declineSecretRequest(requestId: string): Promise<{ status: string }> {
+    return apiRequest(`/secret-requests/${encodeURIComponent(requestId)}/decline`, {
+      method: 'POST',
+    })
+  },
+
+  async getSecretRequests(): Promise<ListSecretRequestsResponse> {
+    return apiRequest('/account/secret-requests')
   },
 
   async downloadFileShareChunk(

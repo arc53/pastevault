@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Generates testdata/crypto/vectors.json from the web app's own crypto code
-// (frontend/src/lib/crypto.ts, file-shares.ts, fingerprint.ts and wrap.ts), so other implementations
+// (frontend/src/lib/crypto.ts, file-shares.ts, fingerprint.ts, wrap.ts and
+// secret-requests.ts), so other implementations
 // (the Go CLI: internal/pastevault/*_test.go) can prove they produce and read
 // exactly the same bytes.
 //
@@ -420,6 +421,89 @@ async function wrapNegativeVectors({ wrap, fingerprint }) {
   return vectors
 }
 
+// Answers to secret requests, sealed by the web page's own helper
+// (frontend/src/lib/secret-requests.ts) and rebuilt from the primitives.
+async function requestPayloadVectors({ secretRequests, fingerprint }) {
+  const cases = [
+    {
+      name: 'request-payload-text',
+      requestId: '3f2c8a4e-7b1d-4c9e-8f60-2a5b9d0e1c73',
+      payload: secretRequests.textPayload('OPENAI_API_KEY', 'sk-test-Ünïcödé "quoted" <b>&amp;</b>\n2nd line'),
+      requestSecretKey: bytes(32, 0x33),
+      contentKey: bytes(32, 0x44),
+      nonce: bytes(24, 0x55),
+      ephemeralSecretKey: bytes(32, 0x66),
+      wrapNonce: bytes(24, 0x77),
+    },
+    {
+      name: 'request-payload-file',
+      requestId: '9a0b1c2d-3e4f-4a5b-8c6d-7e8f90a1b2c3',
+      payload: secretRequests.filePayload('TLS_KEY', 'server.key', 'application/x-pem-file', bytes(70, 0xfa)),
+      requestSecretKey: bytes(32, 0x88),
+      contentKey: bytes(32, 0x99),
+      nonce: bytes(24, 0xaa),
+      ephemeralSecretKey: bytes(32, 0xbb),
+      wrapNonce: bytes(24, 0xcc),
+    },
+  ]
+
+  const vectors = []
+  for (const testCase of cases) {
+    const requestPublicKey = x25519.getPublicKey(testCase.requestSecretKey)
+    const sealed = await withRandom(
+      [testCase.contentKey, testCase.nonce, testCase.ephemeralSecretKey, testCase.wrapNonce],
+      () => secretRequests.sealSecretPayload(testCase.payload, testCase.requestId, requestPublicKey)
+    )
+    const plaintext = JSON.stringify(testCase.payload)
+    const aad = `pastevault:request:${testCase.requestId}:v1`
+    const context = `request:${testCase.requestId}`
+
+    // Independent rebuild from the primitives.
+    const ciphertext = xchacha20poly1305(testCase.contentKey, testCase.nonce, Buffer.from(aad)).encrypt(
+      Buffer.from(plaintext)
+    )
+    assert.equal(sealed.ciphertext, b64url(ciphertext))
+    assert.equal(sealed.nonce, b64url(testCase.nonce))
+    assert.equal(
+      sealed.wrapped_key,
+      manualWrap({
+        contentKey: testCase.contentKey,
+        recipientPublicKey: requestPublicKey,
+        aadFingerprint: fingerprint.agentFingerprint(requestPublicKey),
+        context,
+        ephemeralSecretKey: testCase.ephemeralSecretKey,
+        nonce: testCase.wrapNonce,
+      }).envelope
+    )
+    assert.equal(secretRequests.sealedSize(testCase.payload), Buffer.from(sealed.ciphertext, 'base64url').length)
+    assert.deepEqual(
+      secretRequests.openSecretPayload(sealed, testCase.requestSecretKey, testCase.requestId),
+      testCase.payload
+    )
+
+    vectors.push({
+      name: testCase.name,
+      request_id: testCase.requestId,
+      request_secret_key: b64url(testCase.requestSecretKey),
+      request_public_key: b64url(requestPublicKey),
+      request_fingerprint: fingerprint.agentFingerprint(requestPublicKey),
+      aad,
+      wrap_context: context,
+      payload: testCase.payload,
+      plaintext,
+      kind: sealed.kind,
+      content_key: b64url(testCase.contentKey),
+      nonce: sealed.nonce,
+      ephemeral_secret_key: b64url(testCase.ephemeralSecretKey),
+      wrap_nonce: b64url(testCase.wrapNonce),
+      ciphertext: sealed.ciphertext,
+      wrapped_key: sealed.wrapped_key,
+    })
+  }
+
+  return vectors
+}
+
 const SECTIONS = [
   ['paste', pasteVectors],
   ['chunk', chunkVectors],
@@ -427,6 +511,7 @@ const SECTIONS = [
   ['fingerprint', fingerprintVectors],
   ['wrap', wrapVectors],
   ['wrap_negative', wrapNegativeVectors],
+  ['request_payload', requestPayloadVectors],
 ]
 
 async function generate() {
@@ -435,6 +520,7 @@ async function generate() {
     fileShares: await importFrontend('lib/file-shares.ts'),
     fingerprint: await importFrontend('lib/fingerprint.ts'),
     wrap: await importFrontend('lib/wrap.ts'),
+    secretRequests: await importFrontend('lib/secret-requests.ts'),
   }
 
   const document = {

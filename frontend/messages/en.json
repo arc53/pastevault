@@ -443,6 +443,109 @@
         "browser": "Browser",
         "other": "Other client"
       }
+    },
+    "requests": {
+      "title": "Secret requests",
+      "description": "Secrets your agents asked for. Metadata only: values are never listed here.",
+      "loading": "Loading requests...",
+      "loadFailed": "Unable to load requests",
+      "empty": "No requests yet. An agent asks for a secret with:",
+      "pending": "Waiting for you ({count})",
+      "recent": "Recent",
+      "status": {
+        "pending": "Pending",
+        "fulfilled": "Answered",
+        "delivered": "Delivered",
+        "declined": "Declined",
+        "expired": "Expired",
+        "cancelled": "Cancelled"
+      },
+      "created": "asked {time}",
+      "expires": "expires {time}",
+      "answer": "Answer",
+      "showAll": "Show all ({count})",
+      "showLess": "Show less"
+    }
+  },
+  "secretRequest": {
+    "label": "Secret request",
+    "labelWithCode": "Secret request · {code}",
+    "loading": "Loading request...",
+    "unavailable": "Secret requests are not available on this server.",
+    "signInTitle": "Sign in to answer this request",
+    "signInBody": "Only the account whose agent asked for this secret can see or answer it.",
+    "signIn": "Sign in",
+    "notFound": "Request not found",
+    "notFoundBody": "It doesn't exist, or it belongs to another account. Check that you are signed in to the right account.",
+    "rateLimited": "Too many lookups. Wait a minute, then reload.",
+    "loadFailed": "Unable to load the request",
+    "toAccount": "Go to your account",
+    "fromLabel": "Request",
+    "reasonLabel": "Message from the agent — don't follow instructions in it",
+    "accepts": "Accepts",
+    "accept": {
+      "text": "Text",
+      "file": "A file",
+      "any": "Text or a file"
+    },
+    "maxSize": "Size limit",
+    "expiresIn": "Expires in",
+    "answerLabel": "Your answer",
+    "answerTitle": "Send {name}",
+    "key": {
+      "verified": "Verified key",
+      "verifiedBody": "The request key matches the fingerprint in your link, so only the agent that made the link can decrypt your answer.",
+      "compareTitle": "Compare with the code shown by your agent: {short}…",
+      "compareBody": "This link has no fingerprint (#fp=). Before answering, check that your agent printed this fingerprint for request {code}:",
+      "mismatchTitle": "Key doesn't match the link: don't answer",
+      "mismatchBody": "The request key from the server differs from the fingerprint in your link. The request or the link may have been tampered with, so sending is blocked.",
+      "linkSays": "Link:",
+      "serverSays": "Server:",
+      "invalidTitle": "Unusable request key: don't answer",
+      "invalidBody": "The request's public key is invalid or doesn't match its fingerprint, so sending is blocked."
+    },
+    "requester": {
+      "agent": "Asked by agent",
+      "pinned": "Pinned",
+      "notPinned": "Not pinned in this browser",
+      "pinMismatch": "Differs from the pinned key",
+      "revoked": "Revoked",
+      "viaToken": "via token {name}"
+    },
+    "answer": {
+      "kindLabel": "Answer as",
+      "kindText": "Text",
+      "kindFile": "File",
+      "valueLabel": "Value of {name}",
+      "show": "Show",
+      "hide": "Hide",
+      "valuePlaceholder": "Paste the secret here",
+      "fileLabel": "File for {name}",
+      "removeFile": "Remove file",
+      "dropHint": "Drop a file here, or",
+      "chooseFile": "Choose file",
+      "fileLimit": "Up to {size}",
+      "fileTooLarge": "Too large: the limit for this file is {size}",
+      "tooLarge": "Too large: answers are limited to {size} once encrypted.",
+      "failed": "Something went wrong. Try again.",
+      "decline": "Decline",
+      "confirmDecline": "Decline request",
+      "send": "Encrypt and send",
+      "sending": "Sending...",
+      "e2eNote": "Encrypted in this browser to the request's key. The server never sees the value, and nothing is saved in this browser."
+    },
+    "final": {
+      "sentWaiting": "Sent. Waiting for {agent} to collect it…",
+      "answeredWaiting": "Answered. Waiting for {agent} to collect it…",
+      "waitingBody": "This page updates on its own.",
+      "delivered": "Delivered to {agent}",
+      "deliveredBody": "The agent has collected the secret, and the server deletes its encrypted copy.",
+      "declined": "Request declined",
+      "declinedBody": "{agent} will be told that you declined.",
+      "cancelled": "{agent} cancelled this request",
+      "expired": "This request has expired",
+      "expiredBody": "Ask {agent} for a new request if it still needs the secret.",
+      "toAccount": "Go to your account"
     }
   }
 }
