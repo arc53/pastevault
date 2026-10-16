@@ -260,13 +260,22 @@ export async function revokeAgent(principal: Principal, id: string, request: Fas
   }
 
   const actor = auditActorFor(principal, principal.user.id)
+  // Its open secret requests are cancelled (and answers wiped): nobody may
+  // answer, or collect an answer, for an agent that no longer exists.
+  const { cancelRequestsOfAgent } = await import('./secret-requests.js')
+  const requestsCancelled = await cancelRequestsOfAgent(principal.user.id, agent.id, actor, request)
   await recordAuditEvent({
     user_id: principal.user.id,
     subject_type: 'agent',
     subject_id: agent.id,
     event: 'agent.revoked',
     actor,
-    details: { name: agent.name, fingerprint: agent.fingerprint, tokens_revoked: tokens.length },
+    details: {
+      name: agent.name,
+      fingerprint: agent.fingerprint,
+      tokens_revoked: tokens.length,
+      requests_cancelled: requestsCancelled,
+    },
     request,
   })
   for (const token of tokens) {

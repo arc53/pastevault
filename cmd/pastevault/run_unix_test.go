@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"sync"
 	"syscall"
@@ -69,5 +70,45 @@ func TestRunForwardsSignals(t *testing.T) {
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("the signal was not forwarded")
+	}
+}
+
+// A signal that arrives before the command has started is replayed to it
+// once it has (it used to be dropped, and the forwarder raced with Start).
+func TestSignalBeforeStartIsReplayed(t *testing.T) {
+	attach, stop := forwardSignals()
+	defer stop()
+	if err := syscall.Kill(os.Getpid(), syscall.SIGUSR1); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(100 * time.Millisecond)
+
+	child := exec.Command("sleep", "10")
+	if err := child.Start(); err != nil {
+		t.Fatal(err)
+	}
+	attach(child.Process)
+	started := time.Now()
+	_ = child.Wait()
+	if code := childExitCode(child.ProcessState); code != 128+int(syscall.SIGUSR1) || time.Since(started) > 5*time.Second {
+		t.Fatalf("exit %d after %s, want %d at once", code, time.Since(started), 128+int(syscall.SIGUSR1))
+	}
+}
+
+// Masked output must not keep run waiting for background processes the
+// command left behind (they hold the output pipe open).
+func TestRunDoesNotWaitForBackgroundProcesses(t *testing.T) {
+	withAgent(t)
+	importSecret(t, "TOKEN", "background-secret-value")
+	envFile := writeFile(t, ".env.pv", "T=pv://secret/TOKEN\n", 0o600)
+
+	started := time.Now()
+	result := runCLI(t, "", false, "run", "--env-file", envFile, "--", "sh", "-c", `sleep 8 & echo "started $T"`)
+	elapsed := time.Since(started)
+	if result.exit != 0 || result.stdout != "started [masked:T]\n" {
+		t.Fatalf("exit %d, stdout %q, stderr %s", result.exit, result.stdout, result.stderr)
+	}
+	if elapsed > 4*time.Second {
+		t.Fatalf("run waited %s for a background process", elapsed)
 	}
 }

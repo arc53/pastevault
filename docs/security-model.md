@@ -59,14 +59,15 @@ Share titles, file names and content are encrypted and not visible to it.
 
 ### A leaked API token
 
-Tokens (`pv_pat_…`) are scoped, expire (90 days by default), can be revoked, and are stored as SHA-256 hashes. An agent-bound token can only act for its own agent's shares and requests. Tokens cannot create or revoke tokens, and are never accepted on the login endpoints. The fixed `pv_pat_` prefix lets secret scanners find leaked tokens. `run` strips `PASTEVAULT_TOKEN`, `PASTEVAULT_PASSWORD` and `PASTEVAULT_AGENT_KEY` from the command's environment.
+Tokens (`pv_pat_…`) are scoped, expire (90 days by default), can be revoked, and are stored as SHA-256 hashes. An agent-bound token can only act for its own agent's shares and requests. **Only an agent-bound token (or the login session) can create a secret request**, and only for its own agent: a leaked unbound token cannot post "agent X asks for OPENAI_API_KEY" to phish the account's human (the `#fp=` check would pass, because the attacker made the link). Revoking an agent cancels its open requests and wipes answers it has not collected. Tokens cannot create or revoke tokens, and are never accepted on the login endpoints. The fixed `pv_pat_` prefix lets secret scanners find leaked tokens. `run` strips `PASTEVAULT_TOKEN`, `PASTEVAULT_PASSWORD` and `PASTEVAULT_AGENT_KEY` from the command's environment.
 
 ### A compromised agent host
 
 Agent private keys, the local store, request files and stored credentials are `0600` files of the same OS user (on Windows they inherit the profile directory's ACL). **Any code running as that user can read them**, including the agent itself.
 
 - `run` masking and the MCP server's no-plaintext policy protect **transcripts and logs**. They are not a security boundary against the agent process: a command run with secrets can read its own environment, write the value to a file, send it over the network, or transform it in ways the masker cannot recognise (see "What masking does and does not do" in the CLI reference).
-- `secret reveal` refuses to run without a terminal on stdin and stdout. That is friction against agents printing secrets, not a boundary.
+- `secret reveal` refuses to run without a terminal on stdin and stdout. That is friction against agents printing secrets, not a boundary: `pastevault run --no-mask -- printenv NAME` and `pastevault inject -i - --stdout` print values without a terminal.
+- The masker covers common encodings (base64, hex, several URL percent-encodings incl. URL userinfo, JSON escaping, multi-line values line by line) but not all; the CLI reference lists the gaps.
 - OS keychain storage for agent keys is a possible follow-up.
 
 ### Prompt injection through MCP

@@ -399,3 +399,85 @@ func FuzzMaskerSplits(f *testing.F) {
 		}
 	})
 }
+
+// URL encodings seen in practice, spelled out by hand (not computed with
+// the masker's own helpers).
+func TestURLEncodingVariants(t *testing.T) {
+	value := `p@ss/w:rd+x y~z!*'()#`
+	m := mustMasker(t, Secret{Name: "PW", Value: []byte(value)})
+
+	for name, encoded := range map[string]string{
+		"strict RFC 3986 (curl --data-urlencode)": `p%40ss%2Fw%3Ard%2Bx%20y~z%21%2A%27%28%29%23`,
+		"strict, lower-case hex":                  `p%40ss%2fw%3ard%2bx%20y~z%21%2a%27%28%29%23`,
+		"JavaScript encodeURIComponent":           `p%40ss%2Fw%3Ard%2Bx%20y~z!*'()%23`,
+		"encodeURIComponent, lower-case hex":      `p%40ss%2fw%3ard%2bx%20y~z!*'()%23`,
+		"Python quote (keeps /)":                  `p%40ss/w%3Ard%2Bx%20y~z%21%2A%27%28%29%23`,
+		"Python quote_plus":                       `p%40ss%2Fw%3Ard%2Bx+y~z%21%2A%27%28%29%23`,
+		"quote_plus, lower-case hex":              `p%40ss%2fw%3ard%2bx+y~z%21%2a%27%28%29%23`,
+		"WHATWG userinfo (Node, browsers)":        `p%40ss%2Fw%3Ard+x%20y~z!*'()%23`,
+	} {
+		line := "before " + encoded + " after"
+		got := m.MaskString(line)
+		if got != "before [masked:PW] after" {
+			t.Errorf("%s: %q -> %q", name, line, got)
+		}
+	}
+
+	// A password inside a logged connection URL, escaped by Go and by Node.
+	for _, logged := range []string{
+		"dsn=" + (&url.URL{Scheme: "postgres", User: url.UserPassword("app", value), Host: "db:5432", Path: "/x"}).String(),
+		"dsn=postgres://app:p%40ss%2Fw%3Ard+x%20y~z!*'()%23@db:5432/x",
+	} {
+		got := m.MaskString(logged)
+		if !strings.Contains(got, "postgres://app:[masked:PW]@db:5432/x") {
+			t.Errorf("%q -> %q", logged, got)
+		}
+	}
+}
+
+func TestMultiLineSecrets(t *testing.T) {
+	lines := []string{
+		"-----BEGIN PRIVATE KEY-----",
+		"MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7",
+		"aV3xQ9bLmT2yZp8wKf4sRj6NcE1uHd0oGq5tWvXiYk7lBn3MzAe",
+		"Short",
+		"-----END PRIVATE KEY-----",
+	}
+	value := strings.Join(lines, "\n") + "\n"
+	m := mustMasker(t, Secret{Name: "KEY", Value: []byte(value)})
+
+	crlf := strings.ReplaceAll(value, "\n", "\r\n")
+	if got := m.MaskString("key:\r\n" + crlf + "done"); got != "key:\r\n[masked:KEY]done" {
+		t.Errorf("CRLF: %q", got)
+	}
+
+	// Every line with a log prefix: each long line is masked on its own.
+	var prefixed strings.Builder
+	for _, line := range lines {
+		prefixed.WriteString("app-1 | " + line + "\n")
+	}
+	got := m.MaskString(prefixed.String())
+	for _, line := range lines[1:3] {
+		if strings.Contains(got, line) {
+			t.Errorf("line %q leaked:\n%s", line, got)
+		}
+	}
+	if !strings.Contains(got, "app-1 | Short\n") {
+		t.Errorf("a line under %d bytes is not a pattern:\n%s", MinSecretLength, got)
+	}
+
+	// Indented lines (e.g. YAML) and a value given with CRLF, printed with LF.
+	m = mustMasker(t, Secret{Name: "KEY", Value: []byte(crlf)})
+	if got := m.MaskString(value); got != "[masked:KEY]" {
+		t.Errorf("CRLF value printed with LF: %q", got)
+	}
+	if got := m.MaskString("    " + lines[1] + "\n"); got != "    [masked:KEY]\n" {
+		t.Errorf("indented line: %q", got)
+	}
+
+	// Blank-ish lines never become patterns.
+	m = mustMasker(t, Secret{Name: "PAD", Value: []byte("abcdefgh\n          \n12345678")})
+	if got := m.MaskString("x          y"); got != "x          y" {
+		t.Errorf("whitespace line was masked: %q", got)
+	}
+}

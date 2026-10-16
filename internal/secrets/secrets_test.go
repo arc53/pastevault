@@ -364,3 +364,82 @@ func TestResolver(t *testing.T) {
 		t.Fatalf("legacy URL = %q %v", value, err)
 	}
 }
+
+// Errors never delete the request file: it holds the only key for the answer.
+func TestCheckKeepsRequestFileOnErrors(t *testing.T) {
+	isolate(t)
+	fake, client := newFakeServer(t)
+	agent := newAgent(t, client.BaseURL(), "builder", "agent-1")
+	pending, err := NewRequest(context.Background(), client, "https://x", agent, RequestOptions{Name: "TOKEN", TTL: time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, answer := range []func() (int, any){
+		func() (int, any) { return 404, map[string]string{"error": "Secret request not found"} },
+		func() (int, any) { return 401, map[string]string{"error": "invalid_token"} },
+		func() (int, any) { return 403, map[string]string{"error": "other_agent"} },
+		func() (int, any) { return 500, map[string]string{"error": "boom"} },
+	} {
+		fake.answers = []func() (int, any){answer}
+		if _, err := Check(context.Background(), client, pending); err == nil {
+			t.Fatal("expected an error")
+		}
+		if _, err := os.Stat(pending.Path); err != nil {
+			t.Fatalf("the request file was deleted after an error: %v", err)
+		}
+	}
+}
+
+// Two requests saved under one name: the later answer is stored under a
+// fallback name instead of being lost after delivery.
+func TestAnswerStoredUnderFallbackName(t *testing.T) {
+	isolate(t)
+	fake, client := newFakeServer(t)
+	agent := newAgent(t, client.BaseURL(), "builder", "agent-1")
+	pending, err := NewRequest(context.Background(), client, "https://x", agent, RequestOptions{Name: "TOKEN", TTL: time.Minute})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Meanwhile something else stored TOKEN.
+	target, _ := store.Open(client.BaseURL(), agent)
+	payload, _ := pv.NewTextPayload("x", []byte("first-answer"))
+	if _, err := target.Put("TOKEN", payload, store.Source{Type: store.SourceImport}, false); err != nil {
+		t.Fatal(err)
+	}
+
+	fake.answers = []func() (int, any){fulfilled(t, func() *pv.PendingRequest { return pending }, "second-answer")}
+	outcome, err := Check(context.Background(), client, pending)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !outcome.Renamed || outcome.SavedAs != "TOKEN.ABCDEFGH" || outcome.Handle != "pv://secret/TOKEN.ABCDEFGH" || fake.acks != 1 {
+		t.Fatalf("outcome = %+v (acks %d)", outcome, fake.acks)
+	}
+	_, first, _ := target.Get("TOKEN")
+	_, second, _ := target.Get("TOKEN.ABCDEFGH")
+	if first.Value != "first-answer" || second.Value != "second-answer" {
+		t.Fatalf("values %q %q", first.Value, second.Value)
+	}
+
+	// Crash recovery finds the fallback entry again.
+	if err := pv.SavePendingRequest(pending); err != nil {
+		t.Fatal(err)
+	}
+	fake.answers = []func() (int, any){status(pv.RequestDelivered)}
+	outcome, err = Check(context.Background(), client, pending)
+	if err != nil || outcome.Status != OutcomeStored || outcome.SavedAs != "TOKEN.ABCDEFGH" {
+		t.Fatalf("recovered = %+v %v", outcome, err)
+	}
+
+	// With Overwrite (await --overwrite) the name is replaced instead.
+	pending2, _ := NewRequest(context.Background(), client, "https://x", agent, RequestOptions{Name: "OTHER", TTL: time.Minute})
+	_, _ = target.Put("OTHER", payload, store.Source{Type: store.SourceImport}, false)
+	pending2.Overwrite = true
+	fake.answers = []func() (int, any){fulfilled(t, func() *pv.PendingRequest { return pending2 }, "replacement")}
+	outcome, err = Check(context.Background(), client, pending2)
+	if err != nil || outcome.Renamed || outcome.SavedAs != "OTHER" {
+		t.Fatalf("overwrite = %+v %v", outcome, err)
+	}
+}

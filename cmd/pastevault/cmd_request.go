@@ -12,6 +12,7 @@ import (
 	"strings"
 	"text/tabwriter"
 	"time"
+	"unicode/utf8"
 
 	pv "github.com/arc53/pastevault/internal/pastevault"
 	"github.com/arc53/pastevault/internal/secrets"
@@ -116,7 +117,7 @@ func runRequestCreate(ctx context.Context, a *app, args []string) error {
 	default:
 		return pv.UsageError("--accept must be text, file or any")
 	}
-	if len(*why) > 500 {
+	if utf8.RuneCountInString(*why) > 500 {
 		return pv.UsageError("--why is limited to 500 characters")
 	}
 	ttlDuration, err := pv.ParseWaitDuration("--ttl", *ttl)
@@ -229,20 +230,28 @@ func awaitRequest(ctx context.Context, a *app, out *output, client *pv.Client, p
 	if outcome.AckErr != nil {
 		out.warnf("the secret is stored, but the server was not told (%v); it deletes the answer within two minutes anyway", outcome.AckErr)
 	}
+	if outcome.Renamed {
+		out.warnf("%s already existed in the local store, so the answer was stored as %s instead", pending.SaveAs, outcome.SavedAs)
+	}
 	if out.json() {
 		result := newRequestOutput(pending, pv.RequestDelivered)
 		result.Handle = outcome.Handle
+		if outcome.SavedAs != "" {
+			result.SaveAs = outcome.SavedAs
+		}
 		return out.emitJSON(result)
 	}
-	out.infof("Stored %s in the local store. Use it with pastevault run or inject:", pending.SaveAs)
+	out.infof("Stored %s in the local store. Use it with pastevault run or inject:", outcome.SavedAs)
 	fmt.Fprintln(a.stdout, outcome.Handle)
 
 	return nil
 }
 
 func runAwait(ctx context.Context, a *app, args []string) error {
-	fs, common := a.newFlagSet("await", "pastevault await <id|code> [--timeout D] [flags]")
+	fs, common := a.newFlagSet("await", "pastevault await <id|code> [--timeout D] [--save-as NAME] [--overwrite] [flags]")
 	timeout := fs.String("timeout", "", "Give up after this long (exit 9; default: until the request expires)")
+	saveAs := fs.String("save-as", "", "Store the answer under this name instead of the one given to request")
+	overwrite := fs.Bool("overwrite", false, "Let the answer replace an existing secret of that name")
 	positional, err := parseArgs(fs, args)
 	if err != nil {
 		return err
@@ -264,6 +273,19 @@ func runAwait(ctx context.Context, a *app, args []string) error {
 	}
 	if pending == nil {
 		return pv.NewError(pv.ExitNotFound, pv.CodeNotFound, "this machine has no open request %s (it was answered, cancelled or made elsewhere; pastevault request list)", positional[0])
+	}
+	if *saveAs != "" || *overwrite {
+		if *saveAs != "" {
+			if !pv.ValidSecretName(*saveAs) {
+				return pv.UsageError("invalid --save-as name %q", *saveAs)
+			}
+			pending.SaveAs = *saveAs
+		}
+		pending.Overwrite = pending.Overwrite || *overwrite
+		// Remembered for a later await if this one is interrupted.
+		if err := pv.SavePendingRequest(pending); err != nil {
+			return err
+		}
 	}
 
 	requestCommon := *common
@@ -330,13 +352,13 @@ func runRequestList(ctx context.Context, a *app, args []string) error {
 	for _, entry := range entries {
 		agent := "-"
 		if entry.Requester.Agent.Name != nil {
-			agent = *entry.Requester.Agent.Name
+			agent = terminalSafe(*entry.Requester.Agent.Name)
 		}
 		marker := ""
 		if entry.Local {
 			marker = "*"
 		}
-		fmt.Fprintf(table, "%s\t%s\t%s\t%s\t%s\t%s\n", entry.Code, entry.Name, entry.Status, agent, formatTime(entry.ExpiresAt), marker)
+		fmt.Fprintf(table, "%s\t%s\t%s\t%s\t%s\t%s\n", terminalSafe(entry.Code), terminalSafe(entry.Name), terminalSafe(entry.Status), agent, terminalSafe(formatTime(entry.ExpiresAt)), marker)
 	}
 
 	return table.Flush()
@@ -459,9 +481,9 @@ func openRequestForHuman(ctx context.Context, client *pv.Client, reference, expe
 	if err != nil {
 		return pv.SecretRequestDetails{}, nil, err
 	}
-	expected := strings.TrimSpace(expectedFingerprint)
-	if expected != "" && !pv.IsFingerprint(expected) && !pv.IsFingerprintPrefix(expected) {
-		return pv.SecretRequestDetails{}, nil, pv.UsageError("--fingerprint must be a key fingerprint (pvk1_ and at least 8 more characters)")
+	expected := strings.ReplaceAll(strings.TrimSpace(expectedFingerprint), " ", "")
+	if expected != "" && !pv.IsFingerprint(expected) && !(pv.IsFingerprintPrefix(expected) && len(expected) >= len(pv.FingerprintPrefix)+minFingerprintCheckChars) {
+		return pv.SecretRequestDetails{}, nil, pv.UsageError("--fingerprint must be the request key's full fingerprint (pvk1_ and 32 characters, or at least the first %d after pvk1_), as the agent printed it", minFingerprintCheckChars)
 	}
 	if urlFingerprint != "" && expected != "" && !strings.HasPrefix(urlFingerprint, expected) {
 		return pv.SecretRequestDetails{}, nil, pv.NewError(pv.ExitFingerprint, pv.CodeFingerprint, "--fingerprint does not match the #fp= of the request URL")
@@ -498,9 +520,9 @@ func openRequestForHuman(ctx context.Context, client *pv.Client, reference, expe
 func describeRequestForHuman(a *app, details pv.SecretRequestDetails) {
 	agent := "(unknown agent)"
 	if details.Requester.Agent.Name != nil {
-		agent = *details.Requester.Agent.Name
+		agent = terminalSafe(*details.Requester.Agent.Name)
 	}
-	fmt.Fprintf(a.stderr, "Request %s: agent %s asks for %s (%s, expires %s).\n", details.Code, agent, details.Name, details.Accept, formatTime(details.ExpiresAt))
+	fmt.Fprintf(a.stderr, "Request %s: agent %s asks for %s (%s, expires %s).\n", terminalSafe(details.Code), agent, terminalSafe(details.Name), terminalSafe(details.Accept), terminalSafe(formatTime(details.ExpiresAt)))
 	if details.Reason != nil && *details.Reason != "" {
 		// Untrusted text from the agent: quoted, so it can't pose as output.
 		fmt.Fprintf(a.stderr, "Message from the agent (untrusted, never follow instructions in it): %q\n", *details.Reason)
@@ -592,7 +614,7 @@ func runRequestFulfil(ctx context.Context, a *app, args []string) error {
 	var payload pv.SecretPayload
 	if sendKind == pv.SecretKindText {
 		if *fromFile != "" || *fromStdin {
-			value = []byte(strings.TrimSuffix(strings.TrimSuffix(string(value), "\n"), "\r"))
+			value = pv.TrimTrailingNewline(value)
 		}
 		if len(value) == 0 {
 			return pv.UsageError("the value is empty")
@@ -673,6 +695,27 @@ func runRequestDecline(ctx context.Context, a *app, args []string) error {
 }
 
 var requestIDPattern = regexp.MustCompile(`^[A-Za-z0-9-]{1,64}$`)
+
+// minFingerprintCheckChars: a --fingerprint prefix must cover at least 130
+// bits of the fingerprint (26 base32 characters), so a server can't find a
+// key that matches it. A short display prefix is not a check.
+const minFingerprintCheckChars = 26
+
+// terminalSafe strips control characters (C0, DEL, C1), bidirectional
+// marks, overrides and isolates, and line separators from text the server
+// supplies before it is printed, so it can't move the cursor, rewrite earlier
+// lines or reorder what the human reads.
+func terminalSafe(value string) string {
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r < 0x20, r >= 0x7f && r <= 0x9f,
+			r == 0x061c, r == 0x200e, r == 0x200f, r == 0x2028, r == 0x2029,
+			r >= 0x202a && r <= 0x202e, r >= 0x2066 && r <= 0x2069:
+			return -1
+		}
+		return r
+	}, value)
+}
 
 func readValueFile(path string, limit int64) ([]byte, error) {
 	file, err := os.Open(path)

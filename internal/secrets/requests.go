@@ -8,7 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
+	"strings"
 	"time"
 
 	pv "github.com/arc53/pastevault/internal/pastevault"
@@ -98,6 +98,11 @@ func NewRequest(ctx context.Context, client *pv.Client, publicBase string, ident
 		Fingerprint: keys.Fingerprint,
 		AgentID:     agentID,
 	})
+	var apiErr *pv.APIRequestError
+	if errors.As(err, &apiErr) && apiErr.ErrorCode == "agent_bound_token_required" {
+		return nil, pv.WrapError(pv.ExitAuth, "agent_bound_token_required", err,
+			"a secret request speaks for agent %s, so it needs an API token bound to that agent, or a login session: create one with pastevault token create --name %s-bot --agent %s (signed in) and use it as PASTEVAULT_TOKEN", agentName, agentName, agentName)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -145,6 +150,11 @@ type Outcome struct {
 	// Status is a request status (pending, declined, expired, cancelled,
 	// delivered) or "stored" once the answer is in the local store.
 	Status string
+	// SavedAs is the store name the answer was saved under. It differs from
+	// the request's SaveAs (Renamed) when that name was taken by the time
+	// the answer arrived: the answer is never thrown away.
+	SavedAs string
+	Renamed bool
 	// Handle and Entry are set when Status is "stored".
 	Handle string
 	Entry  *store.Entry
@@ -166,11 +176,11 @@ func (o Outcome) Final() bool {
 // (declined, cancelled, expired, already delivered) delete the request file
 // too. A 429 slow_down is returned as an error (pv.IsSlowDown).
 func Check(ctx context.Context, client *pv.Client, pending *pv.PendingRequest) (Outcome, error) {
+	// Errors (404, 401/403, network) never delete the request file: it holds
+	// the only key that can open the answer, and a wrong server, an expired
+	// login or an outage is not the end of the request.
 	response, err := client.PollSecretRequest(ctx, pending.ID, pending.PollToken)
 	if err != nil {
-		if pv.IsStatus(err, http.StatusNotFound) {
-			_ = pv.DeletePendingRequest(pending)
-		}
 		return Outcome{}, err
 	}
 
@@ -184,7 +194,7 @@ func Check(ctx context.Context, client *pv.Client, pending *pv.PendingRequest) (
 		// whose ack or cleanup did not finish, or gone.
 		if entry := storedFrom(pending); entry != nil {
 			_ = pv.DeletePendingRequest(pending)
-			return Outcome{Status: OutcomeStored, Handle: entry.Handle(), Entry: entry}, nil
+			return storedOutcome(pending, entry), nil
 		}
 		_ = pv.DeletePendingRequest(pending)
 		return Outcome{Status: pv.RequestDelivered}, nil
@@ -209,17 +219,57 @@ func openStore(pending *pv.PendingRequest) (*store.Store, error) {
 	return store.Open(pending.Server, identity)
 }
 
+// fallbackNames are the store names an answer is saved under when SaveAs
+// is taken: NAME.<code>, then NAME.<code>.2 ... NAME.<code>.9.
+func fallbackNames(pending *pv.PendingRequest) []string {
+	base := pending.SaveAs
+	suffix := "." + strings.ReplaceAll(pending.Code, "-", "")
+	if len(base)+len(suffix)+2 > 128 {
+		base = base[:128-len(suffix)-2]
+	}
+	names := []string{base + suffix}
+	for index := 2; index <= 9; index++ {
+		names = append(names, fmt.Sprintf("%s%s.%d", base, suffix, index))
+	}
+	return names
+}
+
+// storedFrom finds the entry an earlier run stored this request's answer
+// in (crash between storing and the ack or cleanup).
 func storedFrom(pending *pv.PendingRequest) *store.Entry {
 	target, err := openStore(pending)
 	if err != nil {
 		return nil
 	}
-	entry, err := target.Entry(pending.SaveAs)
-	if err != nil || entry.Source.Type != store.SourceRequest || entry.Source.Ref != pending.ID {
-		return nil
+	for _, name := range append([]string{pending.SaveAs}, fallbackNames(pending)...) {
+		entry, err := target.Entry(name)
+		if err == nil && entry.Source.Type == store.SourceRequest && entry.Source.Ref == pending.ID {
+			return entry
+		}
 	}
 
-	return entry
+	return nil
+}
+
+func storedOutcome(pending *pv.PendingRequest, entry *store.Entry) Outcome {
+	return Outcome{Status: OutcomeStored, Handle: entry.Handle(), Entry: entry, SavedAs: entry.Name, Renamed: entry.Name != pending.SaveAs}
+}
+
+// putAnswer stores the answer as SaveAs, or under a fallback name when
+// SaveAs exists and may not be replaced (another request or import took it
+// meanwhile).
+func putAnswer(target *store.Store, pending *pv.PendingRequest, payload pv.SecretPayload) (*store.Entry, error) {
+	source := store.Source{Type: store.SourceRequest, Ref: pending.ID}
+	if err := target.CheckWritable(pending.SaveAs, pending.Overwrite); err == nil {
+		return target.Put(pending.SaveAs, payload, source, pending.Overwrite)
+	}
+	for _, name := range fallbackNames(pending) {
+		if exists, err := target.Exists(name); err == nil && !exists {
+			return target.Put(name, payload, source, false)
+		}
+	}
+
+	return nil, pv.NewError(pv.ExitLocalFile, pv.CodeLocalFile, "the secret %s and its fallback names already exist in the local store; remove some (pastevault secret rm) and run pastevault await %s within two minutes", pending.SaveAs, pending.Code)
 }
 
 func deliver(ctx context.Context, client *pv.Client, pending *pv.PendingRequest, response pv.PollSecretRequestResponse) (Outcome, error) {
@@ -244,13 +294,13 @@ func deliver(ctx context.Context, client *pv.Client, pending *pv.PendingRequest,
 		if err != nil {
 			return Outcome{}, err
 		}
-		if entry, err = target.Put(pending.SaveAs, payload, store.Source{Type: store.SourceRequest, Ref: pending.ID}, pending.Overwrite); err != nil {
+		if entry, err = putAnswer(target, pending, payload); err != nil {
 			return Outcome{}, err
 		}
 	}
 
 	// Stored: only now tell the server it may wipe the answer.
-	outcome := Outcome{Status: OutcomeStored, Handle: entry.Handle(), Entry: entry}
+	outcome := storedOutcome(pending, entry)
 	outcome.AckErr = client.AckSecretRequest(context.WithoutCancel(ctx), pending.ID, pending.PollToken)
 	if err := pv.DeletePendingRequest(pending); err != nil && outcome.AckErr == nil {
 		outcome.AckErr = fmt.Errorf("could not delete the request file %s: %w", pending.Path, err)

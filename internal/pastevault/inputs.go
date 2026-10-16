@@ -139,10 +139,19 @@ func ResolvePassword(source PasswordSource, stdinIsTerminal bool, prompt func(st
 }
 
 // trimLineEnding removes one trailing newline (\n or \r\n), so files written
-// by editors or "echo" work, while other whitespace stays part of the secret.
+// by editors or "echo" work, while other whitespace (a lone \r included)
+// stays part of the secret.
 func trimLineEnding(value string) string {
-	value = strings.TrimSuffix(value, "\n")
-	return strings.TrimSuffix(value, "\r")
+	if trimmed, found := strings.CutSuffix(value, "\r\n"); found {
+		return trimmed
+	}
+	return strings.TrimSuffix(value, "\n")
+}
+
+// TrimTrailingNewline is trimLineEnding for bytes (secret values read from a
+// file or stdin as text).
+func TrimTrailingNewline(value []byte) []byte {
+	return []byte(trimLineEnding(string(value)))
 }
 
 // ReadTextInput reads paste text (stdin or --text source) up to limit bytes.

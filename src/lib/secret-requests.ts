@@ -121,6 +121,18 @@ export async function settleSecretRequest(row: SecretRequestRow, request?: Fasti
   const db = await prisma()
   const now = new Date()
 
+  // A revoked agent's requests die with it.
+  if (isLive(row)) {
+    const agent = await db.agentIdentity.findUnique({
+      where: { id: row.requester_agent_id },
+      select: { revoked_at: true },
+    })
+    if (!agent || agent.revoked_at) {
+      await cancelForRevokedAgent(row, SYSTEM_ACTOR, request)
+      return reload(row.id)
+    }
+  }
+
   if ((row.status === 'pending' || row.status === 'fulfilled') && row.expires_at.getTime() <= now.getTime()) {
     const result = await db.secretRequest.updateMany({
       where: { id: row.id, status: { in: ['pending', 'fulfilled'] }, expires_at: { lte: now } },
@@ -145,6 +157,54 @@ export async function settleSecretRequest(row: SecretRequestRow, request?: Fasti
   }
 
   return row
+}
+
+// Pending or answered requests, and delivered answers still on the server.
+function isLive(row: SecretRequestRow) {
+  return (
+    row.status === 'pending' ||
+    row.status === 'fulfilled' ||
+    (row.status === 'delivered' && row.response_ciphertext !== null)
+  )
+}
+
+async function cancelForRevokedAgent(row: SecretRequestRow, actor: AuditActor, request?: FastifyRequest) {
+  const db = await prisma()
+  if (row.status === 'delivered') {
+    await db.secretRequest.updateMany({ where: { id: row.id, status: 'delivered' }, data: WIPED_RESPONSE })
+    return
+  }
+
+  const result = await db.secretRequest.updateMany({
+    where: { id: row.id, status: { in: ['pending', 'fulfilled'] } },
+    data: { status: 'cancelled', closed_at: new Date(), ...WIPED_RESPONSE },
+  })
+  if (result.count === 1) {
+    await recordRequestEvent(row, 'request.cancelled', actor, { was: row.status, reason: 'agent_revoked' }, request)
+  }
+}
+
+// Called when an agent is revoked: its open requests are cancelled and any
+// answer still on the server is wiped.
+export async function cancelRequestsOfAgent(
+  userId: string,
+  agentId: string,
+  actor: AuditActor,
+  request?: FastifyRequest
+) {
+  const db = await prisma()
+  const rows = await db.secretRequest.findMany({
+    where: {
+      user_id: userId,
+      requester_agent_id: agentId,
+      OR: [{ status: { in: ['pending', 'fulfilled'] } }, { status: 'delivered', response_ciphertext: { not: null } }],
+    },
+    take: 1000,
+  })
+  for (const row of rows) {
+    await cancelForRevokedAgent(row, actor, request)
+  }
+  return rows.length
 }
 
 // Wipes a delivered response when its lease ends, so a response that is
@@ -204,10 +264,16 @@ export async function createSecretRequest(
 ) {
   const db = await prisma()
 
-  if (principal.agent_id && principal.agent_id !== input.agent_id) {
+  // A request speaks for an agent ("builder asks for OPENAI_API_KEY"), so
+  // only that agent may make it: a token bound to it, or the account's own
+  // login session. An unbound token (e.g. a leaked CI token) could otherwise
+  // impersonate any agent of the account.
+  if (principal.kind === 'token' && principal.agent_id !== input.agent_id) {
     throw new HttpError(403, {
-      error: 'other_agent',
-      message: 'This API token is bound to another agent; a request must name the agent the token is bound to',
+      error: principal.agent_id ? 'other_agent' : 'agent_bound_token_required',
+      message: principal.agent_id
+        ? 'This API token is bound to another agent; a request must name the agent the token is bound to'
+        : 'Secret requests need an API token bound to the requesting agent (pastevault token create --agent NAME) or a login session',
     })
   }
 
@@ -544,7 +610,7 @@ export async function pollSecretRequest(
 
   if (row.status === 'fulfilled') {
     const delivered = await db.secretRequest.updateMany({
-      where: { id: row.id, status: 'fulfilled' },
+      where: { id: row.id, status: 'fulfilled', expires_at: { gt: now } },
       data: { status: 'delivered', delivered_at: now },
     })
     if (delivered.count === 1) {
@@ -566,7 +632,7 @@ export async function pollSecretRequest(
 
 export async function ackSecretRequest(principal: Principal, id: string, pollToken: string) {
   const row = await findPolledRequest(principal, id, pollToken)
-  if (row.status === 'fulfilled') {
+  if (row.status === 'pending' || row.status === 'fulfilled') {
     throw new HttpError(409, { error: 'not_delivered', message: 'Poll the response before acknowledging it' })
   }
   if (row.status !== 'delivered') {

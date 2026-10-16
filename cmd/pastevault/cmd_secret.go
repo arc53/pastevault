@@ -200,7 +200,7 @@ func runSecretImport(a *app, args []string) error {
 	if importKind == pv.SecretKindText {
 		// Like password files: one trailing newline (from echo or an editor)
 		// is not part of the secret.
-		value = []byte(strings.TrimSuffix(strings.TrimSuffix(string(value), "\n"), "\r"))
+		value = pv.TrimTrailingNewline(value)
 		if len(value) == 0 {
 			return pv.UsageError("the secret is empty")
 		}

@@ -444,13 +444,22 @@ await runSuite('requests', { postgres: true }, async ({ startServer, temporaryRo
       }
     }
     assert(pending, 'request --wait wrote its request file')
+    // A display-length prefix is not a check; 26+ characters after pvk1_ are.
     expectExit(
       cli(['request', 'fulfil', pending.code, '--fingerprint', pending.fingerprint.slice(0, 13), '--from-stdin'], {
         config: humanConfig,
         input: 'hunter2-hunter2',
       }),
+      2,
+      'fulfil with a short fingerprint prefix'
+    )
+    expectExit(
+      cli(['request', 'fulfil', pending.code, '--fingerprint', pending.fingerprint.slice(0, 31), '--from-stdin'], {
+        config: humanConfig,
+        input: 'hunter2-hunter2',
+      }),
       0,
-      'fulfil with a short fingerprint'
+      'fulfil with a 26-character fingerprint prefix'
     )
     const result = await waiting.done
     expectExit(result, 0, 'request --wait')
@@ -558,6 +567,10 @@ await runSuite('requests', { postgres: true }, async ({ startServer, temporaryRo
       const fast = await jsonRequest(baseUrl, `/api/secret-requests/${target.id}/poll`, { poll_token: pending.poll_token }, agentHeaders)
       assert.equal(fast.response.status, 429)
       assert.equal(fast.body.error, 'slow_down')
+      // Nothing to acknowledge yet.
+      const early = await jsonRequest(baseUrl, `/api/secret-requests/${target.id}/ack`, { poll_token: pending.poll_token }, agentHeaders)
+      assert.equal(early.response.status, 409)
+      assert.equal(early.body.error, 'not_delivered')
     }
 
     // Too large, wrong kind.
@@ -631,6 +644,29 @@ await runSuite('requests', { postgres: true }, async ({ startServer, temporaryRo
     assert.equal((await create({}, other.headers)).body.code, 'requester_agent_unknown')
     assert.equal((await create({}, {})).response.status, 401)
 
+    // Reasons: no C1 controls, bidi marks or line separators; 500 code points.
+    for (const reason of ['a\u0085b', 'a\u200eb', 'a\u061cb', 'a\u2028b', 'a\u2069b', 'a\u001bb']) {
+      assert.equal((await create({ reason })).response.status, 400, JSON.stringify(reason))
+    }
+    const longReason = await create({ reason: '\u{1F600}'.repeat(500) })
+    assert.equal(longReason.response.status, 201, JSON.stringify(longReason.body))
+    await request(baseUrl, `/api/secret-requests/${longReason.body.id}`, { method: 'DELETE', headers: owner.headers })
+    assert.equal((await create({ reason: '\u{1F600}'.repeat(501) })).response.status, 400)
+
+    // Only a token bound to the agent (or a session) may speak for it: an
+    // unbound token, e.g. a leaked CI token, can't impersonate the agent.
+    const unboundToken = cliJson(['token', 'create', '--name', 'ci-unbound'], { config: agentConfig }).token
+    const impersonation = await create({}, { authorization: `Bearer ${unboundToken}` })
+    assert.equal(impersonation.response.status, 403)
+    assert.equal(impersonation.body.error, 'agent_bound_token_required')
+    const viaCli = cli(['request', 'IMPERSONATED', '--json'], { config: agentConfig, env: { PASTEVAULT_TOKEN: unboundToken } })
+    expectExit(viaCli, 3, 'request with an unbound token')
+    assert.equal(json(viaCli).error.code, 'agent_bound_token_required')
+    assert.match(viaCli.stderr, /pastevault token create .*--agent builder/)
+    // The login session (no token) may.
+    const viaSession = cliJson(['request', 'BY_SESSION'], { config: agentConfig })
+    cliJson(['request', 'cancel', viaSession.id], { config: agentConfig })
+
     // A token without requests:create gets 403.
     const limitedToken = cliJson(['token', 'create', '--name', 'no-requests', '--scopes', 'shares:create'], { config: agentConfig }).token
     const noScope = await create({}, { authorization: `Bearer ${limitedToken}` })
@@ -667,6 +703,34 @@ await runSuite('requests', { postgres: true }, async ({ startServer, temporaryRo
     const listed = await request(baseUrl, '/api/account/secret-requests?status=pending', { headers: third.headers })
     assert.equal(listed.body.requests.length, 20)
     assert(!JSON.stringify(listed.body).includes('poll_token'))
+  }
+
+  // ── revoking an agent cancels its requests and wipes answers ───────
+  {
+    const tempConfig = newConfigDir({ access_token: owner.sessionToken })
+    const temp = cliJson(['agent', 'init', '--name', 'temp'], { config: tempConfig }).agent
+    const open = cliJson(['request', 'OPEN_ONE'], { config: tempConfig })
+    const answered = cliJson(['request', 'ANSWERED_ONE'], { config: tempConfig })
+    const answeredFile = JSON.parse(readFileSync(requestFile(tempConfig, answered.id), 'utf8'))
+    expectExit(cli(['request', 'fulfil', answered.url, '--from-stdin'], { config: humanConfig, input: 'answer-for-temp' }), 0, 'fulfil')
+    assert.equal((await requestRow(answered.id)).status, 'fulfilled')
+
+    const revoked = await request(baseUrl, `/api/agents/${temp.id}`, { method: 'DELETE', headers: owner.headers })
+    assert.equal(revoked.response.status, 200)
+    for (const id of [open.id, answered.id]) {
+      const row = await requestRow(id)
+      assert.equal(row.status, 'cancelled')
+      assert.equal(row.response_ciphertext, null)
+    }
+    const byCode = await request(baseUrl, `/api/secret-requests/by-code/${open.code}`, { headers: owner.headers })
+    assert.equal(byCode.body.status, 'cancelled')
+    expectExit(cli(['request', 'fulfil', open.url, '--from-stdin'], { config: humanConfig, input: 'late' }), 6, 'fulfil a revoked agent\'s request')
+    const poll = await jsonRequest(baseUrl, `/api/secret-requests/${answered.id}/poll`, { poll_token: answeredFile.poll_token }, owner.headers)
+    assert.deepEqual(poll.body, { status: 'cancelled', interval: 3 })
+    const { body: audit } = await request(baseUrl, '/api/account/audit?event=request.cancelled&limit=200', { headers: owner.headers })
+    const cancelledEvents = audit.events.filter((event) => [open.id, answered.id].includes(event.subject_id))
+    assert.equal(cancelledEvents.length, 2)
+    assert(cancelledEvents.every((event) => event.details.reason === 'agent_revoked'))
   }
 
   // ── by-code rate limit: misses (guessing) are limited, the page polling

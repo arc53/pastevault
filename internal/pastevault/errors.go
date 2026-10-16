@@ -199,6 +199,8 @@ func describeAPIError(apiErr *APIRequestError) string {
 		return message + fmt.Sprintf(" (the API token lacks the %s scope)", apiErr.Required)
 	case apiErr.ErrorCode == "recipient_auth_required":
 		return message + " (a share sealed to an agent can only be opened with credentials of the recipient's account: pastevault login, or an API token with shares:receive)"
+	case apiErr.ErrorCode == "agent_bound_token_required":
+		return message + " (use an API token bound to the agent: pastevault token create --agent NAME, or the login session)"
 	case apiErr.ErrorCode == "session_required":
 		return message + " (this needs a browser-approved login: run pastevault login)"
 	case apiErr.StatusCode == http.StatusUnauthorized && strings.EqualFold(apiErr.ErrorCode, "Authentication required"):

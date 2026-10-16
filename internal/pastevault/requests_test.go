@@ -401,3 +401,19 @@ func TestPendingRequestFiles(t *testing.T) {
 		t.Fatal("deleting twice is fine")
 	}
 }
+
+func TestTrimTrailingNewline(t *testing.T) {
+	for input, want := range map[string]string{
+		"v\n":   "v",
+		"v\r\n": "v",
+		"v\r":   "v\r",
+		"v\n\n": "v\n",
+		"v":     "v",
+		"\r\n":  "",
+		"v\n\r": "v\n\r",
+	} {
+		if got := string(TrimTrailingNewline([]byte(input))); got != want {
+			t.Errorf("TrimTrailingNewline(%q) = %q, want %q", input, got, want)
+		}
+	}
+}

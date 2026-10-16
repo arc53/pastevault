@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/arc53/pastevault/internal/envmask"
 	pv "github.com/arc53/pastevault/internal/pastevault"
@@ -45,6 +46,7 @@ func runRun(ctx context.Context, a *app, args []string) error {
 	fs.Var(&envFiles, "env-file", "Read KEY=value lines from this file (repeatable; later files win); pv:// values are resolved")
 	noMask := fs.Bool("no-mask", false, "Do not mask secret values in the command's output (output stays a terminal)")
 	noInherit := fs.Bool("no-inherit", false, "Start from an empty environment (keeps PATH, HOME and a few system variables)")
+	resolveInherited := fs.Bool("resolve-inherited", false, "Also resolve pv://share handles found in the inherited environment (pv://secret handles always are)")
 
 	// Flags end at the first argument that isn't one: everything after it
 	// belongs to the command ("pastevault run env -0" works without --).
@@ -61,8 +63,11 @@ func runRun(ctx context.Context, a *app, args []string) error {
 		return pv.UsageError("no command given: pastevault run [flags] -- COMMAND [ARGS...]")
 	}
 
-	environment, masked, err := buildRunEnvironment(ctx, out, common, envFiles, *noInherit)
+	environment, masked, err := buildRunEnvironment(ctx, out, common, envFiles, *noInherit, *resolveInherited)
 	if err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		return &commandExit{code: exitRunUnresolved, err: err}
 	}
 
@@ -77,14 +82,14 @@ func runRun(ctx context.Context, a *app, args []string) error {
 		}
 	}
 
-	return runChild(a, command, environment, masker, *noMask)
+	return runChild(ctx, a, command, environment, masker, *noMask)
 }
 
 // buildRunEnvironment assembles the child's environment: the inherited
 // environment (minus PASTEVAULT_TOKEN, _PASSWORD and _AGENT_KEY), then each
 // env file in order. Every pv:// value is resolved; the resolved values are
 // returned for masking, by variable name.
-func buildRunEnvironment(ctx context.Context, out *output, common *commonFlags, envFiles []string, noInherit bool) ([]string, map[string][]byte, error) {
+func buildRunEnvironment(ctx context.Context, out *output, common *commonFlags, envFiles []string, noInherit, resolveInherited bool) ([]string, map[string][]byte, error) {
 	values := map[string]string{}
 	var order []string
 	set := func(key, value string) {
@@ -113,10 +118,24 @@ func buildRunEnvironment(ctx context.Context, out *output, common *commonFlags, 
 	type assignment struct {
 		key, value, origin string
 	}
+	// Inherited values: pv://secret handles (local, offline) are resolved.
+	// pv://share handles would open a share on a server, so they only are
+	// with --resolve-inherited. A malformed pv:// value passes through.
 	var assignments []assignment
+	publicBase := pv.ResolvePublicBaseURL(common.server)
 	for _, key := range order {
-		if pv.LooksLikeHandle(values[key]) {
-			assignments = append(assignments, assignment{key, values[key], "the environment"})
+		value := values[key]
+		if !pv.LooksLikeHandle(value) {
+			continue
+		}
+		handle, err := pv.ParseHandle(value, common.server, publicBase, false)
+		switch {
+		case err != nil:
+			out.warnf("%s in the environment looks like a pv:// handle but isn't one (%v); passing it through unchanged", key, err)
+		case handle.Kind == pv.HandleShare && !resolveInherited:
+			out.warnf("%s in the environment is a pv://share handle; passing it through unchanged (put it in an --env-file, or use --resolve-inherited)", key)
+		default:
+			assignments = append(assignments, assignment{key, value, "the environment"})
 		}
 	}
 	for _, path := range envFiles {
@@ -188,9 +207,22 @@ func sortedKeys(values map[string][]byte) []string {
 	return keys
 }
 
+// runWaitDelay bounds how long run waits, after the command exits, for
+// output from processes it left running in the background (daemons started
+// with "&", "docker compose up -d"). Their output after that is dropped.
+const runWaitDelay = 1500 * time.Millisecond
+
 // runChild starts the command, forwards signals, waits, and returns its
 // exit status as a commandExit.
-func runChild(a *app, command []string, environment []string, masker *envmask.Masker, noMask bool) error {
+func runChild(ctx context.Context, a *app, command []string, environment []string, masker *envmask.Masker, noMask bool) error {
+	// Signals are caught from here on and replayed to the command once it
+	// has started; one that arrived earlier cancelled ctx.
+	attachSignals, stopSignals := forwardSignals()
+	defer stopSignals()
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
 	path, err := exec.LookPath(command[0])
 	if err != nil {
 		if errors.Is(err, exec.ErrNotFound) || errors.Is(err, os.ErrNotExist) {
@@ -203,6 +235,7 @@ func runChild(a *app, command []string, environment []string, masker *envmask.Ma
 	child.Args[0] = command[0]
 	child.Env = environment
 	child.Stdin = a.stdin
+	child.WaitDelay = runWaitDelay
 
 	var writers []*envmask.Writer
 	if noMask || !masker.Enabled() {
@@ -214,13 +247,11 @@ func runChild(a *app, command []string, environment []string, masker *envmask.Ma
 		writers = append(writers, stdout, stderr)
 	}
 
-	stopSignals := forwardSignals(child, a.stdinIsTerminal())
 	if err := child.Start(); err != nil {
-		stopSignals()
 		return &commandExit{code: exitRunCannotExec, err: pv.UsageError("%s: %v", command[0], err)}
 	}
+	attachSignals(child.Process)
 	waitErr := child.Wait()
-	stopSignals()
 
 	for _, writer := range writers {
 		_ = writer.Close()
@@ -228,7 +259,7 @@ func runChild(a *app, command []string, environment []string, masker *envmask.Ma
 
 	if waitErr != nil {
 		var exitErr *exec.ExitError
-		if !errors.As(waitErr, &exitErr) {
+		if !errors.As(waitErr, &exitErr) && !errors.Is(waitErr, exec.ErrWaitDelay) {
 			return &commandExit{code: exitRunCannotExec, err: fmt.Errorf("%s: %w", command[0], waitErr)}
 		}
 	}

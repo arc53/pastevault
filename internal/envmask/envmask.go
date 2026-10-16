@@ -99,8 +99,37 @@ func New(secrets []Secret) (*Masker, []string) {
 	return m, warnings
 }
 
-// variants lists the forms of v that are masked.
+// variants lists the forms of v that are masked. A multi-line value is
+// also masked with its line endings normalised (LF and CRLF) and line by
+// line (each line of at least MinSecretLength non-blank bytes), so a PEM key
+// printed with CRLF or with a prefix on every line is still caught.
 func variants(v []byte) []string {
+	forms := [][]byte{v}
+	multiLine := bytes.ContainsAny(v, "\r\n")
+	var lf []byte
+	if multiLine {
+		lf = bytes.ReplaceAll(v, []byte("\r\n"), []byte("\n"))
+		forms = append(forms, lf, bytes.ReplaceAll(lf, []byte("\n"), []byte("\r\n")))
+	}
+
+	var out []string
+	for _, form := range forms {
+		out = append(out, encodings(form)...)
+	}
+	if multiLine {
+		for _, line := range bytes.Split(lf, []byte("\n")) {
+			line = bytes.TrimSpace(line)
+			if len(line) >= MinSecretLength {
+				out = append(out, string(line))
+			}
+		}
+	}
+
+	return out
+}
+
+// encodings are the encoded forms of one value.
+func encodings(v []byte) []string {
 	out := []string{
 		string(v),
 		base64.StdEncoding.EncodeToString(v),
@@ -109,9 +138,28 @@ func variants(v []byte) []string {
 		base64.RawURLEncoding.EncodeToString(v),
 		hex.EncodeToString(v),
 		strings.ToUpper(hex.EncodeToString(v)),
+	}
+
+	// URL encodings, each with upper and lower case hex digits:
+	// Go's query (= Python quote_plus) and path escaping, strict RFC 3986
+	// (curl --data-urlencode, Python quote(safe="")), JavaScript's
+	// encodeURIComponent, Python's quote() (keeps "/"), and the userinfo
+	// part of a URL (a password in postgres://user:PASSWORD@host) as Go and
+	// WHATWG (browsers, Node) escape it.
+	percent := []string{
 		url.QueryEscape(string(v)),
 		url.PathEscape(string(v)),
+		percentEncode(v, isUnreserved),
+		percentEncode(v, func(c byte) bool { return isUnreserved(c) || strings.IndexByte("!*'()", c) >= 0 }),
+		percentEncode(v, func(c byte) bool { return isUnreserved(c) || c == '/' }),
+		strings.TrimPrefix(url.UserPassword("u", string(v)).String(), "u:"),
+		url.User(string(v)).String(),
+		percentEncode(v, func(c byte) bool { return c > 0x20 && c < 0x7f && strings.IndexByte("\"#<>?`{}/:;=@[\\]^|", c) < 0 }),
 	}
+	for _, encoded := range percent {
+		out = append(out, encoded, lowerPercentHex(encoded))
+	}
+
 	out = append(out, jsonVariants(v)...)
 	for _, encoding := range []*base64.Encoding{base64.RawStdEncoding, base64.RawURLEncoding} {
 		for offset := 0; offset <= 2; offset++ {
@@ -120,6 +168,47 @@ func variants(v []byte) []string {
 	}
 
 	return out
+}
+
+func isUnreserved(c byte) bool {
+	return c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '-' || c == '.' || c == '_' || c == '~'
+}
+
+// percentEncode escapes every byte that keep rejects as %XX (upper case).
+func percentEncode(v []byte, keep func(byte) bool) string {
+	const digits = "0123456789ABCDEF"
+	var builder strings.Builder
+	for _, c := range v {
+		if keep(c) {
+			builder.WriteByte(c)
+			continue
+		}
+		builder.WriteByte('%')
+		builder.WriteByte(digits[c>>4])
+		builder.WriteByte(digits[c&15])
+	}
+
+	return builder.String()
+}
+
+// lowerPercentHex lower-cases the hex digits of %XX escapes.
+func lowerPercentHex(s string) string {
+	encoded := []byte(s)
+	for i := 0; i+2 < len(encoded); i++ {
+		if encoded[i] == '%' {
+			encoded[i+1] = toLowerHex(encoded[i+1])
+			encoded[i+2] = toLowerHex(encoded[i+2])
+		}
+	}
+
+	return string(encoded)
+}
+
+func toLowerHex(c byte) byte {
+	if c >= 'A' && c <= 'F' {
+		return c + 'a' - 'A'
+	}
+	return c
 }
 
 // embeddedBase64 is the part of a base64 stream that depends only on v when

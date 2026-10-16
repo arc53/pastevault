@@ -33,6 +33,8 @@ Sign in, one of:
 
   Tokens are scoped, expire after 90 days by default, and can be revoked (`pastevault token revoke`, or the web account page). A token bound to an agent (`--agent`) can only act for that agent. Tokens cannot create tokens, and default tokens cannot register agents.
 
+  **Secret requests need an agent-bound token** (or the login session): `request` and the MCP `request_secret` tool refuse an unbound token (exit 3, `agent_bound_token_required`), because a request tells you "agent X asks for…" and a leaked general token must not be able to say that. Create the agent's token with `--agent NAME`, as above, or run `agent init` with an unbound token that has `agents:write`, which binds it to the new agent.
+
 Check with `pastevault whoami --json`.
 
 ## 2. Give the agent a key

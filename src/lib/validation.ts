@@ -245,13 +245,18 @@ export const SECRET_REQUEST_DEFAULT_TTL_SECONDS = 600
 export const SECRET_REQUEST_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 
 // The reason is shown to a human as untrusted text. Control characters other
-// than tab and newline, and bidirectional overrides, could disguise it.
+// than tab and newline (C0, DEL, C1), bidirectional marks, overrides and
+// isolates, and line/paragraph separators could disguise it. Its length is
+// counted in Unicode code points (as JSON Schema maxLength and the CLI do).
+export const SECRET_REQUEST_REASON_MAX = 500
+export const SECRET_REQUEST_REASON_FORBIDDEN =
+  /[\u0000-\u0008\u000b-\u001f\u007f-\u009f\u061c\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]/
 const reasonSchema = z
   .string()
-  .max(500)
+  .refine((value) => Array.from(value).length <= SECRET_REQUEST_REASON_MAX, 'reason is limited to 500 characters')
   .refine(
-    (value) => !/[\u0000-\u0008\u000b-\u001f\u007f‪-‮⁦-⁩]/.test(value),
-    'reason must not contain control or bidirectional-override characters'
+    (value) => !SECRET_REQUEST_REASON_FORBIDDEN.test(value),
+    'reason must not contain control, bidirectional or line-separator characters'
   )
 
 export const createSecretRequestSchema = z

@@ -228,3 +228,44 @@ func TestSecretCommands(t *testing.T) {
 		t.Fatalf("no agent: exit %d %s", none.exit, none.stderr)
 	}
 }
+
+func TestRunInheritedHandles(t *testing.T) {
+	requireShell(t)
+	withAgent(t)
+	importSecret(t, "LOCAL", "inherited-local-secret")
+
+	// pv://secret resolves; pv://share passes through (no network) unless
+	// --resolve-inherited; a malformed pv:// value passes through.
+	t.Setenv("A", "pv://secret/LOCAL")
+	t.Setenv("B", "pv://share/abcdefABCDEF#k="+strings.Repeat("A", 43))
+	t.Setenv("C", "pv://not-a-handle")
+	result := runCLI(t, "", false, "run", "--", "sh", "-c", `echo "$A|$B|$C"`)
+	if result.exit != 0 {
+		t.Fatalf("exit %d: %s", result.exit, result.stderr)
+	}
+	if result.stdout != "[masked:A]|pv://share/abcdefABCDEF#k="+strings.Repeat("A", 43)+"|pv://not-a-handle\n" {
+		t.Fatalf("stdout %q", result.stdout)
+	}
+	if !strings.Contains(result.stderr, "B in the environment is a pv://share handle") || !strings.Contains(result.stderr, "C in the environment looks like a pv:// handle") {
+		t.Fatalf("stderr %s", result.stderr)
+	}
+
+	// With --resolve-inherited the share handle is resolved (and fails here:
+	// there is no server), so nothing runs.
+	resolved := runCLI(t, "", false, "run", "--resolve-inherited", "--", "true")
+	if resolved.exit == 0 {
+		t.Fatalf("--resolve-inherited must resolve B: %s", resolved.stderr)
+	}
+
+	// A missing inherited secret is still an error.
+	t.Setenv("A", "pv://secret/MISSING")
+	if missing := runCLI(t, "", false, "run", "--", "true"); missing.exit != 125 {
+		t.Fatalf("missing inherited secret: exit %d", missing.exit)
+	}
+}
+
+func TestTerminalSafe(t *testing.T) {
+	if got := terminalSafe("ok\x1b[2J\u202enot\u2028x\u0085y\tz"); got != "ok[2Jnotxyz" {
+		t.Fatalf("terminalSafe = %q", got)
+	}
+}

@@ -294,7 +294,7 @@ An agent is an X25519 key pair. The private key stays on its machine; the public
 
 ```
 pastevault request NAME [--why TEXT] [--ttl 10m] [--accept text|file|any] [--save-as NAME] [--agent NAME] [--overwrite] [--wait [--timeout D]]
-pastevault await <id|code> [--timeout D]
+pastevault await <id|code> [--timeout D] [--save-as NAME] [--overwrite]
 pastevault request list [--status S]
 pastevault request cancel <id|code>...
 pastevault request fulfil <code|url> [--from-file F | --from-stdin] [--kind text|file] [--fingerprint FP]
@@ -307,8 +307,8 @@ An agent never asks for a secret in chat. It asks the human of its own account t
 2. The human opens the link **signed in to the same account**. The page checks that the request key matches `#fp=`, shows the agent and the reason (as untrusted text), and seals the answer to the request key in the browser. Only the human's login session can answer; an API token (an agent) never can.
 3. `await` (or `request --wait`) polls, decrypts the answer, seals it into the local store as `--save-as` (default `NAME`), writes the store file, and only then acknowledges it, which wipes it from the server. It prints `pv://secret/NAME`. Use it with `run` or `inject`; the value is never printed.
 
-- `request` needs an agent key on this machine (`pastevault agent init`; exit 2 otherwise) and a credential with `requests:create` (default API tokens have it). The name must match `[A-Za-z_][A-Za-z0-9_.-]{0,127}`. A secret with the `--save-as` name must not exist yet (exit 13) unless `--overwrite`.
-- `--why` is shown to the human, labelled as a message from the agent that must not be trusted. At most 500 characters, no control characters.
+- `request` needs an agent key on this machine (`pastevault agent init`; exit 2 otherwise) and a credential that may speak for that agent: the **login session**, or an API token **bound to the agent** (`pastevault token create --agent NAME`) with `requests:create`. An unbound token is refused (exit 3, `agent_bound_token_required`): a request shows the human "agent X asks for…", so a leaked general-purpose token must not be able to say that. With `PASTEVAULT_AGENT_KEY`, bind the token to the agent whose key that is. The name must match `[A-Za-z_][A-Za-z0-9_.-]{0,127}`. A secret with the `--save-as` name must not exist yet (exit 13) unless `--overwrite`.
+- `--why` is shown to the human, labelled as a message from the agent that must not be trusted. At most 500 characters (Unicode code points); control characters (other than tab and newline), bidirectional marks and line separators are refused.
 - `--ttl` is how long the request stays open: at least the server minimum (`limits.min_secret_request_ttl_seconds`, default 60s), at most 24h. Default 10m.
 - `--accept`: `text` (default), `file` or `any`.
 - `--wait` waits for the answer. `--timeout` limits the wait (default: until the request expires); a timeout exits 9 and keeps the request file, so `await` can resume. Ctrl-C (exit 130) does the same.
@@ -316,6 +316,9 @@ An agent never asks for a secret in chat. It asks the human of its own account t
 - Without `--wait` and `--json`, the link is printed on stdout and the instructions on stderr. With `--wait`, the instructions (including the link) go to stderr and the handle to stdout.
 - An account may have 20 pending requests and create 30 per hour (429, exit 10). Polling is limited to the server's interval (3s); `await` backs off on `slow_down` by itself.
 - If the CLI dies after receiving the answer but before acknowledging it, `await` within two minutes gets the same answer again. After two minutes (or the acknowledgement, or expiry) the server has deleted it.
+- `await --save-as NAME` stores the answer under another name, and `--overwrite` lets it replace an existing secret (both are remembered in the request file). If the name was taken by the time the answer arrives (another request or `secret import` used it), the answer is **not** dropped: it is stored as `NAME.<code>` (e.g. `OPENAI_API_KEY.ABCDEFGH`), stderr says so, and the printed handle and JSON `save_as` name the actual entry.
+- The request file is only deleted once the request is over (answered and stored, declined, cancelled, expired, or already collected). Errors (401/403/404, network, a server outage) keep it, so `await` can be retried.
+- Revoking an agent cancels its open requests and wipes answers it has not collected.
 
 JSON (`request --json`, and with `--wait` or `await` once stored):
 
@@ -338,7 +341,7 @@ JSON (`request --json`, and with `--wait` or `await` once stored):
 
 - `request list` shows the account's requests (an API token bound to an agent sees only that agent's), newest first, with `local: true` when this machine holds the request file. Metadata only. JSON: `{"requests":[{id, code, name, reason, accept, fingerprint, status, requester:{agent:{id,name}}, response_kind, response_size, created_at, expires_at, opened_at, fulfilled_at, delivered_at, acked_at, closed_at, local}]}`.
 - `request cancel` withdraws pending (or answered but not yet collected) requests and deletes their request files. The requester's token or the session may cancel.
-- `request fulfil` answers a request from the command line, with the **login session** (`pastevault login`; exit 3 otherwise). Give the full link with `#fp=`, or the code plus `--fingerprint` (the full fingerprint or at least `pvk1_` plus 8 characters, as the agent showed it); the CLI recomputes the fingerprint from the request's public key and refuses with exit 8 if it differs, before reading the value. The value comes from `--from-file`, `--from-stdin`, or a hidden prompt on a terminal. For `text`, one trailing newline from a file or stdin is dropped. `--kind file` sends the bytes as a file (name from `--from-file` or `--filename`). The sealed answer may be at most `max_bytes` (the server's `MAX_SECRET_REQUEST_BYTES`).
+- `request fulfil` answers a request from the command line, with the **login session** (`pastevault login`; exit 3 otherwise). Give the full link with `#fp=`, or the code plus `--fingerprint` (the full fingerprint as the agent printed it, or at least `pvk1_` plus its first 26 characters; the 8-character short form is for display only and is refused); the CLI recomputes the fingerprint from the request's public key and refuses with exit 8 if it differs, before reading the value. The value comes from `--from-file`, `--from-stdin`, or a hidden prompt on a terminal. For `text`, one trailing newline (`\n` or `\r\n`) from a file or stdin is dropped. `--kind file` sends the bytes as a file (name from `--from-file` or `--filename`). The sealed answer may be at most `max_bytes` (the server's `MAX_SECRET_REQUEST_BYTES`).
 - `request decline` declines a pending request (session only); the agent's `await` then exits 6.
 
 ## `secret`: the local store
@@ -353,21 +356,24 @@ pastevault secret reveal NAME
 Secrets in the local store are sealed to the default agent's key (the same PVWRAP1 wrap as sealed shares, context `store:<NAME>`), one file per secret under `store/<server>/<agent>/` (`0600`, directories `0700`). They are referenced as `pv://secret/NAME`. `request`/`await` and `get --save` add them; `import` adds one from a file or stdin (for `text`, one trailing newline is dropped; content that isn't UTF-8 becomes a `file`). Nothing here contacts the server.
 
 - `list` never shows values. JSON: `{"agent":"laptop","secrets":[{name, handle, kind, created_at, source:{type, ref}}]}`.
-- `reveal` prints a secret only when both stdin and stdout are a terminal (exit 2 otherwise). That is friction against an agent capturing it, **not** a security boundary: any program running as your user can read the store and the agent key.
+- `reveal` prints a secret only when both stdin and stdout are a terminal (exit 2 otherwise). That is friction against an agent capturing it, **not** a security boundary: any program running as your user can read the store and the agent key, and `run --no-mask` or `inject --stdout` print values without a terminal.
 - After `agent init --force` or `agent revoke`, older secrets stay readable with the retired key.
 
 ## `run`: a command with secrets in its environment
 
 ```
-pastevault run [--env-file .env.pv]... [--no-mask] [--no-inherit] -- COMMAND [ARGS...]
+pastevault run [--env-file .env.pv]... [--no-mask] [--no-inherit] [--resolve-inherited] -- COMMAND [ARGS...]
 ```
 
-`run` starts COMMAND with the current environment plus the variables from each `--env-file` (later files win). Every value that is a `pv://` handle is resolved first, from the env files and from the inherited environment (`OPENAI_API_KEY=pv://secret/OPENAI_API_KEY pastevault run -- …` works too). If any handle can't be resolved, nothing runs (exit 125).
+`run` starts COMMAND with the current environment plus the variables from each `--env-file` (later files win). Every `pv://` handle in the env files is resolved first. If any handle can't be resolved, nothing runs (exit 125).
+
+In the **inherited** environment, only `pv://secret/…` handles are resolved (they are local; `OPENAI_API_KEY=pv://secret/OPENAI_API_KEY pastevault run -- …` works). A `pv://share/…` value there is passed through unchanged with a warning, because resolving it opens a share on a server: use an `--env-file`, or `--resolve-inherited`. A value that starts with `pv://` but is not a valid handle is passed through with a warning.
 
 - `PASTEVAULT_TOKEN`, `PASTEVAULT_PASSWORD` and `PASTEVAULT_AGENT_KEY` are removed from the inherited environment, so the command never sees the CLI's own credentials. (An `--env-file` may still set them explicitly.)
 - `--no-inherit` starts from an empty environment, keeping only `PATH`, `HOME`, `USER`, `LOGNAME`, the temp directory variables and Windows system variables.
 - stdin is passed through. Signals (SIGINT, SIGTERM, SIGHUP, SIGQUIT, SIGUSR1/2) are forwarded to the command; Ctrl-C on a terminal reaches it directly. The exit code is the command's (128+N if it was killed by signal N), or 125/126/127 (see [Exit codes](#exit-codes)).
 - The command's stdout and stderr are **masked**: every resolved value is replaced by `[masked:VAR]`. Because of that they are pipes, not a terminal (programs may turn off colours or prompts). `--no-mask` passes them through untouched.
+- With masking, `run` exits at most 1.5 s after the command does, even if the command left processes running in the background (`server &`, `docker compose up -d`) that still hold its output open. Their output after that is lost, and they may get `SIGPIPE` when they write; run such commands with `--no-mask`, or redirect the background process's output.
 - Share handles must point at a paste **without a view limit**: `run` would otherwise use up (or burn) a view on every run. A view-limited, burn-after-read, password-protected or file share is refused with exit 125 and the hint `pastevault get <ref> --save NAME`; then use `pv://secret/NAME`.
 
 ### Handles and `.env.pv`
@@ -393,16 +399,29 @@ LOG_LEVEL=debug
 
 Masking keeps secrets out of **transcripts**: terminal scrollback, CI logs, and the context of an agent that runs the command. It is not a security boundary. The command can read its own environment and can always get a secret out some other way.
 
-For each value, the masker looks for the value itself, its standard and URL-safe base64 (padded, unpadded, and inside a longer base64 stream at each of the three byte alignments), lower and upper case hex, URL query and path escaping, and JSON string escaping. It replaces leftmost-longest matches. Output that ends in what could be the start of a secret is held back until more output arrives or the command exits; there is no timer, so a partial secret is never printed early, but a prompt that happens to end that way appears late.
+For each value, the masker looks for:
+
+- the value itself;
+- standard and URL-safe base64 (padded, unpadded, and inside a longer base64 stream at each of the three byte alignments);
+- lower and upper case hex;
+- percent-encoding, each with upper- and lower-case hex digits: Go's query and path escaping (= Python `quote_plus`), strict RFC 3986 (everything but `A-Za-z0-9-._~`, as `curl --data-urlencode`), JavaScript `encodeURIComponent`, Python `quote` (keeps `/`), and URL userinfo escaping as Go and browsers/Node do it (a password inside `postgres://user:PASSWORD@host`);
+- JSON string escaping (Go's, without HTML escaping, and ASCII-only `\uXXXX`);
+- for a value with several lines: the value with LF and with CRLF line endings, and every line on its own that has at least 6 non-blank characters (so a PEM key printed with CRLF or with a log prefix on each line is still masked line by line).
+
+It replaces leftmost-longest matches. Output that ends in what could be the start of a secret is held back until more output arrives or the command exits; there is no timer, so a partial secret is never printed early, but a prompt that happens to end that way appears late.
 
 It does **not** catch:
 
-- values shorter than 6 bytes (`run` warns and does not mask them);
-- line-wrapped encodings (`base64` wraps at 76 characters, so values longer than 57 bytes), other encodings, compression, encryption, or a value split up or reversed;
+- values shorter than 6 bytes (`run` warns and does not mask them), and lines of a multi-line value shorter than 6 non-blank characters;
+- line-wrapped encodings (`base64` wraps at 76 characters, so values longer than 57 bytes), the encodings of a single line of a multi-line value, other encodings (shell quoting, HTML entities, URL encoding of a whole multi-line value with CRLF, ...), compression, encryption, or a value split up, reversed or re-cased;
 - a few bits at the edges of base64 inside a longer stream (the characters next to `[masked:…]` can depend on the neighbouring bytes);
 - anything written to files, sockets or other processes instead of stdout/stderr.
 
 If two variables hold the same value, the replacement names one of them.
+
+stdout and stderr are masked independently. Bytes held back on one stream (a possible secret prefix) can appear after later output on the other, so the interleaving of the two streams is not exact.
+
+Masking, `secret reveal`'s terminal check, and the absence of plaintext in MCP results are **friction, not access control**. Anything that can run the CLI as your user can print a secret, for example `pastevault run --no-mask -- printenv NAME` or `echo '{{ pv://secret/NAME }}' | pastevault inject -i - --stdout`.
 
 ## `inject`: fill a template
 

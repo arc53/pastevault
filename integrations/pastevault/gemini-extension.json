@@ -17,7 +17,7 @@
     },
     {
       "name": "PasteVault API token",
-      "description": "Optional API token (pv_pat_...). Leave empty to use the login stored by pastevault login.",
+      "description": "Optional API token (pv_pat_...), bound to the agent (pastevault token create --agent NAME) so it can make secret requests. Leave empty to use the login stored by pastevault login.",
       "envVar": "PASTEVAULT_TOKEN",
       "sensitive": true
     }

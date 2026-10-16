@@ -4,13 +4,12 @@ package main
 
 import (
 	"os"
-	"os/exec"
 )
 
 // On Windows, Ctrl-C reaches every process attached to the console, so
 // there is nothing to forward.
-func forwardSignals(_ *exec.Cmd, _ bool) func() {
-	return func() {}
+func forwardSignals() (attach func(*os.Process), stop func()) {
+	return func(*os.Process) {}, func() {}
 }
 
 func childExitCode(state *os.ProcessState) int {
