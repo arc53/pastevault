@@ -194,8 +194,8 @@ await runSuite('e2e-tokens', { postgres: true }, async ({ startServer, createDat
     expires_in_minutes: true,
     max_views: true,
     api_tokens: true,
-    agents: false,
-    sealed_shares: false,
+    agents: true,
+    sealed_shares: true,
     secret_requests: false,
     audit: true,
   })
@@ -501,8 +501,10 @@ await runSuite('e2e-tokens', { postgres: true }, async ({ startServer, createDat
     { recipient: { agent_id: 'agent-1', fingerprint, wrapped_key: wrappedKey } },
     session
   )
+  // Agents of another account (or unknown ones) can't be recipients;
+  // tests/e2e-agents.mjs covers sealing to the account's own agents.
   assert.equal(agentRecipient.response.status, 400)
-  assert.equal(agentRecipient.body.code, 'recipient_agent_unsupported')
+  assert.equal(agentRecipient.body.code, 'recipient_agent_unknown')
 
   const sealedFile = await createCompletedFileShare(baseUrl, {
     recipient: { fingerprint, wrapped_key: wrappedKey },
@@ -795,6 +797,7 @@ await runSuite('e2e-tokens', { postgres: true }, async ({ startServer, createDat
     '/api/account/tokens',
     '/api/account/audit',
     `/api/account/shares/${limitedShare.id}/events`,
+    '/api/agents',
   ]) {
     assert.equal((await request(anonymous.baseUrl, pathname)).response.status, 404, pathname)
   }
@@ -804,7 +807,8 @@ await runSuite('e2e-tokens', { postgres: true }, async ({ startServer, createDat
     max_views: true,
     api_tokens: false,
     agents: false,
-    sealed_shares: false,
+    // Sealing to a raw public key (--to-key) needs no accounts.
+    sealed_shares: true,
     secret_requests: false,
     audit: false,
   })

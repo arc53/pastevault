@@ -58,6 +58,17 @@ type CreateFileShareRequest struct {
 	TotalSizeBytes   int64  `json:"total_size_bytes"`
 	BurnAfterRead    bool   `json:"burn_after_read,omitempty"`
 	MaxViews         int    `json:"max_views,omitempty"`
+	// Recipient seals the share to an agent key (no #k= in the link).
+	Recipient *ShareRecipientRequest `json:"recipient,omitempty"`
+}
+
+// ShareRecipientRequest is the recipient of a sealed share: the content key
+// wrapped (PVWRAP1) to the agent's public key. AgentID names an agent of the
+// sender's account; without it the share is sealed to a raw key (--to-key).
+type ShareRecipientRequest struct {
+	AgentID     string `json:"agent_id,omitempty"`
+	Fingerprint string `json:"fingerprint"`
+	WrappedKey  string `json:"wrapped_key"`
 }
 
 type CreateFileShareResponse struct {
@@ -299,6 +310,8 @@ type CreatePasteRequest struct {
 	ExpiresInMinutes int    `json:"expires_in_minutes,omitempty"`
 	BurnAfterRead    bool   `json:"burn_after_read,omitempty"`
 	MaxViews         int    `json:"max_views,omitempty"`
+	// Recipient seals the paste to an agent key (no #k= in the link).
+	Recipient *ShareRecipientRequest `json:"recipient,omitempty"`
 }
 
 type CreatePasteResponse struct {
@@ -478,4 +491,38 @@ type ListAuditEventsResponse struct {
 
 type ListShareEventsResponse struct {
 	Events []AuditEvent `json:"events"`
+}
+
+// AgentSummary is an agent identity as the server lists it. Fingerprint is
+// the server's claim; clients recompute it from PublicKey.
+type AgentSummary struct {
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Kind        string  `json:"kind"`
+	PublicKey   string  `json:"public_key"`
+	Fingerprint string  `json:"fingerprint"`
+	CreatedAt   string  `json:"created_at"`
+	LastUsedAt  *string `json:"last_used_at"`
+	RevokedAt   *string `json:"revoked_at"`
+}
+
+type CreateAgentRequest struct {
+	Name        string `json:"name"`
+	PublicKey   string `json:"public_key"`
+	Fingerprint string `json:"fingerprint"`
+}
+
+type CreateAgentResponse struct {
+	Agent AgentSummary `json:"agent"`
+	// TokenBound is true when the API token used is now bound to this agent.
+	TokenBound bool `json:"token_bound"`
+}
+
+type ListAgentsResponse struct {
+	Agents []AgentSummary `json:"agents"`
+}
+
+type RevokeAgentResponse struct {
+	Agent         AgentSummary `json:"agent"`
+	TokensRevoked int          `json:"tokens_revoked"`
 }

@@ -62,6 +62,12 @@ export function auditActorFor(principal: Principal | null, ownerUserId: string):
   return { kind: 'anonymous' }
 }
 
+// A share sealed to an agent of the owner's account, opened by that account
+// (recipient auth passed). Attributed to the agent the share was sealed to.
+export function recipientActor(principal: Principal, agentId: string | null): AuditActor {
+  return { kind: 'recipient', token_id: principal.token_id, agent_id: agentId }
+}
+
 // Client family only, never the full User-Agent string.
 export function describeClient(userAgent: string | undefined) {
   if (!userAgent) {
@@ -187,18 +193,21 @@ export function recordShareEvent(
 // one share.viewed event per actor per window instead of one row per GET.
 export const VIEW_COALESCE_WINDOW_MS = 10 * 60 * 1000
 
-// share.viewed. View-limited shares log every view (at most max_views rows).
-// Unlimited shares extend the actor's latest share.viewed from the last
-// VIEW_COALESCE_WINDOW_MS when there is one: details.view becomes the latest
-// view number and details.views counts the views folded into the event.
-export async function recordShareView(
-  share: { id: string; user_id: string; share_type: string; slug: string },
+type ShareRef = { id: string; user_id: string; share_type: string; slug: string }
+
+// Folds repeated events by the same actor (actor_kind and actor_token_id)
+// within VIEW_COALESCE_WINDOW_MS into the latest one: `merge` builds its new
+// details from the previous ones. Unbounded events (views of unlimited
+// shares, denied attempts) then cost one row per actor per window.
+async function recordCoalescedShareEvent(
+  share: ShareRef,
+  event: AuditEventName,
   actor: AuditActor,
-  view: { view: number; max_views: number | null },
+  merge: (previous: Record<string, unknown> | null) => Record<string, unknown>,
   request?: FastifyRequest
 ) {
-  if (view.max_views !== null || config.DISABLE_AUTH) {
-    return recordShareEvent(share, 'share.viewed', actor, { details: view, request })
+  if (config.DISABLE_AUTH) {
+    return
   }
 
   try {
@@ -208,7 +217,7 @@ export async function recordShareView(
       where: {
         user_id: share.user_id,
         subject_id: share.id,
-        event: 'share.viewed',
+        event,
         actor_kind: actor.kind,
         actor_token_id: actor.token_id ?? null,
         created_at: { gte: new Date(Date.now() - VIEW_COALESCE_WINDOW_MS) },
@@ -217,31 +226,75 @@ export async function recordShareView(
     })
 
     if (recent) {
-      const previous = parseDetails(recent.details)
-      const views = typeof previous?.views === 'number' ? previous.views : 1
       // Approximate under concurrency (read-modify-write); it's a counter in a
       // metadata log, not an access control.
       await prisma.auditEvent.update({
         where: { id: recent.id },
-        data: {
-          details: JSON.stringify({
-            ...view,
-            views: views + 1,
-            last_viewed_at: new Date(),
-          }),
-        },
+        data: { details: JSON.stringify(merge(parseDetails(recent.details))) },
       })
       return
     }
   } catch (error: unknown) {
     const logger = request?.log ?? console
-    logger.error({ err: error }, 'Failed to coalesce share.viewed')
+    logger.error({ err: error, event }, 'Failed to coalesce audit event')
   }
 
-  return recordShareEvent(share, 'share.viewed', actor, {
-    details: { ...view, views: 1 },
-    request,
-  })
+  return recordShareEvent(share, event, actor, { details: merge(null), request })
+}
+
+// share.viewed. View-limited shares log every view (at most max_views rows).
+// Unlimited shares extend the actor's latest share.viewed from the last
+// VIEW_COALESCE_WINDOW_MS when there is one: details.view becomes the latest
+// view number and details.views counts the views folded into the event.
+export async function recordShareView(
+  share: ShareRef,
+  actor: AuditActor,
+  view: { view: number; max_views: number | null },
+  request?: FastifyRequest
+) {
+  if (view.max_views !== null || config.DISABLE_AUTH) {
+    return recordShareEvent(share, 'share.viewed', actor, { details: view, request })
+  }
+
+  return recordCoalescedShareEvent(
+    share,
+    'share.viewed',
+    actor,
+    (previous) =>
+      previous
+        ? {
+            ...view,
+            views: (typeof previous.views === 'number' ? previous.views : 1) + 1,
+            last_viewed_at: new Date(),
+          }
+        : { ...view, views: 1 },
+    request
+  )
+}
+
+// share.access_denied: a consuming GET of a sealed share without the
+// recipient's credentials. No view was consumed. Repeated attempts by the same
+// actor are folded: details.attempts counts them.
+export async function recordShareAccessDenied(
+  share: ShareRef,
+  actor: AuditActor,
+  reason: string,
+  request?: FastifyRequest
+) {
+  return recordCoalescedShareEvent(
+    share,
+    'share.access_denied',
+    actor,
+    (previous) =>
+      previous
+        ? {
+            reason,
+            attempts: (typeof previous.attempts === 'number' ? previous.attempts : 1) + 1,
+            last_attempt_at: new Date(),
+          }
+        : { reason, attempts: 1 },
+    request
+  )
 }
 
 export async function purgeAuditEventsOlderThan(cutoff: Date) {

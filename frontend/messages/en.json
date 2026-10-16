@@ -175,6 +175,16 @@
     "passwordRetryHint": "The note was opened but the password did not match. It is kept in this tab only: try again without reloading the page.",
     "revealFailed": "Could not derive the decryption key in this browser. The note has not been opened; please try again."
   },
+  "sealedShare": {
+    "title": "Sealed for agent {fingerprint}",
+    "description": "This share is sealed to one agent's key. The link carries no decryption key, so it can't be opened in a browser: only the agent holding the matching private key can open it, with the PasteVault CLI.",
+    "fingerprintLabel": "Recipient key fingerprint",
+    "commandLabel": "Open it on the agent's machine",
+    "copyCommand": "Copy command",
+    "accountNote": "The agent must also be signed in to the sender's account (pastevault login or an API token).",
+    "notOpened": "Viewing this page does not open the share or use up a view.",
+    "createNew": "Create new"
+  },
   "errors": {
     "pasteNotFound": "Paste Not Found",
     "pasteBurned": "Paste Burned",

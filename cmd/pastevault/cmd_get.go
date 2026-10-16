@@ -27,7 +27,9 @@ type getOutput struct {
 	ViewsRemaining *int          `json:"views_remaining"`
 	Burned         bool          `json:"burned"`
 	ExpiresAt      *string       `json:"expires_at"`
-	Content        *string       `json:"content,omitempty"`
+	// Recipient is the local agent key that opened a sealed share.
+	Recipient *putRecipient `json:"recipient,omitempty"`
+	Content   *string       `json:"content,omitempty"`
 }
 
 type getFileInfo struct {
@@ -42,6 +44,8 @@ type getOptions struct {
 	outDir    string
 	overwrite bool
 	password  pv.PasswordSource
+	// sealedTo is the local agent key a sealed share is opened with.
+	sealedTo *pv.AgentIdentity
 }
 
 // shareMeta is what get learns before it consumes a view.
@@ -53,7 +57,9 @@ type shareMeta struct {
 	kdfParams         string
 	viewsRemaining    *int
 	recipient         *pv.RecipientMeta
-	fileCount         int
+	// requiresRecipientAuth: only the recipient agent's account may open it.
+	requiresRecipientAuth bool
+	fileCount             int
 	// lookupErr is the 404 from the meta endpoints when known is false.
 	lookupErr error
 }
@@ -117,7 +123,8 @@ func runGet(ctx context.Context, a *app, args []string) error {
 	if err != nil {
 		return err
 	}
-	// Credentials identify the reader (audit, and later recipient auth).
+	// Credentials identify the reader (audit) and prove a sealed share's
+	// recipient account (recipient auth).
 	// PASTEVAULT_TOKEN is only sent to the configured server.
 	if _, err := pv.AttachCredentials(client, common.server); err != nil {
 		return err
@@ -131,7 +138,23 @@ func runGet(ctx context.Context, a *app, args []string) error {
 	}
 
 	if meta.recipient != nil {
-		return pv.NewError(pv.ExitDecrypt, pv.CodeSealedShare, "this share is sealed to the agent key %s and has no link key; this CLI version cannot open sealed shares", meta.recipient.Fingerprint)
+		// Only the agent holding the matching private key can open it. That
+		// is checked here, before a view is consumed.
+		identity, err := pv.FindIdentityByFingerprint(ref.Server, meta.recipient.Fingerprint)
+		if err != nil {
+			return err
+		}
+		if identity == nil {
+			return pv.NewError(pv.ExitDecrypt, pv.CodeSealedShare, "this share is sealed to the agent key %s, which matches no agent key on this machine (pastevault agent list); nothing was opened", meta.recipient.Fingerprint)
+		}
+		if meta.requiresRecipientAuth && !client.HasAuthToken() {
+			return pv.NewError(pv.ExitAuth, pv.CodeAuth, "this share is sealed to agent %s of an account and can only be opened signed in to that account: run pastevault login, or set PASTEVAULT_TOKEN (scope shares:receive); nothing was opened", pv.ShortFingerprint(identity.Fingerprint))
+		}
+		if len(ref.Key) > 0 || options.password.Requested() {
+			out.warnf("the share is sealed to an agent key; the given key or password is not used")
+		}
+		options.sealedTo = identity
+		ref.Key = nil
 	}
 
 	if meta.kind == pv.ShareKindPaste && out.json() && destinations == 0 {
@@ -145,7 +168,7 @@ func runGet(ctx context.Context, a *app, args []string) error {
 	}
 
 	password := ""
-	if !meta.known || meta.passwordProtected {
+	if options.sealedTo == nil && (!meta.known || meta.passwordProtected) {
 		promptAllowed := options.password.Prompt || (meta.passwordProtected && a.stdinIsTerminal() && !*keyStdin)
 		password, err = pv.ResolvePassword(pv.PasswordSource{Prompt: promptAllowed, File: options.password.File}, a.stdinIsTerminal(), a.promptPassword)
 		if err != nil {
@@ -153,13 +176,16 @@ func runGet(ctx context.Context, a *app, args []string) error {
 		}
 	}
 
+	// A sealed share's key is unwrapped from the opened share instead.
 	var derivedKey []byte
-	if meta.known {
+	switch {
+	case options.sealedTo != nil:
+	case meta.known:
 		derivedKey, err = pv.DerivePasteKey(ref.Key, meta.salt, meta.kdfParams, password)
 		if err != nil {
 			return err
 		}
-	} else if len(ref.Key) == 0 && password == "" {
+	case len(ref.Key) == 0 && password == "":
 		// Either the share does not exist, or the server predates /meta and
 		// nothing could decrypt it anyway: report the 404 without opening.
 		return meta.lookupErr
@@ -193,6 +219,8 @@ func lookupShareMeta(ctx context.Context, client *pv.Client, ref pv.ShareReferen
 				kdfParams:         pasteMeta.KDFParams,
 				viewsRemaining:    pasteMeta.ViewsRemaining,
 				recipient:         pasteMeta.Recipient,
+
+				requiresRecipientAuth: pasteMeta.RequiresRecipientAuth,
 			}, nil
 		case !pv.IsStatus(err, 404):
 			return shareMeta{}, err
@@ -213,6 +241,8 @@ func lookupShareMeta(ctx context.Context, client *pv.Client, ref pv.ShareReferen
 			viewsRemaining:    fileMeta.ViewsRemaining,
 			recipient:         fileMeta.Recipient,
 			fileCount:         fileMeta.FileCount,
+
+			requiresRecipientAuth: fileMeta.RequiresRecipientAuth,
 		}, nil
 	case pv.IsStatus(err, 404):
 		return shareMeta{kind: pv.ShareKindFileShare, lookupErr: err}, nil
@@ -267,7 +297,12 @@ func getPaste(
 		return err
 	}
 
-	if key == nil {
+	if options.sealedTo != nil {
+		key, err = unwrapShareKey(options.sealedTo, paste.WrappedKey, paste.RecipientFingerprint, pv.PasteWrapContext(ref.Slug))
+		if err != nil {
+			return err
+		}
+	} else if key == nil {
 		key, err = pv.DerivePasteKey(ref.Key, paste.Salt, paste.KDFParams, password)
 		if err != nil {
 			return err
@@ -306,6 +341,7 @@ func getPaste(
 		ViewsRemaining: paste.Metadata.ViewsRemaining,
 		Burned:         burned,
 		ExpiresAt:      optionalString(paste.Metadata.ExpiresAt),
+		Recipient:      sealedRecipientOutput(options.sealedTo),
 	}
 
 	switch {
@@ -372,7 +408,12 @@ func getFileShare(
 		return err
 	}
 
-	if key == nil {
+	if options.sealedTo != nil {
+		key, err = unwrapShareKey(options.sealedTo, share.WrappedKey, share.RecipientFingerprint, pv.FileShareWrapContext(ref.Slug))
+		if err != nil {
+			return err
+		}
+	} else if key == nil {
 		key, err = pv.DerivePasteKey(ref.Key, share.Salt, share.KDFParams, password)
 		if err != nil {
 			return err
@@ -405,6 +446,7 @@ func getFileShare(
 		ViewsRemaining: share.Metadata.ViewsRemaining,
 		Burned:         burned,
 		ExpiresAt:      optionalString(share.Metadata.ExpiresAt),
+		Recipient:      sealedRecipientOutput(options.sealedTo),
 	}
 
 	if options.toStdout || options.outFile != "" {
@@ -494,4 +536,31 @@ func downloadToFile(ctx context.Context, client *pv.Client, fileEntry pv.FileSha
 	}
 
 	return writeErr
+}
+
+// unwrapShareKey opens a sealed share's wrapped key with the local agent key.
+// The context binds it to the slug that was asked for, so the server can't
+// hand over another share's envelope.
+func unwrapShareKey(identity *pv.AgentIdentity, wrappedKey, recipientFingerprint, context string) ([]byte, error) {
+	if wrappedKey == "" {
+		return nil, pv.DecryptError("the server returned the sealed share without its wrapped key")
+	}
+	if recipientFingerprint != "" && recipientFingerprint != identity.Fingerprint {
+		return nil, pv.DecryptError("the share is sealed to %s, not to this agent (%s)", recipientFingerprint, identity.Fingerprint)
+	}
+
+	key, err := pv.UnwrapKey(wrappedKey, identity.Keys().PrivateKey, context)
+	if err != nil {
+		return nil, pv.DecryptError("could not unwrap the share key with agent key %s: it was sealed to another key or tampered with", pv.ShortFingerprint(identity.Fingerprint))
+	}
+
+	return key, nil
+}
+
+func sealedRecipientOutput(identity *pv.AgentIdentity) *putRecipient {
+	if identity == nil {
+		return nil
+	}
+
+	return &putRecipient{Name: identity.Name, Fingerprint: identity.Fingerprint}
 }

@@ -5,6 +5,7 @@ import {
   recordOwnedShareView,
 } from '../lib/account-shares.js'
 import { ensureAccountSystemSchema } from '../lib/account-schema.js'
+import { requireRecipientAccess, resolveShareRecipient } from '../lib/agents.js'
 import { auditActorFor, recordShareEvent, recordShareView } from '../lib/audit.js'
 import { config } from '../lib/config.js'
 import {
@@ -44,7 +45,6 @@ import {
   fileShareChunkParamsSchema,
   getFileShareParamsSchema,
   MAX_VIEWS_LIMIT,
-  rejectUnsupportedRecipient,
   validationErrorHandler,
 } from '../lib/validation.js'
 import {
@@ -149,13 +149,14 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
         chunk_size_bytes: config.FILE_CHUNK_SIZE_BYTES,
         burn_after_read: true,
       },
-      // Later stages flip agents, sealed_shares and secret_requests on.
+      // secret_requests arrives in a later stage. Sealing to a raw public key
+      // needs no account; sealing to an account agent needs `agents`.
       features: {
         expires_in_minutes: true,
         max_views: true,
         api_tokens: accountsEnabled,
-        agents: false,
-        sealed_shares: false,
+        agents: accountsEnabled,
+        sealed_shares: true,
         secret_requests: false,
         audit: accountsEnabled,
       },
@@ -186,7 +187,7 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
       requireScope(principal, 'shares:create')
     }
 
-    rejectUnsupportedRecipient(body.recipient)
+    const recipient = await resolveShareRecipient(principal, body.recipient)
 
     const slug = body.slug || generateSlug()
     const expiresAt = resolveShareExpiry(body)
@@ -204,14 +205,7 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
         total_size_bytes: body.total_size_bytes,
         burn_after_read: burnAfterRead,
         max_views: maxViews,
-        recipient: body.recipient
-          ? {
-              fingerprint: body.recipient.fingerprint,
-              agent_id: null,
-              user_id: null,
-              wrapped_key: body.recipient.wrapped_key,
-            }
-          : null,
+        recipient,
         upload_token_hash: hashSecretToken(uploadToken),
       })
 
@@ -235,8 +229,8 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
             burn_after_read: burnAfterRead,
             is_password_protected: Boolean(body.salt),
             max_views: maxViews,
-            recipient_fingerprint: body.recipient?.fingerprint ?? null,
-            recipient_agent_id: null,
+            recipient_fingerprint: recipient?.fingerprint ?? null,
+            recipient_agent_id: recipient?.agent_id ?? null,
             created_via_token_id: principal.token_id,
           })
           await recordShareEvent(
@@ -493,6 +487,10 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
       return reply.code(410).send({ error: 'File share has expired' })
     }
 
+    // A share sealed to an account agent can only be opened by that account
+    // (403 otherwise, and no view is used).
+    const recipientActor = await requireRecipientAccess(request, principal, 'file_share', share)
+
     try {
       const maxViews = effectiveMaxViews(share)
       let viewCount: number
@@ -546,7 +544,7 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
       })
 
       if (owned) {
-        const actor = auditActorFor(principal, owned.user_id)
+        const actor = recipientActor ?? auditActorFor(principal, owned.user_id)
         await recordShareView(owned, actor, { view: viewCount, max_views: maxViews }, request)
         if (isBurned) {
           await recordShareEvent(owned, 'share.burned', actor, { request })

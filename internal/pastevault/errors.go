@@ -187,6 +187,8 @@ func describeAPIError(apiErr *APIRequestError) string {
 		return message + " (the API token is unknown, revoked or expired; check PASTEVAULT_TOKEN or run pastevault login --with-token)"
 	case apiErr.ErrorCode == "insufficient_scope" && apiErr.Required != "":
 		return message + fmt.Sprintf(" (the API token lacks the %s scope)", apiErr.Required)
+	case apiErr.ErrorCode == "recipient_auth_required":
+		return message + " (a share sealed to an agent can only be opened with credentials of the recipient's account: pastevault login, or an API token with shares:receive)"
 	case apiErr.ErrorCode == "session_required":
 		return message + " (this needs a browser-approved login: run pastevault login)"
 	case apiErr.StatusCode == http.StatusUnauthorized && strings.EqualFold(apiErr.ErrorCode, "Authentication required"):

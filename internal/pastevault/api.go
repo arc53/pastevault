@@ -114,6 +114,31 @@ func (c *Client) RevokeAPIToken(ctx context.Context, id string) (RevokeAPITokenR
 	return response, err
 }
 
+func (c *Client) CreateAgent(ctx context.Context, payload CreateAgentRequest) (CreateAgentResponse, error) {
+	var response CreateAgentResponse
+	err := c.doJSON(ctx, http.MethodPost, "agents", payload, "application/json", &response)
+	return response, err
+}
+
+// ListAgents lists the account's agents; includeRevoked adds revoked ones.
+func (c *Client) ListAgents(ctx context.Context, includeRevoked bool) (ListAgentsResponse, error) {
+	relativePath := "agents"
+	if includeRevoked {
+		relativePath += "?include_revoked=1"
+	}
+
+	var response ListAgentsResponse
+	err := c.doJSON(ctx, http.MethodGet, relativePath, nil, "", &response)
+	return response, err
+}
+
+// RevokeAgent revokes an agent and every API token bound to it.
+func (c *Client) RevokeAgent(ctx context.Context, id string) (RevokeAgentResponse, error) {
+	var response RevokeAgentResponse
+	err := c.doJSON(ctx, http.MethodDelete, path.Join("agents", url.PathEscape(id)), nil, "", &response)
+	return response, err
+}
+
 func (c *Client) ListAccountShares(ctx context.Context, query AccountSharesQuery) (ListAccountSharesResponse, error) {
 	values := url.Values{}
 	setQuery(values, "share_type", query.ShareType)

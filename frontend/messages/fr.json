@@ -175,6 +175,16 @@
     "passwordRetryHint": "La note a été ouverte, mais le mot de passe ne correspond pas. Elle n’est conservée que dans cet onglet : réessayez sans recharger la page.",
     "revealFailed": "Impossible de dériver la clé de déchiffrement dans ce navigateur. La note n’a pas été ouverte ; veuillez réessayer."
   },
+  "sealedShare": {
+    "title": "Scellé pour l'agent {fingerprint}",
+    "description": "Ce partage est scellé avec la clé d'un agent. Le lien ne contient pas de clé de déchiffrement, il ne peut donc pas être ouvert dans un navigateur : seul l'agent qui détient la clé privée correspondante peut l'ouvrir, avec la CLI PasteVault.",
+    "fingerprintLabel": "Empreinte de la clé du destinataire",
+    "commandLabel": "Ouvrez-le sur la machine de l'agent",
+    "copyCommand": "Copier la commande",
+    "accountNote": "L'agent doit aussi être connecté au compte de l'expéditeur (pastevault login ou un jeton d'API).",
+    "notOpened": "Afficher cette page n'ouvre pas le partage et ne consomme aucune vue.",
+    "createNew": "Créer"
+  },
   "errors": {
     "pasteNotFound": "Paste introuvable",
     "pasteBurned": "Paste détruit",

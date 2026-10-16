@@ -111,5 +111,144 @@
       "nonce": "cHd-hYyTmqGor7a9xMvS2eDn7vX8AwoR",
       "ciphertext": "Zqz9pCTYUJZYrTp1aU9p7Tpvt5iAS71n2pQNPUBadtvSMw574NfyzaT4GOsNk8MJ5xo2MCA5J71mlAFEsSUsJWkRyE9NA9zk2DonM6y62a9GMcStPjzd4Pkbj8eJ-0HWYwSlHUa-qFIW3Gw0UhCdyyW4JVuRuSWNP6D_a_nQqDwDMNCiVvm33fovS-UFYf1l1Vgqt6ol0aPFvfLhCJkGHbw-gfV8wylCM2apPqgd4Rxf9GoSLwskujZ9EyA0V7AxtzkKjDOxpJU3k2BWVMRD7AMEnFZ53E2Fc5B8P6IxLH8VNBucPhKV_8i-VVLENb3IFS53Yl5J8btrq9cDXDW1Us4eMQ5iJp6bNx819zuiwdouaxV9l0mqpmBvEOt80zzWT8-LYyX5SxAlBv6--Ev5a-1b2dQ"
     }
+  ],
+  "fingerprint": [
+    {
+      "name": "fingerprint-from-secret-a",
+      "secret_key": "oKeutbzDytHY3-bt9PsCCRAXHiUsMzpBSE9WXWRrcnk",
+      "public_key": "PkXO4Od6KPwV6XHFkojF-hulYuZjDPpjfyZ4PCDUdjE",
+      "fingerprint": "pvk1_aiivyxasa4ht7regqlslgd3otsxvw3st",
+      "short": "pvk1_aiivyxas",
+      "display": "pvk1_aiiv yxas a4ht 7reg qlsl gd3o tsxv w3st"
+    },
+    {
+      "name": "fingerprint-from-secret-b",
+      "secret_key": "ERgfJi00O0JJUFdeZWxzeoGIj5adpKuyucDHztXc4-o",
+      "public_key": "5SuUCtGCz-1ZViTaqqiS9o8U1SxJrpAWtquHDggOgwA",
+      "fingerprint": "pvk1_g56qglowu4f7a7kukwckymwcr6txs4f5",
+      "short": "pvk1_g56qglow",
+      "display": "pvk1_g56q glow u4f7 a7ku kwck ymwc r6tx s4f5"
+    },
+    {
+      "name": "fingerprint-base-point",
+      "public_key": "CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "fingerprint": "pvk1_nhhpcpckp776iqs3x7sucrn3ghfaublg",
+      "short": "pvk1_nhhpcpck",
+      "display": "pvk1_nhhp cpck p776 iqs3 x7su crn3 ghfa ublg"
+    }
+  ],
+  "wrap": [
+    {
+      "name": "wrap-paste",
+      "context": "paste:Vb3kq9TQx_2Z",
+      "content_key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o",
+      "recipient_secret_key": "oKeutbzDytHY3-bt9PsCCRAXHiUsMzpBSE9WXWRrcnk",
+      "recipient_public_key": "PkXO4Od6KPwV6XHFkojF-hulYuZjDPpjfyZ4PCDUdjE",
+      "recipient_fingerprint": "pvk1_aiivyxasa4ht7regqlslgd3otsxvw3st",
+      "ephemeral_secret_key": "w8rR2N_m7fT7AgkQFx4lLDM6QUhPVl1ka3J5gIeOlZw",
+      "ephemeral_public_key": "tQ6tSjSbCdiP1h9KHmzANccrx0rK-UiWndTDNf9QtjI",
+      "nonce": "WmFob3Z9hIuSmaCnrrW8w8rR2N_m7fT7",
+      "shared_secret": "jSoHV_WedivjGzVB7vggT43Xu9fQTz5AXSHMGPubYQA",
+      "wrap_key": "RTVzMo_z6HnOw0AeoqVI4ovWt5hm24zsTztH5PVjf6c",
+      "aad": "pastevault:wrap:v1:paste:Vb3kq9TQx_2Z:pvk1_aiivyxasa4ht7regqlslgd3otsxvw3st",
+      "envelope": "AbUOrUo0mwnYj9YfSh5swDXHK8dKyvlIlp3UwzX_ULYyWmFob3Z9hIuSmaCnrrW8w8rR2N_m7fT7jjLt4XbozgMYKsQ0v17LKqxJ3SLwiZ5gw1y5qSswseO-VzKhoGy23cA4cP5EXZg-"
+    },
+    {
+      "name": "wrap-file-share",
+      "context": "file-share:fileslug1234",
+      "content_key": "ICcuNTxDSlFYX2ZtdHuCiZCXnqWss7rByM_W3eTr8vk",
+      "recipient_secret_key": "ERgfJi00O0JJUFdeZWxzeoGIj5adpKuyucDHztXc4-o",
+      "recipient_public_key": "5SuUCtGCz-1ZViTaqqiS9o8U1SxJrpAWtquHDggOgwA",
+      "recipient_fingerprint": "pvk1_g56qglowu4f7a7kukwckymwcr6txs4f5",
+      "ephemeral_secret_key": "d36FjJOaoaivtr3Ey9LZ4Ofu9fwDChEYHyYtNDtCSVA",
+      "ephemeral_public_key": "KRfXQblgIeJDAsU1nI5tlafRHeFqv2DTVF32zajy0Eo",
+      "nonce": "BQwTGiEoLzY9REtSWWBnbnV8g4qRmJ-m",
+      "shared_secret": "lxn-_0aTtyVS_2z_d5HETtyZORMGFPPuC6awibqe8Vo",
+      "wrap_key": "5WWTjZ9fAlxhUGsZLxm-e5u7j6EnPZD09thfLVAPchc",
+      "aad": "pastevault:wrap:v1:file-share:fileslug1234:pvk1_g56qglowu4f7a7kukwckymwcr6txs4f5",
+      "envelope": "ASkX10G5YCHiQwLFNZyObZWn0R3har9g01Rd9s2o8tBKBQwTGiEoLzY9REtSWWBnbnV8g4qRmJ-mJtP1-tesTlrNMxeboPB5K_jR3YLGmzQAlU-D57_lOEN9GQhESSY_SnmMhYuerX7i"
+    }
+  ],
+  "wrap_negative": [
+    {
+      "name": "unwrap-wrong-context",
+      "operation": "unwrap",
+      "reason": "the envelope was made for another paste",
+      "envelope": "AbUOrUo0mwnYj9YfSh5swDXHK8dKyvlIlp3UwzX_ULYyWmFob3Z9hIuSmaCnrrW8w8rR2N_m7fT7jjLt4XbozgMYKsQ0v17LKqxJ3SLwiZ5gw1y5qSswseO-VzKhoGy23cA4cP5EXZg-",
+      "recipient_secret_key": "oKeutbzDytHY3-bt9PsCCRAXHiUsMzpBSE9WXWRrcnk",
+      "context": "paste:another-slug"
+    },
+    {
+      "name": "unwrap-wrong-context-kind",
+      "operation": "unwrap",
+      "reason": "a paste envelope used for a file share with the same slug",
+      "envelope": "AbUOrUo0mwnYj9YfSh5swDXHK8dKyvlIlp3UwzX_ULYyWmFob3Z9hIuSmaCnrrW8w8rR2N_m7fT7jjLt4XbozgMYKsQ0v17LKqxJ3SLwiZ5gw1y5qSswseO-VzKhoGy23cA4cP5EXZg-",
+      "recipient_secret_key": "oKeutbzDytHY3-bt9PsCCRAXHiUsMzpBSE9WXWRrcnk",
+      "context": "file-share:Vb3kq9TQx_2Z"
+    },
+    {
+      "name": "unwrap-wrong-recipient",
+      "operation": "unwrap",
+      "reason": "opened with another agent key",
+      "envelope": "AbUOrUo0mwnYj9YfSh5swDXHK8dKyvlIlp3UwzX_ULYyWmFob3Z9hIuSmaCnrrW8w8rR2N_m7fT7jjLt4XbozgMYKsQ0v17LKqxJ3SLwiZ5gw1y5qSswseO-VzKhoGy23cA4cP5EXZg-",
+      "recipient_secret_key": "ERgfJi00O0JJUFdeZWxzeoGIj5adpKuyucDHztXc4-o",
+      "context": "paste:Vb3kq9TQx_2Z"
+    },
+    {
+      "name": "unwrap-wrong-fingerprint",
+      "operation": "unwrap",
+      "reason": "the AAD binds another recipient fingerprint",
+      "envelope": "AbUOrUo0mwnYj9YfSh5swDXHK8dKyvlIlp3UwzX_ULYyWmFob3Z9hIuSmaCnrrW8w8rR2N_m7fT7jjLt4XbozgMYKsQ0v17LKqxJ3SLwiZ5gw1y5qSswseMG91T9qPemdjLKRLDIk6Jo",
+      "recipient_secret_key": "oKeutbzDytHY3-bt9PsCCRAXHiUsMzpBSE9WXWRrcnk",
+      "context": "paste:Vb3kq9TQx_2Z"
+    },
+    {
+      "name": "unwrap-tampered",
+      "operation": "unwrap",
+      "reason": "one ciphertext bit flipped",
+      "envelope": "AbUOrUo0mwnYj9YfSh5swDXHK8dKyvlIlp3UwzX_ULYyWmFob3Z9hIuSmaCnrrW8w8rR2N_m7fT7jjLt4XbozgMYKsQ0v17LKqxJ3SLwiZ5gw1y5qSswseO-VzKhoGy23cA4cP5EXZg_",
+      "recipient_secret_key": "oKeutbzDytHY3-bt9PsCCRAXHiUsMzpBSE9WXWRrcnk",
+      "context": "paste:Vb3kq9TQx_2Z"
+    },
+    {
+      "name": "unwrap-bad-version",
+      "operation": "unwrap",
+      "reason": "unknown envelope version byte",
+      "envelope": "ArUOrUo0mwnYj9YfSh5swDXHK8dKyvlIlp3UwzX_ULYyWmFob3Z9hIuSmaCnrrW8w8rR2N_m7fT7jjLt4XbozgMYKsQ0v17LKqxJ3SLwiZ5gw1y5qSswseO-VzKhoGy23cA4cP5EXZg-",
+      "recipient_secret_key": "oKeutbzDytHY3-bt9PsCCRAXHiUsMzpBSE9WXWRrcnk",
+      "context": "paste:Vb3kq9TQx_2Z"
+    },
+    {
+      "name": "unwrap-truncated",
+      "operation": "unwrap",
+      "reason": "envelope shorter than 105 bytes",
+      "envelope": "AbUOrUo0mwnYj9YfSh5swDXHK8dKyvlIlp3UwzX_ULYyWmFob3Z9hIuSmaCnrrW8w8rR2N_m7fT7jjLt4XbozgMYKsQ0v17LKqxJ3SLwiZ5gw1y5qSswseO-VzKhoGy23cA4cP5EXZg",
+      "recipient_secret_key": "oKeutbzDytHY3-bt9PsCCRAXHiUsMzpBSE9WXWRrcnk",
+      "context": "paste:Vb3kq9TQx_2Z"
+    },
+    {
+      "name": "unwrap-zero-ephemeral",
+      "operation": "unwrap",
+      "reason": "low-order ephemeral key gives an all-zero shared secret",
+      "envelope": "AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWmFob3Z9hIuSmaCnrrW8w8rR2N_m7fT7jjLt4XbozgMYKsQ0v17LKqxJ3SLwiZ5gw1y5qSswseO-VzKhoGy23cA4cP5EXZg-",
+      "recipient_secret_key": "oKeutbzDytHY3-bt9PsCCRAXHiUsMzpBSE9WXWRrcnk",
+      "context": "paste:Vb3kq9TQx_2Z"
+    },
+    {
+      "name": "wrap-zero-public-key",
+      "operation": "wrap",
+      "reason": "all-zero shared secret",
+      "recipient_public_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "content_key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o",
+      "context": "paste:Vb3kq9TQx_2Z"
+    },
+    {
+      "name": "wrap-low-order-public-key",
+      "operation": "wrap",
+      "reason": "point of order 8 gives an all-zero shared secret",
+      "recipient_public_key": "4Ot6fDtBuK4WVuP68Z_EatoJjeucMrH9hmIFFl9JuAA",
+      "content_key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o",
+      "context": "paste:Vb3kq9TQx_2Z"
+    }
   ]
 }

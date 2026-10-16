@@ -104,18 +104,6 @@ function checkShareOptions(
   }
 }
 
-// Stage 1 stores shares sealed to a raw public key. Sealing to an agent of the
-// account needs agent lookup and recipient auth on read, which come with the
-// agents API; until then such requests are refused instead of half-honoured.
-export function rejectUnsupportedRecipient(recipient: { agent_id?: string } | undefined) {
-  if (recipient?.agent_id !== undefined) {
-    throw new HttpError(400, {
-      error: 'recipient.agent_id is not supported by this server yet',
-      code: 'recipient_agent_unsupported',
-    })
-  }
-}
-
 export const createPasteSchema = z
   .object({
     ciphertext: z.string().min(1),
@@ -222,4 +210,29 @@ export const createApiTokenSchema = z
 
 export const apiTokenParamsSchema = z.object({
   tokenId: z.string().min(1).max(128),
+})
+
+export const createAgentSchema = z
+  .object({
+    name: z
+      .string()
+      .regex(
+        /^[a-z0-9][a-z0-9._-]{0,62}$/,
+        'name must be 1-63 characters of a-z, 0-9, ".", "_" or "-", starting with a letter or digit'
+      ),
+    public_key: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{43}$/, 'public_key must be a 32-byte X25519 key in unpadded base64url'),
+    fingerprint: z
+      .string()
+      .regex(/^pvk1_[a-z2-7]{32}$/, 'Fingerprint must look like pvk1_ followed by 32 base32 characters'),
+  })
+  .strict()
+
+export const listAgentsQuerySchema = z.object({
+  include_revoked: z.enum(['0', '1', 'true', 'false']).optional(),
+})
+
+export const agentParamsSchema = z.object({
+  agentId: z.string().min(1).max(128),
 })

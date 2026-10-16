@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,9 +26,10 @@ type putOutput struct {
 	TotalSizeBytes    *int64        `json:"total_size_bytes,omitempty"`
 }
 
-// putRecipient names the agent a sealed share was sent to (put --to).
+// putRecipient names the agent a sealed share was sent to (put --to). Name
+// is omitted for --to-key.
 type putRecipient struct {
-	Name        string `json:"name"`
+	Name        string `json:"name,omitempty"`
 	Fingerprint string `json:"fingerprint"`
 }
 
@@ -41,6 +43,14 @@ type putOptions struct {
 	password      pv.PasswordSource
 	noKeyInOutput bool
 	keyOut        string
+	to            string
+	toKey         string
+	// recipient is resolved from to/toKey; the share is then sealed to it.
+	recipient *shareRecipient
+}
+
+func (options putOptions) sealed() bool {
+	return options.to != "" || options.toKey != ""
 }
 
 // pasteInput is text that becomes a /p/ paste.
@@ -65,6 +75,8 @@ func runPut(ctx context.Context, a *app, args []string) error {
 	passwordFile := fs.String("password-file", "", "Protect with the password in this file")
 	noKeyInOutput := fs.Bool("no-key-in-output", false, "Print the link without its key (requires --key-out)")
 	keyOut := fs.String("key-out", "", "Write the share key to this new file (mode 0600)")
+	to := fs.String("to", "", "Seal the share to an agent of your account: NAME or pvk1_ fingerprint (link without key; default --max-views 1, --expires 1h)")
+	toKey := fs.String("to-key", "", "Seal the share to this X25519 public key (base64url, from pastevault agent pubkey)")
 
 	positional, err := parseArgs(fs, args)
 	if err != nil {
@@ -81,6 +93,8 @@ func runPut(ctx context.Context, a *app, args []string) error {
 		password:      pv.PasswordSource{Prompt: *passwordPrompt, File: *passwordFile},
 		noKeyInOutput: *noKeyInOutput,
 		keyOut:        *keyOut,
+		to:            strings.TrimSpace(*to),
+		toKey:         strings.TrimSpace(*toKey),
 	}
 	if err := validatePutFlags(&options, out, *expires, *expiresHours, *burn || *burnAfterRead); err != nil {
 		return err
@@ -118,7 +132,8 @@ func runPut(ctx context.Context, a *app, args []string) error {
 		return pv.UsageError("--as files needs file paths; text from stdin or --text is shared as a paste")
 	}
 
-	client, _, err := authenticatedClient(ctx, common, false)
+	// Sealing to an account agent needs the account (agent list, ownership).
+	client, _, err := authenticatedClient(ctx, common, options.to != "")
 	if err != nil {
 		return err
 	}
@@ -126,6 +141,12 @@ func runPut(ctx context.Context, a *app, args []string) error {
 	capabilities, err := fetchCapabilities(ctx, client)
 	if err != nil {
 		return err
+	}
+	if options.sealed() && !capabilities.Features.SealedShares {
+		return pv.UnsupportedError("this server does not support shares sealed to an agent key; update the server")
+	}
+	if options.to != "" && !capabilities.Features.Agents {
+		return pv.UnsupportedError("this server does not support agents; use --to-key with the agent's public key, or update the server")
 	}
 	maxPasteBytes := capabilities.Limits.MaxPasteSizeBytes
 	if maxPasteBytes <= 0 {
@@ -174,6 +195,17 @@ func runPut(ctx context.Context, a *app, args []string) error {
 		}
 	}
 
+	// Resolved (and the key pinned or checked) before anything is uploaded.
+	switch {
+	case options.to != "":
+		options.recipient, err = resolveRecipientAgent(ctx, client, out, options.to)
+	case options.toKey != "":
+		options.recipient, err = recipientFromKey(options.toKey)
+	}
+	if err != nil {
+		return err
+	}
+
 	encryption, err := pv.PrepareFileShareEncryption(password)
 	if err != nil {
 		return err
@@ -207,6 +239,15 @@ func runPut(ctx context.Context, a *app, args []string) error {
 }
 
 func validatePutFlags(options *putOptions, out *output, expires string, expiresHours int, burn bool) error {
+	if options.to != "" && options.toKey != "" {
+		return pv.UsageError("use either --to or --to-key, not both")
+	}
+	if options.toKey != "" {
+		if _, err := recipientFromKey(options.toKey); err != nil {
+			return err
+		}
+	}
+
 	switch options.as {
 	case "auto", "paste", "files":
 	default:
@@ -237,6 +278,8 @@ func validatePutFlags(options *putOptions, out *output, expires string, expiresH
 			return err
 		}
 		options.expiryMinutes = minutes
+	case options.sealed():
+		options.expiryMinutes = sealedDefaultExpiresMinutes
 	default:
 		options.expiryMinutes = pv.DefaultExpiresMinutes
 	}
@@ -258,8 +301,23 @@ func validatePutFlags(options *putOptions, out *output, expires string, expiresH
 		return pv.UsageError("password-protected shares have no URL key; drop --key-out and --no-key-in-output")
 	}
 
+	if options.sealed() {
+		if options.password.Requested() {
+			return pv.UsageError("a share sealed with --to/--to-key cannot also have a password")
+		}
+		if options.keyOut != "" || options.noKeyInOutput {
+			return pv.UsageError("a sealed share's key is only for its recipient; drop --key-out and --no-key-in-output")
+		}
+		if options.maxViews == 0 {
+			options.maxViews = 1
+		}
+	}
+
 	return nil
 }
+
+// sealedDefaultExpiresMinutes is the default expiry with --to/--to-key.
+const sealedDefaultExpiresMinutes = 60
 
 // filePasteCandidate returns the paste for "--as paste", or for "--as auto"
 // with a single dotenv file that fits the paste limit; nil means file share.
@@ -392,6 +450,12 @@ func createPaste(
 	if err != nil {
 		return putOutput{}, err
 	}
+	var recipient *pv.ShareRecipientRequest
+	if options.recipient != nil {
+		if recipient, err = options.recipient.request(encryption.Key, pv.PasteWrapContext(slug)); err != nil {
+			return putOutput{}, err
+		}
+	}
 
 	out.infof("Creating paste %s", slug)
 	response, err := client.CreatePaste(ctx, pv.CreatePasteRequest{
@@ -404,6 +468,7 @@ func createPaste(
 		ExpiresInMinutes: expiry.Minutes,
 		BurnAfterRead:    options.maxViews == 1,
 		MaxViews:         maxViewsField(options.maxViews),
+		Recipient:        recipient,
 	})
 	if err != nil {
 		return putOutput{}, err
@@ -411,6 +476,7 @@ func createPaste(
 
 	key := shareURLKey(encryption, options)
 	return putOutput{
+		Recipient:         options.recipient.output(),
 		Slug:              response.Slug,
 		Kind:              string(pv.ShareKindPaste),
 		URL:               pv.BuildPasteURL(pv.ResolvePublicBaseURL(server), response.Slug, key),
@@ -455,6 +521,12 @@ func createFileShare(
 	if err != nil {
 		return putOutput{}, err
 	}
+	var recipient *pv.ShareRecipientRequest
+	if options.recipient != nil {
+		if recipient, err = options.recipient.request(encryption.Key, pv.FileShareWrapContext(slug)); err != nil {
+			return putOutput{}, err
+		}
+	}
 
 	out.infof("Creating share %s", slug)
 	createResponse, err := client.CreateFileShare(ctx, pv.CreateFileShareRequest{
@@ -467,6 +539,7 @@ func createFileShare(
 		TotalSizeBytes:   totalSize,
 		BurnAfterRead:    options.maxViews == 1,
 		MaxViews:         maxViewsField(options.maxViews),
+		Recipient:        recipient,
 	})
 	if err != nil {
 		return putOutput{}, err
@@ -514,6 +587,7 @@ func createFileShare(
 	key := shareURLKey(encryption, options)
 	fileCount := len(inputs)
 	return putOutput{
+		Recipient:         options.recipient.output(),
 		Slug:              createResponse.Slug,
 		Kind:              string(pv.ShareKindFileShare),
 		URL:               pv.BuildFileShareURL(pv.ResolvePublicBaseURL(server), createResponse.Slug, key),
@@ -550,9 +624,9 @@ func resultMaxViews(fromServer *int, requested int) *int {
 }
 
 // shareURLKey is the key that goes into the printed link: none for password
-// shares or with --no-key-in-output.
+// shares, sealed shares or with --no-key-in-output.
 func shareURLKey(encryption pv.FileShareEncryption, options putOptions) []byte {
-	if options.noKeyInOutput {
+	if options.noKeyInOutput || options.recipient != nil {
 		return nil
 	}
 
@@ -575,6 +649,8 @@ func printPutResult(out *output, result putOutput, encryption pv.FileShareEncryp
 	out.printf("%s\n", result.URL)
 	if !out.common.quiet {
 		switch {
+		case result.Recipient != nil:
+			out.printf("pastevault get %s\n", result.Slug)
 		case result.PasswordProtected:
 			out.printf("pastevault get %s --password\n", result.Slug)
 		case options.noKeyInOutput:
@@ -586,6 +662,13 @@ func printPutResult(out *output, result putOutput, encryption pv.FileShareEncryp
 
 	if result.PasswordProtected {
 		out.infof("Password protection is enabled; recipients also need the password.")
+	}
+	if recipient := result.Recipient; recipient != nil {
+		who := "the holder of key " + pv.ShortFingerprint(recipient.Fingerprint)
+		if recipient.Name != "" {
+			who = fmt.Sprintf("agent %s (%s)", recipient.Name, pv.ShortFingerprint(recipient.Fingerprint))
+		}
+		out.infof("Sealed for %s: the link has no key, and only that agent can open it with pastevault get.", who)
 	}
 	if options.keyOut != "" {
 		out.infof("Share key written to %s", options.keyOut)

@@ -112,3 +112,28 @@ export function isUniqueConstraintError(error: unknown): boolean {
     /unique constraint|duplicate key value|\b23505\b/i.test(candidate.message)
   )
 }
+
+const BASE32_ALPHABET = 'abcdefghijklmnopqrstuvwxyz234567'
+
+// RFC 4648 base32, lowercase, without padding (API tokens, fingerprints).
+export function base32Lower(bytes: Uint8Array) {
+  let output = ''
+  let buffer = 0
+  let bits = 0
+
+  for (const byte of bytes) {
+    buffer = (buffer << 8) | byte
+    bits += 8
+    while (bits >= 5) {
+      output += BASE32_ALPHABET[(buffer >>> (bits - 5)) & 31]
+      bits -= 5
+    }
+    buffer &= (1 << bits) - 1
+  }
+
+  if (bits > 0) {
+    output += BASE32_ALPHABET[(buffer << (5 - bits)) & 31]
+  }
+
+  return output
+}

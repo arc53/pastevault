@@ -56,6 +56,7 @@ var commands = []command{
 	{"revoke", "Delete shares you own", runRevoke},
 	{"audit", "Show the account audit log", runAudit},
 	{"token", "Create, list and revoke API tokens", runToken},
+	{"agent", "Create and manage agent keys for sealed shares", runAgent},
 	{"login", "Link this CLI to an account (browser approval or --with-token)", runLogin},
 	{"whoami", "Show the account and credential in use", runWhoAmI},
 	{"logout", "Forget (and revoke) stored credentials", runLogout},
@@ -314,7 +315,9 @@ Environment:
   PASTEVAULT_PUBLIC_URL      Base URL for share links (web origin)
   PASTEVAULT_TOKEN           API token (used only for the configured server)
   PASTEVAULT_PASSWORD        Share password (instead of a prompt)
-  PASTEVAULT_CONFIG_DIR      Directory for stored credentials
+  PASTEVAULT_CONFIG_DIR      Directory for stored credentials, agent keys and pins
+  PASTEVAULT_AGENT           Default agent name
+  PASTEVAULT_AGENT_KEY       Agent private key (base64url) instead of a key file
   PASTEVAULT_JSON            Set to 1 for JSON output
   PASTEVAULT_NO_UPDATE_CHECK Disable passive update checks
 
@@ -326,6 +329,8 @@ Examples:
   pastevault get abc123 --key-file key.txt -o out.txt
   pastevault status abc123 --wait viewed --timeout 10m
   pastevault token create --name ci
+  pastevault agent init --name laptop
+  pastevault put .env --to build-bot
 
 Run 'pastevault <command> --help' for a command's flags.
 Exit codes and JSON shapes: docs/cli-reference.md

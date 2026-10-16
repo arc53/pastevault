@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { ensureAccountSystemSchema } from './account-schema.js'
 import { getPrisma } from './db.js'
-import { hashSecretToken } from './utils.js'
+import { base32Lower, hashSecretToken } from './utils.js'
 
 export const SCOPES = [
   'shares:create',
@@ -26,29 +26,6 @@ const API_TOKEN_BODY_LENGTH = 52
 // Shown in listings so people can tell tokens apart: "pv_pat_" + 5 characters.
 const API_TOKEN_DISPLAY_PREFIX_LENGTH = 12
 const LAST_USED_RESOLUTION_MS = 60_000
-const BASE32_ALPHABET = 'abcdefghijklmnopqrstuvwxyz234567'
-
-function base32Lower(bytes: Uint8Array) {
-  let output = ''
-  let buffer = 0
-  let bits = 0
-
-  for (const byte of bytes) {
-    buffer = (buffer << 8) | byte
-    bits += 8
-    while (bits >= 5) {
-      output += BASE32_ALPHABET[(buffer >>> (bits - 5)) & 31]
-      bits -= 5
-    }
-    buffer &= (1 << bits) - 1
-  }
-
-  if (bits > 0) {
-    output += BASE32_ALPHABET[(buffer << (5 - bits)) & 31]
-  }
-
-  return output
-}
 
 export function isApiTokenString(value: string) {
   return value.startsWith(API_TOKEN_PREFIX)
@@ -125,6 +102,13 @@ export async function findActiveApiToken(token: string) {
         data: { last_used_at: now },
       })
       .catch(() => undefined)
+
+    // An agent-bound token acts as its agent, so it counts as agent use.
+    if (record.agent_id) {
+      void prisma.agentIdentity
+        .updateMany({ where: { id: record.agent_id }, data: { last_used_at: now } })
+        .catch(() => undefined)
+    }
   }
 
   return record

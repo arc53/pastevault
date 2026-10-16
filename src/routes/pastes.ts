@@ -5,6 +5,7 @@ import {
   markOwnedShareStatus,
 } from '../lib/account-shares.js'
 import { ensureAccountSystemSchema } from '../lib/account-schema.js'
+import { requireRecipientAccess, resolveShareRecipient } from '../lib/agents.js'
 import { auditActorFor, recordShareEvent, recordShareView } from '../lib/audit.js'
 import { config } from '../lib/config.js'
 import { getPrisma } from '../lib/db.js'
@@ -22,7 +23,7 @@ import {
 import {
   createPasteSchema,
   getPasteParamsSchema,
-  rejectUnsupportedRecipient,
+  HttpError,
   validationErrorHandler,
 } from '../lib/validation.js'
 import {
@@ -60,7 +61,7 @@ export async function pastesRoute(fastify: FastifyInstance) {
       requireScope(principal, 'shares:create')
     }
 
-    rejectUnsupportedRecipient(body.recipient)
+    const recipient = await resolveShareRecipient(principal, body.recipient)
 
     if (Buffer.from(body.ciphertext, 'base64').length > config.MAX_PASTE_SIZE_BYTES) {
       return reply.code(413).send({
@@ -84,8 +85,10 @@ export async function pastesRoute(fastify: FastifyInstance) {
           expires_at: expiresAt,
           burn_after_read: maxViews === 1,
           max_views: maxViews,
-          recipient_fingerprint: body.recipient?.fingerprint ?? null,
-          wrapped_key: body.recipient?.wrapped_key ?? null,
+          recipient_fingerprint: recipient?.fingerprint ?? null,
+          recipient_agent_id: recipient?.agent_id ?? null,
+          recipient_user_id: recipient?.user_id ?? null,
+          wrapped_key: recipient?.wrapped_key ?? null,
         },
       })
 
@@ -235,6 +238,10 @@ export async function pastesRoute(fastify: FastifyInstance) {
         return reply.code(410).send({ error: 'Paste has expired' })
       }
 
+      // A paste sealed to an account agent can only be consumed by that
+      // account (403 otherwise, and no view is used).
+      const recipientActor = await requireRecipientAccess(request, principal, 'paste', paste)
+
       const maxViews = effectiveMaxViews(paste)
       let isBurned = false
       let viewCount: number
@@ -271,7 +278,7 @@ export async function pastesRoute(fastify: FastifyInstance) {
       })
 
       if (owned) {
-        const actor = auditActorFor(principal, owned.user_id)
+        const actor = recipientActor ?? auditActorFor(principal, owned.user_id)
         await recordShareView(owned, actor, { view: viewCount, max_views: maxViews }, request)
         if (isBurned) {
           await recordShareEvent(owned, 'share.burned', actor, { request })
@@ -306,6 +313,9 @@ export async function pastesRoute(fastify: FastifyInstance) {
 
       return response
     } catch (error: unknown) {
+      if (error instanceof HttpError) {
+        throw error
+      }
       fastify.log.error({ err: error }, 'Failed to retrieve paste')
       return reply.code(500).send({ error: 'Internal server error' })
     }

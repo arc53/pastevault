@@ -20,7 +20,7 @@ export function canDeleteOwnedShare(status: OwnedShareStatus) {
   return status === 'active' || status === 'uploading'
 }
 
-async function findOwnedShareByResource(
+export async function findOwnedShareByResource(
   shareType: OwnedShareType,
   resourceId: string
 ) {

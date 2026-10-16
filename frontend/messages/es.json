@@ -175,6 +175,16 @@
     "passwordRetryHint": "La nota se abrió, pero la contraseña no coincide. Solo se conserva en esta pestaña: vuelve a intentarlo sin recargar la página.",
     "revealFailed": "No se pudo derivar la clave de descifrado en este navegador. La nota no se ha abierto; inténtalo de nuevo."
   },
+  "sealedShare": {
+    "title": "Sellado para el agente {fingerprint}",
+    "description": "Este contenido está sellado con la clave de un agente. El enlace no incluye la clave de descifrado, así que no se puede abrir en un navegador: solo el agente que tiene la clave privada correspondiente puede abrirlo con la CLI de PasteVault.",
+    "fingerprintLabel": "Huella de la clave del destinatario",
+    "commandLabel": "Ábrelo en la máquina del agente",
+    "copyCommand": "Copiar comando",
+    "accountNote": "El agente también debe haber iniciado sesión en la cuenta del remitente (pastevault login o un token de API).",
+    "notOpened": "Ver esta página no abre el contenido ni consume una visualización.",
+    "createNew": "Crear nuevo"
+  },
   "errors": {
     "pasteNotFound": "Paste No Encontrado",
     "pasteBurned": "Paste Quemado",

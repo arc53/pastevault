@@ -50,8 +50,10 @@ jobs:
           fi
       - run: go vet ./cmd/... ./internal/...
       - run: go test ./cmd/... ./internal/...
+      # Vectors regenerated from the web code, then checked by Go and by the
+      # web's own test (fingerprint.ts, wrap.ts).
       - name: Crypto vectors match the web implementation
-        run: node scripts/crypto-vectors.mjs --check
+        run: npm run test:crypto
 
   e2e-sqlite:
     name: E2E (SQLite, incl. Go CLI)
@@ -76,7 +78,7 @@ jobs:
       - run: npm run test:e2e
 
   e2e-postgres:
-    name: E2E (Postgres migrations, tokens and security)
+    name: E2E (Postgres migrations, tokens, security and agents)
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -101,11 +103,16 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             frontend/package-lock.json
+      # The agents suite drives the Go CLI.
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
       - run: npm ci
       - run: npm ci
         working-directory: frontend
       - run: npm run build:cli
       - name: Migrations match schema.postgres.prisma (fresh, plain up, PR1 upgrade)
         run: node tests/check-postgres-migrations.mjs
-      - name: Tokens and security suites on Postgres
-        run: node tests/run-e2e.mjs tokens security
+      - name: Tokens, security and agents suites on Postgres
+        run: node tests/run-e2e.mjs tokens security agents

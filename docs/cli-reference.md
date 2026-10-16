@@ -29,6 +29,14 @@ Commands use the first credential that applies:
 
 Credentials live in `auth.json` in the config directory: `$PASTEVAULT_CONFIG_DIR`, else `<user config dir>/pastevault` (for example `~/.config/pastevault` on Linux). The directory is created `0700` and the file is written `0600`. The auto-update settings (`pastevault config`) are not affected by `PASTEVAULT_CONFIG_DIR`.
 
+The config directory also holds (all files `0600`, directories `0700`):
+
+| File | Contents |
+|---|---|
+| `agents/<server>/<name>.json` | An agent key: `{v:1, name, server, agent_id, public_key, private_key, fingerprint, created_at}`. `<server>` is the server URL made file-safe, e.g. `https_api.pastevault.dev`. After `agent revoke` the file is renamed `<name>.revoked-<unix time>.json` and kept, so shares already sealed to it can still be opened. |
+| `known_agents.json` | Pinned agent keys: `{servers:{<server URL>:{<name>:{fingerprint, public_key, first_seen, source:"self"\|"tofu"\|"manual"}}}}`. |
+| `cli.json` | CLI settings: `{servers:{<server URL>:{default_agent}}}`. Separate from the updater's `config.json`, which stays in `<user config dir>/pastevault`. |
+
 Managing API tokens (`token create|list|revoke`) needs the **login session**. The server refuses token management with an API token, so a leaked token cannot mint new tokens or extend itself.
 
 ## Exit codes
@@ -38,12 +46,12 @@ Managing API tokens (`token create|list|revoke`) needs the **login session**. Th
 | 0 | OK | |
 | 1 | Unexpected or internal error | `internal` |
 | 2 | Usage or flag error; invalid request (HTTP 400); too large (413); missing key or password | `usage`, `invalid_request`, `too_large`, `key_required`, `password_required` |
-| 3 | Authentication: not logged in, 401, 403, missing scope, session required | `auth`, `not_logged_in`, `session_required` |
+| 3 | Authentication: not logged in, 401, 403, missing scope, session required, a sealed share opened without the recipient account | `auth`, `not_logged_in`, `session_required` |
 | 4 | Not found (404) | `not_found` |
 | 5 | Gone: burned, expired or revoked (410); a share that stops existing while `status --wait` waits | `gone` |
 | 6 | Request declined or cancelled (secret requests, future) | `declined` |
 | 7 | Decryption or integrity failure: wrong key or password, tampering, sealed share you cannot open | `decrypt_failed`, `sealed_share` |
-| 8 | Fingerprint or pin mismatch (agents, future) | `fingerprint_mismatch` |
+| 8 | Fingerprint or pin mismatch: an agent's key differs from the pinned one or from this machine's key file | `fingerprint_mismatch` |
 | 9 | Timeout (`status --wait`, login code expiry) | `timeout` |
 | 10 | Rate limited (429) | `rate_limited` |
 | 11 | Network or server error (5xx, connection failure) | `network` |
@@ -60,7 +68,9 @@ Managing API tokens (`token create|list|revoke`) needs the **login session**. Th
 | `PASTEVAULT_PUBLIC_URL` | Base URL for printed links, when the web app is not at the server URL minus `api.`/`/api`. |
 | `PASTEVAULT_TOKEN` | API token (`pv_pat_…`), used only for the configured server. |
 | `PASTEVAULT_PASSWORD` | Share password for `get`, and for `put --password` (instead of a prompt). |
-| `PASTEVAULT_CONFIG_DIR` | Directory for `auth.json`. |
+| `PASTEVAULT_CONFIG_DIR` | Directory for `auth.json`, agent keys, `known_agents.json` and `cli.json`. |
+| `PASTEVAULT_AGENT` | Default agent name (overrides `cli.json`). |
+| `PASTEVAULT_AGENT_KEY` | An agent private key (base64url, 32 bytes) used instead of key files, for CI and containers. `get` opens shares sealed to it. |
 | `PASTEVAULT_JSON` | `1` turns on `--json` for every command. |
 | `PASTEVAULT_NO_UPDATE_CHECK` | Disables passive update checks. |
 
@@ -97,6 +107,10 @@ Pastes are created in the same `/p/` format as the web app, so the browser opens
 | `--password-file F` | Password-protect with the password in F (one trailing newline is ignored). |
 | `--key-out F` | Also write the share key (base64url) to the new file F, mode `0600`. Refuses an existing file. |
 | `--no-key-in-output` | Print the link without `#k=`. Requires `--key-out`. |
+| `--to NAME\|FP` | Seal the share to an agent of your account, by name, full `pvk1_…` fingerprint, or a unique fingerprint prefix (`pvk1_` plus at least 8 characters). Needs a credential. |
+| `--to-key PK` | Seal the share to a raw X25519 public key (base64url, from `pastevault agent pubkey`). Works without an account. |
+
+**Sealed shares** (`--to`, `--to-key`). The share's key is wrapped (PVWRAP1) to the agent's public key and the printed link has **no** `#k=`: only the holder of the matching private key can open it, with `pastevault get`. `--to`/`--to-key` cannot be combined with a password, `--key-out` or `--no-key-in-output`. They default to `--max-views 1` and `--expires 1h` unless given. With `--to`, the agent's public key comes from the server but its fingerprint is computed locally and checked against `known_agents.json`: the first use pins it (`Pinned NAME pvk1_…` on stderr), and a different key later fails with exit 8 before anything is uploaded. After verifying the new fingerprint with the agent's owner (`pastevault agent show` on its machine), accept it with `pastevault agent trust NAME FP`. A full fingerprint in `--to` is itself the verification. A share sealed to an account agent can only be **opened** (consumed) with credentials of that account holding `shares:receive`; anyone else gets 403 and no view is used. Servers without sealed shares or agents exit 14.
 
 Older servers: without `expires_in_minutes` support, whole-hour expiries are sent as hours and anything else exits 14. Without `max_views` support, `--max-views` above 1 exits 14.
 
@@ -121,7 +135,7 @@ JSON output:
 }
 ```
 
-`kind` is `paste` or `file_share`. `key_file` appears with `--key-out`. `file_count` and `total_size_bytes` appear for file shares. `recipient` is reserved for shares sealed to an agent (`{name, fingerprint}`) and is `null` otherwise.
+`kind` is `paste` or `file_share`. `key_file` appears with `--key-out`. `file_count` and `total_size_bytes` appear for file shares. `recipient` is `{name, fingerprint}` for a sealed share (`name` is omitted with `--to-key`) and `null` otherwise.
 
 ## `get`: open a share
 
@@ -135,7 +149,9 @@ References:
 - `<slug>#k=KEY` or a bare `<slug>` on `--server`. Bare references try pastes first, then file shares.
 - `pv://share/<slug>[?server=HOST][#k=KEY]`.
 
-`get` always reads the share's metadata first. A missing key or password, an output path that cannot be written, or a sealed share all fail **before** a view is consumed, so a burn-after-read share is not wasted.
+`get` always reads the share's metadata first. A missing key or password, an output path that cannot be written, or a sealed share that no local agent key matches all fail **before** a view is consumed, so a burn-after-read share is not wasted.
+
+Sealed shares are opened with the local agent key whose fingerprint equals the share's recipient (key files under `agents/`, including revoked ones, or `PASTEVAULT_AGENT_KEY`). No key matches: exit 7 (`sealed_share`). A share sealed to an account agent also needs that account's credentials (exit 3 without any, checked before opening). The JSON output then adds `recipient: {name, fingerprint}` naming the key used.
 
 | Flag | Meaning |
 |---|---|
@@ -218,7 +234,7 @@ Needs `audit:read`. `--since` takes `15m`/`24h`/`7d` or an RFC 3339 time. JSON: 
 ## `token`: API tokens
 
 ```
-pastevault token create --name N [--scopes a,b] [--expires 90d|never]
+pastevault token create --name N [--scopes a,b] [--expires 90d|never] [--agent NAME]
 pastevault token list
 pastevault token revoke <id | prefix>
 ```
@@ -226,10 +242,33 @@ pastevault token revoke <id | prefix>
 These commands need the login session (`pastevault login`); `PASTEVAULT_TOKEN` and stored tokens are not used for them.
 
 - `create` prints the token **once**, alone on stdout (`token create --name ci -q > ci.token`). Default scopes are all except `agents:write`. Known scopes: `shares:create`, `shares:read`, `shares:revoke`, `shares:receive`, `agents:read`, `agents:write`, `requests:create`, `audit:read`. `--expires` takes `1d`–`365d` or `never` (default `90d`). JSON: `{id, token, name, prefix, scopes, agent_id, expires_at}`.
+- `--agent NAME` (name, full fingerprint or id) binds the token to an agent: it then acts as that agent, can only open shares sealed to that agent (not to the account's other agents), and is revoked with the agent.
 - `list` never shows token values. JSON: `{"tokens":[{id, name, prefix, scopes, agent, created_at, expires_at, last_used_at, revoked_at}]}`.
 - `revoke` takes the id or the 12-character prefix (`pv_pat_xxxxx`). JSON: `{"token":{…}}`.
 
 Use a token as `PASTEVAULT_TOKEN`, or store it with `login --with-token`.
+
+## `agent`: agent keys for sealed shares
+
+```
+pastevault agent init [--name N] [--force] [--default]
+pastevault agent list [--all]
+pastevault agent show [NAME]
+pastevault agent pubkey [NAME]
+pastevault agent revoke NAME
+pastevault agent trust NAME FINGERPRINT
+pastevault agent default [NAME]
+```
+
+An agent is an X25519 key pair. The private key stays on its machine; the public key is registered with the account so others in the account can `put --to NAME`. Fingerprints look like `pvk1_` plus 32 base32 characters; the short form is the first 8 characters after `pvk1_` and is for display only.
+
+- `init` generates a key, writes it (`0600`) before registering it, registers it (`agents:write`; a login session has it, default API tokens don't), pins it as `self`, and prints the fingerprint on stdout. `--name` defaults to the host name. The first agent on a server becomes the default; `--default` forces that. `--force` replaces this machine's key for the name, revoking the old agent. If an unbound API token registers the agent, the token becomes bound to it (`token_bound: true`). JSON: `{agent:{id, name, fingerprint, public_key, created_at, local_key, key_file, default, pin}, server, token_bound}`.
+- `list` shows the account's agents with locally computed fingerprints, whether this machine holds the key (`local_key`), the pin state (`self`, `tofu`, `manual`, `none`, `mismatch`) and `fingerprint_mismatch` when the server's claimed fingerprint is not its key's. JSON: `{"agents":[…]}`.
+- `show` prints an agent's full fingerprint; without NAME, the default agent (`PASTEVAULT_AGENT_KEY`, `PASTEVAULT_AGENT`, `cli.json`, or the only local key). Works offline for local keys. JSON: `{agent, server_status:"active"|"revoked"|"missing"|"unknown", server}`.
+- `pubkey` prints a local agent's public key for `put --to-key`.
+- `revoke` revokes an agent (by name, full fingerprint or id) and every API token bound to it. A local key for it is kept, renamed, so shares sealed to it before can still be opened. JSON: `{agent, tokens_revoked}`.
+- `trust` pins NAME's current server key after you verified FINGERPRINT out of band. It refuses (exit 8) when the server's key has another fingerprint.
+- `default` shows or sets the default agent for the server.
 
 ## `login`, `whoami`, `logout`
 
@@ -253,9 +292,13 @@ pastevault logout [--revoke]
 - Error messages never include keys, passwords or tokens.
 - `PASTEVAULT_TOKEN` is not tied to a server, so the CLI only sends it to the configured server.
 - `put --password` derives the key with PBKDF2-SHA256 (600,000 iterations) like the web app. A password is only as strong as its entropy; prefer the default random link key.
+- Agent private keys are files readable only by your OS user (`0600`; on Windows they inherit the profile directory's ACL). Anything running as that user can read them. They are never printed or sent; `PASTEVAULT_AGENT_KEY` is for CI secrets.
+- The server lists agents' public keys and could substitute its own. The CLI always computes fingerprints itself and pins keys, so a substituted key fails with exit 8 instead of being used. Compare fingerprints out of band before `agent trust`.
 
 ## Formats and test vectors
 
 Pastes use the web format: plaintext `{"title","body","render_mode","language_hint"?}` (JSON), XChaCha20-Poly1305 with a 24-byte nonce and AAD `pastevault:<slug>:v1`. File shares use per-chunk AAD `pastevault:file-share:chunk:<slug>:<file_id>:<index>:v1` and manifest AAD `pastevault:file-share:manifest:<slug>:v1`.
 
-`testdata/crypto/vectors.json` is generated from the web app's code by `node scripts/crypto-vectors.mjs` and checked with `--check` in CI; the Go tests read it. `npm run test:crypto` runs both.
+Sealed shares keep these formats and wrap the 32-byte share key with **PVWRAP1**: an ephemeral X25519 key, HKDF-SHA256 (`salt = e_pk || recipient_pk`, `info = "pastevault:wrap:v1"`), then XChaCha20-Poly1305 with AAD `pastevault:wrap:v1:<context>:<recipient fingerprint>`. The envelope is `0x01 || e_pk(32) || nonce(24) || ciphertext(48)`, 105 bytes or 140 base64url characters. Contexts are `paste:<slug>` and `file-share:<slug>`. Fingerprints are `pvk1_` + base32 (lowercase, unpadded) of the first 20 bytes of `SHA-256("pastevault:agent-key:v1" || 0x00 || public_key)`. Low-order public keys (all-zero shared secret) are refused.
+
+`testdata/crypto/vectors.json` is generated from the web app's code by `node scripts/crypto-vectors.mjs` and checked with `--check` in CI. It includes fingerprint and wrap vectors and negative wrap cases (wrong context, wrong recipient, wrong fingerprint in the AAD, tampering, low-order keys). The Go tests and `frontend/src/lib/__tests__/crypto-vectors.test.ts` both read it; `npm run test:crypto` runs all three.

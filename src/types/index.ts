@@ -154,6 +154,7 @@ export interface CapabilitiesResponse {
     chunk_size_bytes: number
     burn_after_read: boolean
   }
+  // agents needs accounts; sealed_shares (to a raw public key) works without.
   features: {
     expires_in_minutes: boolean
     max_views: boolean
@@ -292,4 +293,38 @@ export interface ListAuditEventsResponse {
 
 export interface ListShareEventsResponse {
   events: AuditEventResponse[]
+}
+
+export interface AgentSummary {
+  id: string
+  name: string
+  kind: string
+  // X25519 public key, unpadded base64url. Clients recompute the fingerprint
+  // from it instead of trusting `fingerprint`.
+  public_key: string
+  fingerprint: string
+  created_at: Date
+  last_used_at: Date | null
+  revoked_at: Date | null
+}
+
+export interface CreateAgentRequest {
+  name: string
+  public_key: string
+  fingerprint: string
+}
+
+export interface CreateAgentResponse {
+  agent: AgentSummary
+  // True when the calling API token was unbound and is now bound to this agent.
+  token_bound: boolean
+}
+
+export interface ListAgentsResponse {
+  agents: AgentSummary[]
+}
+
+export interface RevokeAgentResponse {
+  agent: AgentSummary
+  tokens_revoked: number
 }

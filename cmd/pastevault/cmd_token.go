@@ -25,7 +25,7 @@ func runToken(ctx context.Context, a *app, args []string) error {
 	case "revoke", "rm":
 		return runTokenRevoke(ctx, a, args[1:])
 	case "--help", "-h", "help":
-		fmt.Fprintln(a.stderr, "Usage:\n  pastevault token create --name N [--scopes a,b] [--expires 90d|never]\n  pastevault token list\n  pastevault token revoke <id | prefix>")
+		fmt.Fprintln(a.stderr, "Usage:\n  pastevault token create --name N [--scopes a,b] [--expires 90d|never] [--agent NAME]\n  pastevault token list\n  pastevault token revoke <id | prefix>")
 		return errHelpShown
 	default:
 		return pv.UsageError("unknown token command %q (expected create, list or revoke)", args[0])
@@ -39,10 +39,11 @@ var knownScopes = []string{
 }
 
 func runTokenCreate(ctx context.Context, a *app, args []string) error {
-	fs, common := a.newFlagSet("token create", "pastevault token create --name N [--scopes a,b] [--expires 90d|never] [flags]")
+	fs, common := a.newFlagSet("token create", "pastevault token create --name N [--scopes a,b] [--expires 90d|never] [--agent NAME] [flags]")
 	name := fs.String("name", "", "Token name, e.g. ci or laptop-agent")
 	scopes := fs.String("scopes", "", "Comma-separated scopes (default: all except agents:write)")
 	expires := fs.String("expires", "90d", "Lifetime in days (1d-365d) or never")
+	agent := fs.String("agent", "", "Bind the token to this agent (name or pvk1_ fingerprint); revoking the agent revokes the token")
 
 	positional, err := parseArgs(fs, args)
 	if err != nil {
@@ -80,6 +81,12 @@ func runTokenCreate(ctx context.Context, a *app, args []string) error {
 	client, err := sessionClient(ctx, common)
 	if err != nil {
 		return err
+	}
+	if *agent != "" {
+		request.AgentID, err = resolveTokenAgent(ctx, client, strings.TrimSpace(*agent))
+		if err != nil {
+			return err
+		}
 	}
 	created, err := client.CreateAPIToken(ctx, request)
 	if err != nil {
@@ -250,4 +257,21 @@ func containsString(list []string, value string) bool {
 	}
 
 	return false
+}
+
+// resolveTokenAgent maps token create --agent (name, full fingerprint or
+// id) to an active agent's id.
+func resolveTokenAgent(ctx context.Context, client *pv.Client, target string) (string, error) {
+	agents, err := fetchServerAgents(ctx, client, false)
+	if err != nil {
+		return "", err
+	}
+
+	for _, agent := range agents {
+		if agent.Name == target || agent.ID == target || (agent.fingerprint != "" && agent.fingerprint == target) {
+			return agent.ID, nil
+		}
+	}
+
+	return "", pv.NewError(pv.ExitNotFound, pv.CodeNotFound, "no active agent %s in this account (pastevault agent list)", target)
 }

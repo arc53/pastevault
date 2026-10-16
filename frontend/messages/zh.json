@@ -175,6 +175,16 @@
     "passwordRetryHint": "笔记已打开，但密码不匹配。内容仅保留在此标签页中：请勿刷新页面，直接重试。",
     "revealFailed": "无法在此浏览器中生成解密密钥。笔记尚未被打开，请重试。"
   },
+  "sealedShare": {
+    "title": "已为代理 {fingerprint} 加封",
+    "description": "此分享已使用某个代理的密钥加封。链接中不包含解密密钥，因此无法在浏览器中打开：只有持有对应私钥的代理才能通过 PasteVault CLI 打开。",
+    "fingerprintLabel": "接收方密钥指纹",
+    "commandLabel": "在代理所在的机器上打开",
+    "copyCommand": "复制命令",
+    "accountNote": "代理还必须登录发送者的账户（pastevault login 或 API 令牌）。",
+    "notOpened": "查看此页面不会打开分享，也不会消耗查看次数。",
+    "createNew": "新建"
+  },
   "errors": {
     "pasteNotFound": "贴文未找到",
     "pasteBurned": "贴文已销毁",
