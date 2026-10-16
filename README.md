@@ -53,7 +53,7 @@ Set `PASTEVAULT_NO_UPDATE_CHECK=1` to suppress passive checks for a particular e
 
 ### B) One command self-hosting (Node.js)
 
-Requirements: Node.js 20.19+, 22.13+, or 24+ and npm.
+Requirements: Node.js 22.13+ or 24+ and npm.
 
 ```bash
 npx pastevault up
