@@ -2,7 +2,6 @@ package pastevault
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"mime"
@@ -79,24 +78,6 @@ func ValidateExpiresHours(hours int) error {
 	}
 	if hours > MaxExpiresHours {
 		return fmt.Errorf("--expires-hours must be at most %d (got %d)", MaxExpiresHours, hours)
-	}
-
-	return nil
-}
-
-// CheckShareAccess verifies, before a share is opened, that the caller has
-// what it needs to decrypt it. Opening a burn-after-read share destroys it, so
-// this must fail early instead of after the only read.
-func CheckShareAccess(meta FileShareMetaResponse, ref ShareReference, password string) error {
-	if meta.PasswordProtected {
-		if strings.TrimSpace(password) == "" {
-			return fmt.Errorf("this share is password-protected; rerun with --password")
-		}
-		return nil
-	}
-
-	if len(ref.Key) == 0 {
-		return fmt.Errorf("missing share key; provide the full URL or use --key")
 	}
 
 	return nil
@@ -311,32 +292,42 @@ func DownloadManifest(
 			return err
 		}
 
-		var writeErr error
-		for _, chunk := range fileEntry.Chunks {
-			encryptedChunk, err := client.downloadChunkWithRetry(ctx, slug, downloadGrant, fileEntry.ID, chunk.Index)
-			if err != nil {
-				writeErr = err
-				break
-			}
-
-			plaintext, err := DecryptFileChunk(encryptedChunk, chunk.Nonce, key, slug, fileEntry.ID, chunk.Index)
-			if err != nil {
-				writeErr = err
-				break
-			}
-
-			if _, err := output.Write(plaintext); err != nil {
-				writeErr = err
-				break
-			}
-		}
-
+		writeErr := DownloadFileTo(ctx, client, fileEntry, key, slug, downloadGrant, output)
 		closeErr := output.Close()
 		if writeErr != nil {
 			return writeErr
 		}
 		if closeErr != nil {
 			return closeErr
+		}
+	}
+
+	return nil
+}
+
+// DownloadFileTo downloads and decrypts one manifest file into w.
+func DownloadFileTo(
+	ctx context.Context,
+	client *Client,
+	fileEntry FileShareManifestFile,
+	key []byte,
+	slug string,
+	downloadGrant string,
+	w io.Writer,
+) error {
+	for _, chunk := range fileEntry.Chunks {
+		encryptedChunk, err := client.downloadChunkWithRetry(ctx, slug, downloadGrant, fileEntry.ID, chunk.Index)
+		if err != nil {
+			return err
+		}
+
+		plaintext, err := DecryptFileChunk(encryptedChunk, chunk.Nonce, key, slug, fileEntry.ID, chunk.Index)
+		if err != nil {
+			return DecryptError("could not decrypt %s: the content was tampered with or the key is wrong", fileEntry.Name)
+		}
+
+		if _, err := w.Write(plaintext); err != nil {
+			return err
 		}
 	}
 
@@ -354,36 +345,15 @@ func PromptForPassword(prompt string) (string, error) {
 	return strings.TrimSpace(string(password)), nil
 }
 
-func NewShareOutputJSON(slug, shareURL, expiresAt string, fileCount int, totalBytes int64, passwordProtected, burnAfterRead bool) (string, error) {
-	payload := struct {
-		Slug              string `json:"slug"`
-		URL               string `json:"url"`
-		ExpiresAt         string `json:"expires_at,omitempty"`
-		FileCount         int    `json:"file_count"`
-		TotalSizeBytes    int64  `json:"total_size_bytes"`
-		PasswordProtected bool   `json:"password_protected"`
-		BurnAfterRead     bool   `json:"burn_after_read"`
-	}{
-		Slug:              slug,
-		URL:               shareURL,
-		ExpiresAt:         expiresAt,
-		FileCount:         fileCount,
-		TotalSizeBytes:    totalBytes,
-		PasswordProtected: passwordProtected,
-		BurnAfterRead:     burnAfterRead,
-	}
-
-	data, err := json.Marshal(payload)
-	if err != nil {
-		return "", err
-	}
-
-	return string(data), nil
-}
-
 func pathExists(targetPath string) bool {
 	_, err := os.Lstat(targetPath)
 	return err == nil
+}
+
+// CreatePrivateFile creates targetPath with owner-only permissions. Without
+// overwrite an existing file is an error (os.ErrExist).
+func CreatePrivateFile(targetPath string, overwrite bool) (*os.File, error) {
+	return createPrivateFile(targetPath, overwrite)
 }
 
 // createPrivateFile opens targetPath for writing with owner-only permissions,

@@ -27,12 +27,15 @@ Usage:
 ```bash
 pastevault login
 pastevault put ./report.pdf
-pastevault put --burn-after-read --expires-hours 1 ./secret.txt
+pastevault put --burn --expires 1h ./secret.txt
+echo "some text" | pastevault put -
 pastevault get https://your-server.example/f/abc123#k=yourkey
-pastevault get abc123#k=yourkey
+pastevault get abc123#k=yourkey --stdout
 pastevault whoami
 pastevault logout
 ```
+
+Every command, flag, JSON output shape and exit code is listed in [docs/cli-reference.md](docs/cli-reference.md).
 
 The native CLI talks to `https://api.pastevault.dev` by default and emits public share links on `https://pastevault.dev`. `pastevault login` uses a browser link or short code flow on `/device`, and logged-in CLI uploads show up later in the web account dashboard. Override the defaults with `PASTEVAULT_SERVER`, `PASTEVAULT_PUBLIC_URL`, or `--server` when testing against another deployment.
 

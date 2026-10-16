@@ -1,0 +1,14 @@
+{
+  "burned": false,
+  "content": "echo hi",
+  "expires_at": "2026-10-17T12:00:00.000Z",
+  "kind": "paste",
+  "language_hint": "bash",
+  "max_views": 2,
+  "render_mode": "plain",
+  "size_bytes": 7,
+  "slug": "<slug>",
+  "title": "script",
+  "view_count": 1,
+  "views_remaining": 1
+}

@@ -1,0 +1,111 @@
+name: Checks and end-to-end tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Typecheck, lint, Go tests, crypto vectors
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: npm ci
+      - run: npm ci
+        working-directory: frontend
+      - name: Backend typecheck and lint
+        run: |
+          npm run typecheck
+          npm run lint
+      - name: Frontend typecheck and lint
+        working-directory: frontend
+        run: |
+          npm run typecheck
+          npm run lint
+      - name: gofmt
+        run: |
+          unformatted="$(gofmt -l cmd internal)"
+          if [ -n "$unformatted" ]; then
+            echo "Run gofmt on:"; echo "$unformatted"; exit 1
+          fi
+      - run: go vet ./cmd/... ./internal/...
+      - run: go test ./cmd/... ./internal/...
+      - name: Crypto vectors match the web implementation
+        run: node scripts/crypto-vectors.mjs --check
+
+  e2e-sqlite:
+    name: E2E (SQLite, incl. Go CLI)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: npm ci
+      - run: npm ci
+        working-directory: frontend
+      # Builds backend and frontend, then runs every tests/e2e-*.mjs suite.
+      - run: npm run test:e2e
+
+  e2e-postgres:
+    name: E2E (Postgres migrations and tokens)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      E2E_POSTGRES_URL: postgres://postgres:postgres@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+      - run: npm ci
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run build:cli
+      - name: Migrations match schema.postgres.prisma (also after a server boot)
+        run: node tests/check-postgres-migrations.mjs --boot
+      - name: Tokens suite on Postgres
+        run: node tests/run-e2e.mjs tokens

@@ -34,28 +34,6 @@ func TestValidateExpiresHours(t *testing.T) {
 	}
 }
 
-func TestCheckShareAccess(t *testing.T) {
-	t.Parallel()
-
-	keyed := ShareReference{Slug: "slug123", Key: []byte("key")}
-	keyless := ShareReference{Slug: "slug123"}
-	passwordMeta := FileShareMetaResponse{PasswordProtected: true, BurnAfterRead: true}
-	keyMeta := FileShareMetaResponse{BurnAfterRead: true}
-
-	if err := CheckShareAccess(passwordMeta, keyless, ""); err == nil || !strings.Contains(err.Error(), "--password") {
-		t.Fatalf("expected password error, got %v", err)
-	}
-	if err := CheckShareAccess(passwordMeta, keyless, "hunter2"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if err := CheckShareAccess(keyMeta, keyless, ""); err == nil || !strings.Contains(err.Error(), "missing share key") {
-		t.Fatalf("expected missing key error, got %v", err)
-	}
-	if err := CheckShareAccess(keyMeta, keyed, ""); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
 func TestDownloadManifestWritesPrivateFilesWithGrant(t *testing.T) {
 	t.Parallel()
 

@@ -29,6 +29,7 @@
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "test:e2e": "npm run build:cli && node tests/run-e2e.mjs",
+    "test:crypto": "node scripts/crypto-vectors.mjs --check && go test ./internal/pastevault -run Vectors",
     "prepublishOnly": "npm run build:cli",
     "postinstall": "prisma generate --config prisma.config.js"
   },

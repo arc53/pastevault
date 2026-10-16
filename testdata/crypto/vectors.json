@@ -1,0 +1,115 @@
+{
+  "description": "PasteVault crypto test vectors, generated from the web app by scripts/crypto-vectors.mjs. Do not edit by hand.",
+  "version": 1,
+  "paste": [
+    {
+      "name": "paste-url-key-plain-language",
+      "mode": "url_key",
+      "slug": "Vb3kq9TQx_2Z",
+      "aad": "pastevault:Vb3kq9TQx_2Z:v1",
+      "content": {
+        "title": "deploy notes",
+        "body": "line 1\nline 2 with \"quotes\", a \\ backslash & <tags>\n",
+        "render_mode": "plain",
+        "language_hint": "bash"
+      },
+      "plaintext": "{\"title\":\"deploy notes\",\"body\":\"line 1\\nline 2 with \\\"quotes\\\", a \\\\ backslash & <tags>\\n\",\"render_mode\":\"plain\",\"language_hint\":\"bash\"}",
+      "key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o",
+      "nonce": "QEdOVVxjanF4f4aNlJuiqbC3vsXM09rh",
+      "ciphertext": "VthB8PPHezWOS6NCBYn3iF82Ew7ugJS5EeQep2S3Q9YeCB9CesVFjZbd_QnDRl6tY-z1F80MBVd-F8rmGNifWtSzO9lSfKRtdnVCHdIr-9wUUw4wK5W8vRJFZhF2vwLVJXt4eg13qDZp_05bAKp__5QbDfGQ0W7p2vzp6ro8dX4oGivqv0wxq2mYeLxaNHGw-hFkQ-0vHPg"
+    },
+    {
+      "name": "paste-url-key-markdown-unicode",
+      "mode": "url_key",
+      "slug": "mD-unic0de42",
+      "aad": "pastevault:mD-unic0de42:v1",
+      "content": {
+        "title": "",
+        "body": "# Héllo 👋\n\n- ünïcödé\n- tab\there\n",
+        "render_mode": "markdown"
+      },
+      "plaintext": "{\"title\":\"\",\"body\":\"# Héllo 👋\\n\\n- ünïcödé\\n- tab\\there\\n\",\"render_mode\":\"markdown\"}",
+      "key": "AgkQFx4lLDM6QUhPVl1ka3J5gIeOlZyjqrG4v8bN1Ns",
+      "nonce": "QUhPVl1ka3J5gIeOlZyjqrG4v8bN1Nvi",
+      "ciphertext": "p9TSUJNo8-nLv8IST-YJeyOGdeUVjdY6kDF9irIK0IaPRiFd0U7hXTM0Cxy0wUNlaHFrbFsrmWRQadZY_vwl_bWxPGJhHFJh2k6CRu5AC79HIGwKXhqkZcmuoUwMCrP-lxheGevfaAV4-gLF"
+    },
+    {
+      "name": "paste-password",
+      "mode": "password",
+      "slug": "pW-protected",
+      "aad": "pastevault:pW-protected:v1",
+      "content": {
+        "title": ".env",
+        "body": "API_KEY=sk-test-123\nDATABASE_URL=postgres://u:p@db/app\n",
+        "render_mode": "plain",
+        "language_hint": "bash"
+      },
+      "plaintext": "{\"title\":\".env\",\"body\":\"API_KEY=sk-test-123\\nDATABASE_URL=postgres://u:p@db/app\\n\",\"render_mode\":\"plain\",\"language_hint\":\"bash\"}",
+      "password": "correct horse battery staple",
+      "salt": "kJeepayzusHIz9bd5Ovy-Q",
+      "kdf_params": "{\"iterations\":600000,\"algorithm\":\"PBKDF2\",\"hash\":\"SHA-256\",\"keyLen\":32}",
+      "key": "uc33E1sFlU1FE05uVu-87O96oVfqzCq3CyTiBx0PLHs",
+      "nonce": "YGdudXyDipGYn6attLvCydDX3uXs8_oB",
+      "ciphertext": "YJLc1gZY3FkHzJJnqMxr6s9i75N_Z_KbwHb5LluZwap7P5sxh9Db1quZfTopSWP4xJ1HMiTsTotl-JXDn63SoKIxMXQLLdV9RdIdHlkAaItWhu0z_zCceSEJsl-kYrP9DJuB2mpPtYM7MZ0inAKYM03hOIDXdXoH6uf4FLEVm8PMeCqFVBfIu1QokidBy2AY"
+    }
+  ],
+  "chunk": [
+    {
+      "name": "chunk-text",
+      "slug": "fileslug1234",
+      "file_id": "file_id_0001",
+      "index": 0,
+      "aad": "pastevault:file-share:chunk:fileslug1234:file_id_0001:0:v1",
+      "key": "ICcuNTxDSlFYX2ZtdHuCiZCXnqWss7rByM_W3eTr8vk",
+      "nonce": "MDc-RUxTWmFob3Z9hIuSmaCnrrW8w8rR",
+      "plaintext": "aGVsbG8gY2h1bmsK",
+      "ciphertext": "wUJY6qww35H-SOTWK0fwEmSDu8n2Tm82lOsSJA"
+    },
+    {
+      "name": "chunk-binary-index-3",
+      "slug": "fileslug1234",
+      "file_id": "file_id_0002",
+      "index": 3,
+      "aad": "pastevault:file-share:chunk:fileslug1234:file_id_0002:3:v1",
+      "key": "ISgvNj1ES1JZYGdudXyDipGYn6attLvCydDX3uXs8_o",
+      "nonce": "MTg_Rk1UW2JpcHd-hYyTmqGor7a9xMvS",
+      "plaintext": "8Pf-BQwTGiEoLzY9REtSWWBnbnV8g4qRmJ-mrbS7wsnQ197l7PP6AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqQ",
+      "ciphertext": "4P0Kv3sanM7ykS2oL5sR8AREFtJFbi_lAaI8dbhMOQHm5PQh4TGDT2Szptdde2qP4S_bCBToES276JhUtKsXDYzZqjOCtTLkv5Gl0PuKXoA"
+    }
+  ],
+  "manifest": [
+    {
+      "name": "manifest-with-note",
+      "slug": "fileslug1234",
+      "aad": "pastevault:file-share:manifest:fileslug1234:v1",
+      "manifest": {
+        "version": "v1",
+        "paste": {
+          "title": "Read me",
+          "body": "Two files attached.",
+          "render_mode": "plain"
+        },
+        "files": [
+          {
+            "id": "file_id_0001",
+            "name": "notes.txt",
+            "size": 12,
+            "type": "text/plain",
+            "last_modified": 1760000000000,
+            "chunks": [
+              {
+                "index": 0,
+                "nonce": "MDc-RUxTWmFob3Z9hIuSmaCnrrW8w8rR",
+                "plaintext_size": 12
+              }
+            ]
+          }
+        ]
+      },
+      "plaintext": "{\"version\":\"v1\",\"paste\":{\"title\":\"Read me\",\"body\":\"Two files attached.\",\"render_mode\":\"plain\"},\"files\":[{\"id\":\"file_id_0001\",\"name\":\"notes.txt\",\"size\":12,\"type\":\"text/plain\",\"last_modified\":1760000000000,\"chunks\":[{\"index\":0,\"nonce\":\"MDc-RUxTWmFob3Z9hIuSmaCnrrW8w8rR\",\"plaintext_size\":12}]}]}",
+      "key": "UFdeZWxzeoGIj5adpKuyucDHztXc4-rx-P8GDRQbIik",
+      "nonce": "cHd-hYyTmqGor7a9xMvS2eDn7vX8AwoR",
+      "ciphertext": "Zqz9pCTYUJZYrTp1aU9p7Tpvt5iAS71n2pQNPUBadtvSMw574NfyzaT4GOsNk8MJ5xo2MCA5J71mlAFEsSUsJWkRyE9NA9zk2DonM6y62a9GMcStPjzd4Pkbj8eJ-0HWYwSlHUa-qFIW3Gw0UhCdyyW4JVuRuSWNP6D_a_nQqDwDMNCiVvm33fovS-UFYf1l1Vgqt6ol0aPFvfLhCJkGHbw-gfV8wylCM2apPqgd4Rxf9GoSLwskujZ9EyA0V7AxtzkKjDOxpJU3k2BWVMRD7AMEnFZ53E2Fc5B8P6IxLH8VNBucPhKV_8i-VVLENb3IFS53Yl5J8btrq9cDXDW1Us4eMQ5iJp6bNx819zuiwdouaxV9l0mqpmBvEOt80zzWT8-LYyX5SxAlBv6--Ev5a-1b2dQ"
+    }
+  ]
+}

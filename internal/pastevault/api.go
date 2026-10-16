@@ -59,10 +59,114 @@ func (c *Client) SetAuthToken(token string) {
 	c.authToken = strings.TrimSpace(token)
 }
 
-func (c *Client) GetCapabilities(ctx context.Context) (FileShareCapabilitiesResponse, error) {
-	var response FileShareCapabilitiesResponse
+// HasAuthToken reports whether requests carry a bearer credential.
+func (c *Client) HasAuthToken() bool {
+	return c.authToken != ""
+}
+
+func (c *Client) GetCapabilities(ctx context.Context) (CapabilitiesResponse, error) {
+	var response CapabilitiesResponse
 	err := c.doJSON(ctx, http.MethodGet, "capabilities", nil, "", &response)
 	return response, err
+}
+
+func (c *Client) CreatePaste(ctx context.Context, payload CreatePasteRequest) (CreatePasteResponse, error) {
+	var response CreatePasteResponse
+	err := c.doJSON(ctx, http.MethodPost, "pastes", payload, "application/json", &response)
+	return response, err
+}
+
+// GetPasteMeta describes a paste without consuming a view.
+func (c *Client) GetPasteMeta(ctx context.Context, slug string) (PasteMetaResponse, error) {
+	var response PasteMetaResponse
+	err := c.doJSON(ctx, http.MethodGet, path.Join("pastes", url.PathEscape(slug), "meta"), nil, "", &response)
+	return response, err
+}
+
+// GetPaste opens a paste and consumes a view; the last allowed view burns it.
+func (c *Client) GetPaste(ctx context.Context, slug string) (GetPasteResponse, error) {
+	var response GetPasteResponse
+	err := c.doJSON(ctx, http.MethodGet, path.Join("pastes", url.PathEscape(slug)), nil, "", &response)
+	return response, err
+}
+
+func (c *Client) GetMe(ctx context.Context) (MeResponse, error) {
+	var response MeResponse
+	err := c.doJSON(ctx, http.MethodGet, "me", nil, "", &response)
+	return response, err
+}
+
+func (c *Client) CreateAPIToken(ctx context.Context, payload CreateAPITokenRequest) (CreateAPITokenResponse, error) {
+	var response CreateAPITokenResponse
+	err := c.doJSON(ctx, http.MethodPost, "account/tokens", payload, "application/json", &response)
+	return response, err
+}
+
+func (c *Client) ListAPITokens(ctx context.Context) (ListAPITokensResponse, error) {
+	var response ListAPITokensResponse
+	err := c.doJSON(ctx, http.MethodGet, "account/tokens", nil, "", &response)
+	return response, err
+}
+
+func (c *Client) RevokeAPIToken(ctx context.Context, id string) (RevokeAPITokenResponse, error) {
+	var response RevokeAPITokenResponse
+	err := c.doJSON(ctx, http.MethodDelete, path.Join("account/tokens", url.PathEscape(id)), nil, "", &response)
+	return response, err
+}
+
+func (c *Client) ListAccountShares(ctx context.Context, query AccountSharesQuery) (ListAccountSharesResponse, error) {
+	values := url.Values{}
+	setQuery(values, "share_type", query.ShareType)
+	setQuery(values, "status", query.Status)
+	setQuery(values, "slug", query.Slug)
+	setQuery(values, "cursor", query.Cursor)
+	if query.Limit > 0 {
+		values.Set("limit", fmt.Sprintf("%d", query.Limit))
+	}
+
+	var response ListAccountSharesResponse
+	err := c.doJSON(ctx, http.MethodGet, withQuery("account/shares", values), nil, "", &response)
+	return response, err
+}
+
+func (c *Client) RevokeAccountShare(ctx context.Context, id string) (RevokeAccountShareResponse, error) {
+	var response RevokeAccountShareResponse
+	err := c.doJSON(ctx, http.MethodDelete, path.Join("account/shares", url.PathEscape(id)), nil, "", &response)
+	return response, err
+}
+
+func (c *Client) ListShareEvents(ctx context.Context, id string) (ListShareEventsResponse, error) {
+	var response ListShareEventsResponse
+	err := c.doJSON(ctx, http.MethodGet, path.Join("account/shares", url.PathEscape(id), "events"), nil, "", &response)
+	return response, err
+}
+
+func (c *Client) ListAuditEvents(ctx context.Context, query AuditQuery) (ListAuditEventsResponse, error) {
+	values := url.Values{}
+	setQuery(values, "since", query.Since)
+	setQuery(values, "event", query.Event)
+	setQuery(values, "cursor", query.Cursor)
+	if query.Limit > 0 {
+		values.Set("limit", fmt.Sprintf("%d", query.Limit))
+	}
+
+	var response ListAuditEventsResponse
+	err := c.doJSON(ctx, http.MethodGet, withQuery("account/audit", values), nil, "", &response)
+	return response, err
+}
+
+func setQuery(values url.Values, name, value string) {
+	if value != "" {
+		values.Set(name, value)
+	}
+}
+
+func withQuery(relativePath string, values url.Values) string {
+	if len(values) == 0 {
+		return relativePath
+	}
+
+	return relativePath + "?" + values.Encode()
 }
 
 func (c *Client) CreateFileShare(ctx context.Context, payload CreateFileShareRequest) (CreateFileShareResponse, error) {
@@ -225,7 +329,9 @@ func (c *Client) doBytes(ctx context.Context, method, relativePath string, body 
 
 func (c *Client) doBytesAtBase(ctx context.Context, baseURL *url.URL, method, relativePath string, body io.Reader, contentType string, headers http.Header, target io.Writer) error {
 	requestURL := *baseURL
+	relativePath, rawQuery, _ := strings.Cut(relativePath, "?")
 	requestURL.Path = path.Join(baseURL.Path, relativePath)
+	requestURL.RawQuery = rawQuery
 
 	request, err := http.NewRequestWithContext(ctx, method, requestURL.String(), body)
 	if err != nil {
@@ -256,13 +362,19 @@ func (c *Client) doBytesAtBase(ctx context.Context, baseURL *url.URL, method, re
 		data, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
 		apiError := APIErrorResponse{}
 		if len(data) > 0 && json.Unmarshal(data, &apiError) == nil && apiError.Error != "" {
+			description := apiError.ErrorDescription
+			if description == "" {
+				description = apiError.Message
+			}
 			return &APIRequestError{
 				Method:           method,
 				Path:             requestURL.Path,
 				StatusCode:       response.StatusCode,
 				Status:           response.Status,
 				ErrorCode:        apiError.Error,
-				ErrorDescription: apiError.ErrorDescription,
+				ErrorDescription: description,
+				Code:             apiError.Code,
+				Required:         apiError.Required,
 			}
 		}
 
