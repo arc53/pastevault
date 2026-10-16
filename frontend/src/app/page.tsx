@@ -282,8 +282,11 @@ export default function CreatePastePage() {
     if (isDraftEmpty(draft)) {
       releaseDraft()
     } else {
+      // On failure keep the previous id, so Send and Discard can still clear that older write.
       const id = saveDraft(draft)
-      ownedDraftRef.current = id ? { id, serialized } : null
+      if (id) {
+        ownedDraftRef.current = { id, serialized }
+      }
     }
   })
 
@@ -705,6 +708,7 @@ export default function CreatePastePage() {
     <Select
       value={expiresInHours.toString()}
       onValueChange={(value) => setExpiresInHours(Number(value))}
+      disabled={isCreating}
     >
       <SelectTrigger className={className}>
         <SelectValue />
@@ -720,7 +724,7 @@ export default function CreatePastePage() {
   )
 
   const renderFormatSelect = (fullWidth = false) => (
-    <Select value={format} onValueChange={setFormat}>
+    <Select value={format} onValueChange={setFormat} disabled={isCreating}>
       <SelectTrigger className={fullWidth ? 'w-full' : 'w-[180px]'}>
         <SelectValue />
       </SelectTrigger>
@@ -986,6 +990,7 @@ export default function CreatePastePage() {
                     type="checkbox"
                     checked={burnAfterRead}
                     onChange={(event) => setBurnAfterRead(event.target.checked)}
+                    disabled={isCreating}
                     className="h-4 w-4 rounded-sm border-border bg-background text-primary focus:ring-ring"
                   />
                 </label>
@@ -1001,6 +1006,7 @@ export default function CreatePastePage() {
                     type="checkbox"
                     checked={passwordProtected}
                     onChange={(event) => setPasswordProtected(event.target.checked)}
+                    disabled={isCreating}
                     className="h-4 w-4 rounded-sm border-border bg-background text-primary focus:ring-ring"
                   />
                 </label>
@@ -1041,6 +1047,7 @@ export default function CreatePastePage() {
                         type="button"
                         className="underline-offset-2 hover:text-foreground hover:underline"
                         onClick={discardDraft}
+                        disabled={isCreating}
                       >
                         {tCreate('draft.discard')}
                       </button>
@@ -1051,6 +1058,7 @@ export default function CreatePastePage() {
                   id="note-title"
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
+                  readOnly={isCreating}
                   placeholder={t('title')}
                   className="h-10 text-sm"
                 />
@@ -1188,6 +1196,7 @@ export default function CreatePastePage() {
                 onChange={setBody}
                 language={format}
                 height={editorHeight}
+                readOnly={isCreating}
               />
             </div>
 
@@ -1255,6 +1264,7 @@ export default function CreatePastePage() {
                       type="checkbox"
                       checked={burnAfterRead}
                       onChange={(event) => setBurnAfterRead(event.target.checked)}
+                      disabled={isCreating}
                       className="h-4 w-4 rounded-sm border-border bg-background text-primary focus:ring-ring"
                     />
                   </label>
@@ -1270,6 +1280,7 @@ export default function CreatePastePage() {
                       type="checkbox"
                       checked={passwordProtected}
                       onChange={(event) => setPasswordProtected(event.target.checked)}
+                      disabled={isCreating}
                       className="h-4 w-4 rounded-sm border-border bg-background text-primary focus:ring-ring"
                     />
                   </label>

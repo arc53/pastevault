@@ -12,14 +12,16 @@ interface EditorProps {
   placeholder?: string
   className?: string
   height?: string | number
+  readOnly?: boolean
 }
 
-const MobileTextarea = memo(({ value, onChange, className, height, language }: {
+const MobileTextarea = memo(({ value, onChange, className, height, language, readOnly }: {
   value: string
   onChange: (value: string) => void
   className?: string
   height?: string | number
   language?: string
+  readOnly?: boolean
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const highlightRef = useRef<HTMLDivElement>(null)
@@ -98,6 +100,7 @@ const MobileTextarea = memo(({ value, onChange, className, height, language }: {
         value={value}
         onChange={handleChange}
         onScroll={handleScroll}
+        readOnly={readOnly}
         className="absolute inset-0 h-full w-full resize-none border-0 bg-transparent p-4 font-mono text-[15px] leading-[1.55] outline-none caret-[#22C55E]"
         inputMode="text"
         autoCapitalize="none"
@@ -120,7 +123,8 @@ export function Editor({
   onChange,
   language = 'markdown',
   className,
-  height = '400px'
+  height = '400px',
+  readOnly = false,
 }: EditorProps) {
   const { resolvedTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
@@ -200,6 +204,7 @@ export function Editor({
         ref={textareaRef}
         value={value}
         onChange={handleTextareaChange}
+        readOnly={readOnly}
         className="absolute inset-0 h-full w-full resize-none bg-transparent p-4 font-mono text-[14px] leading-[1.55] outline-none caret-[#22C55E] sm:text-[15px]"
         style={{
           color: 'transparent',
@@ -233,7 +238,7 @@ export function Editor({
   }
 
   if (isMobile) {
-    return <MobileTextarea value={value} onChange={onChange} className={className} height={height} language={language} />
+    return <MobileTextarea value={value} onChange={onChange} className={className} height={height} language={language} readOnly={readOnly} />
   }
 
   return (
@@ -252,6 +257,7 @@ export function Editor({
             setMonacoLoaded(true)
           }}
           options={{
+            readOnly,
             minimap: { enabled: false },
             scrollBeyondLastLine: false,
             fontSize: typeof window !== 'undefined' && window.innerWidth <= 768 ? 15 : 13,
