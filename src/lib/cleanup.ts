@@ -58,7 +58,7 @@ export async function cleanupExpiredPastes(): Promise<number> {
     await markOwnedShareStatus(
       'file_share',
       share.id,
-      share.is_complete ? 'expired' : 'abandoned'
+      share.is_burned ? 'burned' : share.is_complete ? 'expired' : 'abandoned'
     )
     await deleteFileShareObjects(share.slug)
   }

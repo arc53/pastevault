@@ -25,6 +25,10 @@ func TestDoJSONAllowsNilTarget(t *testing.T) {
 				t.Fatalf("unexpected URL: %s", r.URL.String())
 			}
 
+			if r.Header.Get("X-Upload-Token") != "upload-token" {
+				t.Fatalf("unexpected X-Upload-Token header: %q", r.Header.Get("X-Upload-Token"))
+			}
+
 			return &http.Response{
 				StatusCode: http.StatusNoContent,
 				Body:       io.NopCloser(http.NoBody),
@@ -34,7 +38,7 @@ func TestDoJSONAllowsNilTarget(t *testing.T) {
 		}),
 	}
 
-	err = client.CompleteFileShare(context.Background(), "test", CompleteFileShareRequest{
+	err = client.CompleteFileShare(context.Background(), "test", "upload-token", CompleteFileShareRequest{
 		ManifestCiphertext: "ciphertext",
 		ManifestNonce:      "nonce",
 	})
@@ -177,5 +181,193 @@ func TestGetAuthSessionAllowsNullResponse(t *testing.T) {
 	}
 	if session != nil {
 		t.Fatal("expected nil session")
+	}
+}
+
+func newTestClient(t *testing.T, handler func(*http.Request) (*http.Response, error)) *Client {
+	t.Helper()
+
+	client, err := NewClient("https://api.pastevault.dev", "test")
+	if err != nil {
+		t.Fatalf("NewClient returned error: %v", err)
+	}
+	client.httpClient = &http.Client{Transport: roundTripFunc(handler)}
+	return client
+}
+
+func emptyResponse(r *http.Request, status int) *http.Response {
+	return &http.Response{
+		StatusCode: status,
+		Body:       io.NopCloser(http.NoBody),
+		Header:     make(http.Header),
+		Request:    r,
+	}
+}
+
+func TestUploadFileShareChunkSendsUploadToken(t *testing.T) {
+	t.Parallel()
+
+	client := newTestClient(t, func(r *http.Request) (*http.Response, error) {
+		if r.Method != http.MethodPut {
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+		if r.URL.Path != "/api/file-shares/slug123/chunks/file_1/3" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if got := r.Header.Get(UploadTokenHeader); got != "secret-token" {
+			t.Fatalf("unexpected upload token header: %q", got)
+		}
+		return emptyResponse(r, http.StatusNoContent), nil
+	})
+
+	if err := client.UploadFileShareChunk(context.Background(), "slug123", "secret-token", "file_1", 3, []byte("chunk")); err != nil {
+		t.Fatalf("UploadFileShareChunk returned error: %v", err)
+	}
+}
+
+func TestUploadFileShareChunkOmitsEmptyUploadToken(t *testing.T) {
+	t.Parallel()
+
+	// Older servers issue no token; the CLI must not send an empty header.
+	client := newTestClient(t, func(r *http.Request) (*http.Response, error) {
+		if _, ok := r.Header[UploadTokenHeader]; ok {
+			t.Fatalf("expected no %s header", UploadTokenHeader)
+		}
+		return emptyResponse(r, http.StatusNoContent), nil
+	})
+
+	if err := client.UploadFileShareChunk(context.Background(), "slug123", "", "file_1", 0, []byte("chunk")); err != nil {
+		t.Fatalf("UploadFileShareChunk returned error: %v", err)
+	}
+}
+
+func TestUploadFileShareChunkSurfacesUpdateHint(t *testing.T) {
+	t.Parallel()
+
+	client := newTestClient(t, func(r *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusUnauthorized,
+			Status:     "401 Unauthorized",
+			Body:       io.NopCloser(strings.NewReader(`{"error":"Missing upload token (X-Upload-Token). Your PasteVault client is out of date; please update it and try again."}`)),
+			Header:     make(http.Header),
+			Request:    r,
+		}, nil
+	})
+
+	err := client.UploadFileShareChunk(context.Background(), "slug123", "", "file_1", 0, []byte("chunk"))
+	if err == nil || !strings.Contains(err.Error(), "please update it") {
+		t.Fatalf("expected update hint in error, got %v", err)
+	}
+}
+
+func TestCreateFileShareSendsBurnAfterRead(t *testing.T) {
+	t.Parallel()
+
+	client := newTestClient(t, func(r *http.Request) (*http.Response, error) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("failed to read body: %v", err)
+		}
+		if !strings.Contains(string(body), `"burn_after_read":true`) {
+			t.Fatalf("expected burn_after_read in body: %s", body)
+		}
+		if !strings.Contains(string(body), `"expires_in_hours":1`) {
+			t.Fatalf("expected expires_in_hours in body: %s", body)
+		}
+		return &http.Response{
+			StatusCode: http.StatusCreated,
+			Body:       io.NopCloser(strings.NewReader(`{"slug":"slug123","expires_at":null,"burn_after_read":true,"upload_token":"tok"}`)),
+			Header:     make(http.Header),
+			Request:    r,
+		}, nil
+	})
+
+	response, err := client.CreateFileShare(context.Background(), CreateFileShareRequest{
+		Slug:           "slug123",
+		ExpiresInHours: 1,
+		FileCount:      1,
+		TotalSizeBytes: 5,
+		BurnAfterRead:  true,
+	})
+	if err != nil {
+		t.Fatalf("CreateFileShare returned error: %v", err)
+	}
+	if response.UploadToken != "tok" || !response.BurnAfterRead {
+		t.Fatalf("unexpected response: %+v", response)
+	}
+}
+
+func TestDownloadFileShareChunkSendsGrant(t *testing.T) {
+	t.Parallel()
+
+	client := newTestClient(t, func(r *http.Request) (*http.Response, error) {
+		if got := r.Header.Get(DownloadGrantHeader); got != "grant-123" {
+			t.Fatalf("unexpected download grant header: %q", got)
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader("ciphertext")),
+			Header:     make(http.Header),
+			Request:    r,
+		}, nil
+	})
+
+	data, err := client.DownloadFileShareChunk(context.Background(), "slug123", "grant-123", "file_1", 0)
+	if err != nil {
+		t.Fatalf("DownloadFileShareChunk returned error: %v", err)
+	}
+	if string(data) != "ciphertext" {
+		t.Fatalf("unexpected chunk: %q", data)
+	}
+}
+
+func TestGetFileShareMetaUsesMetaEndpoint(t *testing.T) {
+	t.Parallel()
+
+	client := newTestClient(t, func(r *http.Request) (*http.Response, error) {
+		if r.Method != http.MethodGet || r.URL.Path != "/api/file-shares/slug123/meta" {
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"slug":"slug123","burn_after_read":true,"password_protected":true,"file_count":2}`)),
+			Header:     make(http.Header),
+			Request:    r,
+		}, nil
+	})
+
+	meta, err := client.GetFileShareMeta(context.Background(), "slug123")
+	if err != nil {
+		t.Fatalf("GetFileShareMeta returned error: %v", err)
+	}
+	if !meta.BurnAfterRead || !meta.PasswordProtected || meta.FileCount != 2 {
+		t.Fatalf("unexpected meta: %+v", meta)
+	}
+}
+
+func TestSignOutRevokesBearerSession(t *testing.T) {
+	t.Parallel()
+
+	client := newTestClient(t, func(r *http.Request) (*http.Response, error) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+		if r.URL.String() != "https://api.pastevault.dev/api/auth/sign-out" {
+			t.Fatalf("unexpected URL: %s", r.URL.String())
+		}
+		if r.Header.Get("Authorization") != "Bearer test-token" {
+			t.Fatalf("unexpected Authorization header: %s", r.Header.Get("Authorization"))
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"success":true}`)),
+			Header:     make(http.Header),
+			Request:    r,
+		}, nil
+	})
+	client.SetAuthToken("test-token")
+
+	if err := client.SignOut(context.Background()); err != nil {
+		t.Fatalf("SignOut returned error: %v", err)
 	}
 }

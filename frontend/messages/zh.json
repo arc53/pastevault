@@ -138,7 +138,16 @@
     "expiredTitle": "Files Expired",
     "expiredDesc": "This file share has expired and is no longer available.",
     "tooManyFiles": "Too many files selected. The current server limit is {count}.",
-    "shareTooLarge": "This selection exceeds the server limit of {size}."
+    "shareTooLarge": "This selection exceeds the server limit of {size}.",
+    "revealTitle": "阅后即焚",
+    "revealDescription": "这些文件在打开后将被销毁。打开后只能在此标签页中下载，且在最后一次下载 15 分钟后无法再访问。",
+    "revealPasswordDescription": "这些文件受密码保护，打开后将被销毁。请输入密码以显示文件。",
+    "reveal": "显示文件",
+    "burnedNotice": "此分享已在服务器上销毁。请立即下载文件：此标签页的访问权限将在最后一次下载 15 分钟后结束。",
+    "passwordRetryHint": "分享已打开，但密码不匹配。内容仅保留在此标签页中：请勿刷新页面，直接重试。",
+    "burnedTitle": "文件已销毁",
+    "burnedDesc": "此文件分享设置为阅后即焚，且已被打开。",
+    "revealFailed": "无法在此浏览器中生成解密密钥。文件尚未被打开，请重试。"
   },
   "viewPaste": {
     "loadingPaste": "加载贴文中...",
@@ -157,7 +166,14 @@
     "expired": "已过期",
     "daysRemaining": "剩余 {days}天 {hours}小时",
     "hoursRemaining": "剩余 {hours}小时 {minutes}分钟",
-    "minutesRemaining": "剩余 {minutes}分钟"
+    "minutesRemaining": "剩余 {minutes}分钟",
+    "revealTitle": "阅后即焚",
+    "revealDescription": "此笔记在查看后将被销毁。请在准备好阅读时再打开。",
+    "revealPasswordDescription": "此笔记受密码保护，查看后将被销毁。请输入密码以显示内容。",
+    "reveal": "显示笔记",
+    "burnedNotice": "此笔记已在服务器上销毁，现在仅保留在此标签页中。离开前请复制所需内容。",
+    "passwordRetryHint": "笔记已打开，但密码不匹配。内容仅保留在此标签页中：请勿刷新页面，直接重试。",
+    "revealFailed": "无法在此浏览器中生成解密密钥。笔记尚未被打开，请重试。"
   },
   "errors": {
     "pasteNotFound": "贴文未找到",

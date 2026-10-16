@@ -70,6 +70,7 @@ export async function createOwnedFileShareRecord(input: {
   expires_at: Date | null
   file_count: number
   total_size_bytes: number
+  burn_after_read: boolean
   is_password_protected: boolean
 }) {
   await ensureAccountSystemSchema()
@@ -85,6 +86,7 @@ export async function createOwnedFileShareRecord(input: {
       expires_at: input.expires_at,
       file_count: input.file_count,
       total_size_bytes: String(input.total_size_bytes),
+      burn_after_read: input.burn_after_read,
       is_password_protected: input.is_password_protected,
     },
   })

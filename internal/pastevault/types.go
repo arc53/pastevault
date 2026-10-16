@@ -16,6 +16,7 @@ type FileShareCapabilities struct {
 	MaxShareSizeBytes int  `json:"max_share_size_bytes"`
 	MaxFiles          int  `json:"max_files"`
 	ChunkSizeBytes    int  `json:"chunk_size_bytes"`
+	BurnAfterRead     bool `json:"burn_after_read"`
 }
 
 type CreateFileShareRequest struct {
@@ -25,11 +26,15 @@ type CreateFileShareRequest struct {
 	ExpiresInHours int    `json:"expires_in_hours,omitempty"`
 	FileCount      int    `json:"file_count"`
 	TotalSizeBytes int64  `json:"total_size_bytes"`
+	BurnAfterRead  bool   `json:"burn_after_read,omitempty"`
 }
 
 type CreateFileShareResponse struct {
-	Slug      string `json:"slug"`
-	ExpiresAt string `json:"expires_at"`
+	Slug          string `json:"slug"`
+	ExpiresAt     string `json:"expires_at"`
+	BurnAfterRead bool   `json:"burn_after_read"`
+	// UploadToken authorizes chunk uploads and completion. Older servers omit it.
+	UploadToken string `json:"upload_token"`
 }
 
 type CompleteFileShareRequest struct {
@@ -43,6 +48,10 @@ type GetFileShareResponse struct {
 	ManifestNonce      string            `json:"manifest_nonce"`
 	Salt               string            `json:"salt"`
 	KDFParams          string            `json:"kdf_params"`
+	// DownloadGrant is issued when a burn-after-read share is opened and is
+	// required to download its chunks for a short time afterwards.
+	DownloadGrant          string `json:"download_grant"`
+	DownloadGrantExpiresAt string `json:"download_grant_expires_at"`
 }
 
 type FileShareMetadata struct {
@@ -53,6 +62,22 @@ type FileShareMetadata struct {
 	ViewCount      int    `json:"view_count"`
 	FileCount      int    `json:"file_count"`
 	TotalSizeBytes string `json:"total_size_bytes"`
+	BurnAfterRead  bool   `json:"burn_after_read"`
+	IsBurned       bool   `json:"is_burned"`
+}
+
+// FileShareMetaResponse describes a share without opening (or burning) it.
+type FileShareMetaResponse struct {
+	Slug              string `json:"slug"`
+	CreatedAt         string `json:"created_at"`
+	ExpiresAt         string `json:"expires_at"`
+	BurnAfterRead     bool   `json:"burn_after_read"`
+	IsBurned          bool   `json:"is_burned"`
+	PasswordProtected bool   `json:"password_protected"`
+	Salt              string `json:"salt"`
+	KDFParams         string `json:"kdf_params"`
+	FileCount         int    `json:"file_count"`
+	TotalSizeBytes    string `json:"total_size_bytes"`
 }
 
 type FileShareManifest struct {

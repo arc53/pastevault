@@ -6,9 +6,11 @@ import {
   CreateFileShareResponse,
   CreatePasteRequest,
   CreatePasteResponse,
+  FileShareMetaResponse,
   GetFileShareResponse,
   GetPasteResponse,
   ListAccountSharesResponse,
+  PasteMetaResponse,
 } from '@/types'
 
 function getApiBaseUrl() {
@@ -101,14 +103,14 @@ export const api = {
     })
   },
 
-  async getPaste(slug: string): Promise<GetPasteResponse> {
-    return apiRequest(`/pastes/${slug}`)
+  // Does not count as a view and never burns the paste.
+  async getPasteMeta(slug: string): Promise<PasteMetaResponse> {
+    return apiRequest(`/pastes/${slug}/meta`)
   },
 
-  async deletePaste(slug: string): Promise<{ message: string }> {
-    return apiRequest(`/pastes/${slug}`, {
-      method: 'DELETE',
-    })
+  // Burn-after-read pastes are destroyed by this call.
+  async getPaste(slug: string): Promise<GetPasteResponse> {
+    return apiRequest(`/pastes/${slug}`)
   },
 
   async createFileShare(data: CreateFileShareRequest): Promise<CreateFileShareResponse> {
@@ -120,6 +122,7 @@ export const api = {
 
   async uploadFileShareChunk(
     slug: string,
+    uploadToken: string,
     fileId: string,
     chunkIndex: number,
     chunk: Uint8Array
@@ -128,18 +131,34 @@ export const api = {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/octet-stream',
+        'X-Upload-Token': uploadToken,
       },
       body: new Uint8Array(chunk),
     })
   },
 
-  async completeFileShare(slug: string, data: CompleteFileShareRequest) {
+  async completeFileShare(
+    slug: string,
+    uploadToken: string,
+    data: CompleteFileShareRequest
+  ) {
     return apiRequest<{ slug: string }>(`/file-shares/${slug}/complete`, {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Upload-Token': uploadToken,
+      },
       body: JSON.stringify(data),
     })
   },
 
+  // Does not count as a view and never burns the share.
+  async getFileShareMeta(slug: string): Promise<FileShareMetaResponse> {
+    return apiRequest(`/file-shares/${slug}/meta`)
+  },
+
+  // Burn-after-read shares are destroyed by this call; the response carries
+  // the download grant needed to fetch their chunks.
   async getFileShare(slug: string): Promise<GetFileShareResponse> {
     return apiRequest(`/file-shares/${slug}`)
   },
@@ -168,9 +187,15 @@ export const api = {
     })
   },
 
-  async downloadFileShareChunk(slug: string, fileId: string, chunkIndex: number) {
+  async downloadFileShareChunk(
+    slug: string,
+    fileId: string,
+    chunkIndex: number,
+    downloadGrant?: string
+  ) {
     const response = await rawRequest(
-      `/file-shares/${slug}/chunks/${fileId}/${chunkIndex}`
+      `/file-shares/${slug}/chunks/${fileId}/${chunkIndex}`,
+      downloadGrant ? { headers: { 'X-Download-Grant': downloadGrant } } : undefined
     )
     const buffer = await response.arrayBuffer()
     return new Uint8Array(buffer)

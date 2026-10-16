@@ -138,7 +138,16 @@
     "expiredTitle": "Files Expired",
     "expiredDesc": "This file share has expired and is no longer available.",
     "tooManyFiles": "Too many files selected. The current server limit is {count}.",
-    "shareTooLarge": "This selection exceeds the server limit of {size}."
+    "shareTooLarge": "This selection exceeds the server limit of {size}.",
+    "revealTitle": "Burn after reading",
+    "revealDescription": "These files will be destroyed after you open them. Once opened, they can only be downloaded from this tab, and access ends 15 minutes after your last download.",
+    "revealPasswordDescription": "These files are password protected and will be destroyed after you open them. Enter the password to reveal them.",
+    "reveal": "Reveal files",
+    "burnedNotice": "This share has been destroyed on the server. Download your files now: access from this tab ends 15 minutes after your last download.",
+    "passwordRetryHint": "The share was opened but the password did not match. It is kept in this tab only: try again without reloading the page.",
+    "burnedTitle": "Files Burned",
+    "burnedDesc": "This file share was set to burn after reading and has already been opened.",
+    "revealFailed": "Could not derive the decryption key in this browser. The files have not been opened; please try again."
   },
   "viewPaste": {
     "loadingPaste": "Loading paste...",
@@ -157,7 +166,14 @@
     "expired": "Expired",
     "daysRemaining": "{days}d {hours}h remaining",
     "hoursRemaining": "{hours}h {minutes}m remaining",
-    "minutesRemaining": "{minutes}m remaining"
+    "minutesRemaining": "{minutes}m remaining",
+    "revealTitle": "Burn after reading",
+    "revealDescription": "This note will be destroyed after you view it. Open it only when you are ready to read it.",
+    "revealPasswordDescription": "This note is password protected and will be destroyed after you view it. Enter the password to reveal it.",
+    "reveal": "Reveal note",
+    "burnedNotice": "This note has been destroyed on the server. It only exists in this tab now, so copy anything you need before leaving.",
+    "passwordRetryHint": "The note was opened but the password did not match. It is kept in this tab only: try again without reloading the page.",
+    "revealFailed": "Could not derive the decryption key in this browser. The note has not been opened; please try again."
   },
   "errors": {
     "pasteNotFound": "Paste Not Found",

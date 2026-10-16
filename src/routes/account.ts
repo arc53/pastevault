@@ -15,6 +15,7 @@ import { getPrisma } from '../lib/db.js'
 import {
   accountShareParamsSchema,
   accountSharesQuerySchema,
+  validationErrorHandler,
 } from '../lib/validation.js'
 import {
   AccountShare,
@@ -79,6 +80,8 @@ function toAccountShareResponse(share: {
 
 export async function accountRoute(fastify: FastifyInstance) {
   await ensureAccountSystemSchema()
+
+  fastify.setErrorHandler(validationErrorHandler)
 
   fastify.get<{
     Querystring: {

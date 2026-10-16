@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +14,11 @@ import (
 	"time"
 )
 
+const (
+	UploadTokenHeader   = "X-Upload-Token"
+	DownloadGrantHeader = "X-Download-Grant"
+)
+
 type Client struct {
 	baseURL     *url.URL
 	apiBaseURL  *url.URL
@@ -20,6 +26,8 @@ type Client struct {
 	httpClient  *http.Client
 	userAgent   string
 	authToken   string
+	// Backoff between chunk download attempts; one retry per entry.
+	chunkRetryDelays []time.Duration
 }
 
 func NewClient(server, version string) (*Client, error) {
@@ -34,6 +42,12 @@ func NewClient(server, version string) (*Client, error) {
 		authBaseURL: resolveAuthBaseURL(apiURL),
 		httpClient:  &http.Client{Timeout: 90 * time.Second},
 		userAgent:   fmt.Sprintf("pastevault/%s", version),
+		chunkRetryDelays: []time.Duration{
+			time.Second,
+			2 * time.Second,
+			4 * time.Second,
+			8 * time.Second,
+		},
 	}, nil
 }
 
@@ -57,29 +71,77 @@ func (c *Client) CreateFileShare(ctx context.Context, payload CreateFileShareReq
 	return response, err
 }
 
-func (c *Client) UploadFileShareChunk(ctx context.Context, slug, fileID string, chunkIndex int, body []byte) error {
+// optionalHeader returns a header set with name only when value is non-empty,
+// so the CLI keeps working against older servers that issue no tokens.
+func optionalHeader(name, value string) http.Header {
+	if value == "" {
+		return nil
+	}
+
+	return http.Header{name: []string{value}}
+}
+
+func (c *Client) UploadFileShareChunk(ctx context.Context, slug, uploadToken, fileID string, chunkIndex int, body []byte) error {
 	relativePath := path.Join("file-shares", slug, "chunks", fileID, fmt.Sprintf("%d", chunkIndex))
-	return c.doBytes(ctx, http.MethodPut, relativePath, bytes.NewReader(body), "application/octet-stream", nil)
+	return c.doBytes(ctx, http.MethodPut, relativePath, bytes.NewReader(body), "application/octet-stream", optionalHeader(UploadTokenHeader, uploadToken), nil)
 }
 
-func (c *Client) CompleteFileShare(ctx context.Context, slug string, payload CompleteFileShareRequest) error {
-	return c.doJSON(ctx, http.MethodPost, path.Join("file-shares", slug, "complete"), payload, "application/json", nil)
+func (c *Client) CompleteFileShare(ctx context.Context, slug, uploadToken string, payload CompleteFileShareRequest) error {
+	return c.doJSONAtBase(ctx, c.apiBaseURL, http.MethodPost, path.Join("file-shares", slug, "complete"), payload, "application/json", optionalHeader(UploadTokenHeader, uploadToken), nil)
 }
 
+// GetFileShareMeta describes a share without opening it, so it never burns a
+// burn-after-read share.
+func (c *Client) GetFileShareMeta(ctx context.Context, slug string) (FileShareMetaResponse, error) {
+	var response FileShareMetaResponse
+	err := c.doJSON(ctx, http.MethodGet, path.Join("file-shares", slug, "meta"), nil, "", &response)
+	return response, err
+}
+
+// GetFileShare opens a share. Burn-after-read shares are destroyed by this call.
 func (c *Client) GetFileShare(ctx context.Context, slug string) (GetFileShareResponse, error) {
 	var response GetFileShareResponse
 	err := c.doJSON(ctx, http.MethodGet, path.Join("file-shares", slug), nil, "", &response)
 	return response, err
 }
 
-func (c *Client) DownloadFileShareChunk(ctx context.Context, slug, fileID string, chunkIndex int) ([]byte, error) {
+func (c *Client) DownloadFileShareChunk(ctx context.Context, slug, downloadGrant, fileID string, chunkIndex int) ([]byte, error) {
 	var buffer bytes.Buffer
 	relativePath := path.Join("file-shares", slug, "chunks", fileID, fmt.Sprintf("%d", chunkIndex))
-	if err := c.doBytes(ctx, http.MethodGet, relativePath, nil, "", &buffer); err != nil {
+	if err := c.doBytes(ctx, http.MethodGet, relativePath, nil, "", optionalHeader(DownloadGrantHeader, downloadGrant), &buffer); err != nil {
 		return nil, err
 	}
 
 	return buffer.Bytes(), nil
+}
+
+// downloadChunkWithRetry retries transient failures (network errors, 429 and
+// 5xx). Burned shares cannot be reopened, so a dropped connection must not end
+// the download; 4xx answers such as an expired grant are final.
+func (c *Client) downloadChunkWithRetry(ctx context.Context, slug, downloadGrant, fileID string, chunkIndex int) ([]byte, error) {
+	for attempt := 0; ; attempt++ {
+		data, err := c.DownloadFileShareChunk(ctx, slug, downloadGrant, fileID, chunkIndex)
+		if err == nil || attempt >= len(c.chunkRetryDelays) || !isRetryableError(err) || ctx.Err() != nil {
+			return data, err
+		}
+
+		timer := time.NewTimer(c.chunkRetryDelays[attempt])
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
+}
+
+func isRetryableError(err error) bool {
+	var apiErr *APIRequestError
+	if errors.As(err, &apiErr) {
+		return apiErr.StatusCode == http.StatusTooManyRequests || apiErr.StatusCode >= 500
+	}
+
+	return true
 }
 
 func (c *Client) RequestDeviceCode(ctx context.Context, clientID string) (DeviceCodeResponse, error) {
@@ -109,15 +171,20 @@ func (c *Client) GetAuthSession(ctx context.Context) (*AuthSessionResponse, erro
 	return response, nil
 }
 
+// SignOut revokes the session behind the current bearer token on the server.
+func (c *Client) SignOut(ctx context.Context) error {
+	return c.doAuthJSON(ctx, http.MethodPost, "sign-out", struct{}{}, "application/json", nil)
+}
+
 func (c *Client) doJSON(ctx context.Context, method, relativePath string, payload any, contentType string, target any) error {
-	return c.doJSONAtBase(ctx, c.apiBaseURL, method, relativePath, payload, contentType, target)
+	return c.doJSONAtBase(ctx, c.apiBaseURL, method, relativePath, payload, contentType, nil, target)
 }
 
 func (c *Client) doAuthJSON(ctx context.Context, method, relativePath string, payload any, contentType string, target any) error {
-	return c.doJSONAtBase(ctx, c.authBaseURL, method, relativePath, payload, contentType, target)
+	return c.doJSONAtBase(ctx, c.authBaseURL, method, relativePath, payload, contentType, nil, target)
 }
 
-func (c *Client) doJSONAtBase(ctx context.Context, baseURL *url.URL, method, relativePath string, payload any, contentType string, target any) error {
+func (c *Client) doJSONAtBase(ctx context.Context, baseURL *url.URL, method, relativePath string, payload any, contentType string, headers http.Header, target any) error {
 	var body io.Reader
 
 	if payload != nil {
@@ -137,7 +204,7 @@ func (c *Client) doJSONAtBase(ctx context.Context, baseURL *url.URL, method, rel
 		responseTarget = buffer
 	}
 
-	if err := c.doBytesAtBase(ctx, baseURL, method, relativePath, body, contentType, responseTarget); err != nil {
+	if err := c.doBytesAtBase(ctx, baseURL, method, relativePath, body, contentType, headers, responseTarget); err != nil {
 		return err
 	}
 
@@ -152,11 +219,11 @@ func (c *Client) doJSONAtBase(ctx context.Context, baseURL *url.URL, method, rel
 	return nil
 }
 
-func (c *Client) doBytes(ctx context.Context, method, relativePath string, body io.Reader, contentType string, target io.Writer) error {
-	return c.doBytesAtBase(ctx, c.apiBaseURL, method, relativePath, body, contentType, target)
+func (c *Client) doBytes(ctx context.Context, method, relativePath string, body io.Reader, contentType string, headers http.Header, target io.Writer) error {
+	return c.doBytesAtBase(ctx, c.apiBaseURL, method, relativePath, body, contentType, headers, target)
 }
 
-func (c *Client) doBytesAtBase(ctx context.Context, baseURL *url.URL, method, relativePath string, body io.Reader, contentType string, target io.Writer) error {
+func (c *Client) doBytesAtBase(ctx context.Context, baseURL *url.URL, method, relativePath string, body io.Reader, contentType string, headers http.Header, target io.Writer) error {
 	requestURL := *baseURL
 	requestURL.Path = path.Join(baseURL.Path, relativePath)
 
@@ -172,6 +239,11 @@ func (c *Client) doBytesAtBase(ctx context.Context, baseURL *url.URL, method, re
 	}
 	if c.authToken != "" {
 		request.Header.Set("Authorization", "Bearer "+c.authToken)
+	}
+	for name, values := range headers {
+		for _, value := range values {
+			request.Header.Add(name, value)
+		}
 	}
 
 	response, err := c.httpClient.Do(request)

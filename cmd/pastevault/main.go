@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -105,6 +106,7 @@ Environment:
 Examples:
   pastevault put ./report.pdf
   pastevault put --password ./secret.txt
+  pastevault put --burn-after-read --expires-hours 1 ./secret.txt
   pastevault get https://pastevault.example/f/abc123#k=base64urlkey
   pastevault get abc123#k=base64urlkey
   pastevault get --server https://pastevault.example abc123
@@ -297,8 +299,9 @@ func runPut(ctx context.Context, args []string) error {
 	fs.SetOutput(os.Stderr)
 
 	server := fs.String("server", pv.DefaultServerURL(), "PasteVault server base URL")
-	expiresHours := fs.Int("expires-hours", 24, "Share expiry in hours")
+	expiresHours := fs.Int("expires-hours", 24, "Share expiry in hours (1-8760)")
 	passwordFlag := fs.Bool("password", false, "Prompt for a password instead of using a random URL key")
+	burnAfterRead := fs.Bool("burn-after-read", false, "Destroy the share once it has been opened")
 	jsonOutput := fs.Bool("json", false, "Emit machine-readable JSON")
 
 	if err := fs.Parse(args); err != nil {
@@ -307,6 +310,10 @@ func runPut(ctx context.Context, args []string) error {
 
 	if fs.NArg() == 0 {
 		return errors.New("at least one file path is required")
+	}
+
+	if err := pv.ValidateExpiresHours(*expiresHours); err != nil {
+		return err
 	}
 
 	password := ""
@@ -349,6 +356,10 @@ func runPut(ctx context.Context, args []string) error {
 		return errors.New("file sharing is not enabled on this server")
 	}
 
+	if *burnAfterRead && !capabilities.FileShares.BurnAfterRead {
+		return errors.New("this server does not support burn-after-read file shares; update the server or omit --burn-after-read")
+	}
+
 	if len(inputs) > capabilities.FileShares.MaxFiles {
 		return fmt.Errorf("share includes %d files but server limit is %d", len(inputs), capabilities.FileShares.MaxFiles)
 	}
@@ -376,10 +387,12 @@ func runPut(ctx context.Context, args []string) error {
 		ExpiresInHours: *expiresHours,
 		FileCount:      len(inputs),
 		TotalSizeBytes: totalSize,
+		BurnAfterRead:  *burnAfterRead,
 	})
 	if err != nil {
 		return err
 	}
+	uploadToken := createResponse.UploadToken
 
 	manifestFiles := make([]pv.FileShareManifestFile, 0, len(inputs))
 	chunkSize := capabilities.FileShares.ChunkSizeBytes
@@ -392,7 +405,7 @@ func runPut(ctx context.Context, args []string) error {
 
 		fmt.Fprintf(os.Stderr, "Uploading %s (%d/%d)\n", input.DisplayName, index+1, len(inputs))
 
-		chunks, err := pv.UploadFile(ctx, client, input, encryption.Key, slug, fileID, chunkSize)
+		chunks, err := pv.UploadFile(ctx, client, input, encryption.Key, slug, uploadToken, fileID, chunkSize)
 		if err != nil {
 			return err
 		}
@@ -417,7 +430,7 @@ func runPut(ctx context.Context, args []string) error {
 		return err
 	}
 
-	if err := client.CompleteFileShare(ctx, slug, pv.CompleteFileShareRequest{
+	if err := client.CompleteFileShare(ctx, slug, uploadToken, pv.CompleteFileShareRequest{
 		ManifestCiphertext: manifestCiphertext,
 		ManifestNonce:      manifestNonce,
 	}); err != nil {
@@ -427,7 +440,7 @@ func runPut(ctx context.Context, args []string) error {
 	shareURL := pv.BuildFileShareURL(pv.ResolvePublicBaseURL(*server), createResponse.Slug, encryption.ShareKey())
 	shareRef := pv.BuildShortShareRef(createResponse.Slug, encryption.ShareKey())
 	if *jsonOutput {
-		output, err := pv.NewShareOutputJSON(createResponse.Slug, shareURL, createResponse.ExpiresAt, len(inputs), totalSize, password != "")
+		output, err := pv.NewShareOutputJSON(createResponse.Slug, shareURL, createResponse.ExpiresAt, len(inputs), totalSize, password != "", *burnAfterRead)
 		if err != nil {
 			return err
 		}
@@ -443,6 +456,9 @@ func runPut(ctx context.Context, args []string) error {
 	}
 	if password != "" {
 		fmt.Fprintln(os.Stderr, "Password protection is enabled; recipients will also need the password.")
+	}
+	if *burnAfterRead {
+		fmt.Fprintln(os.Stderr, "Burn after reading is enabled; the share is destroyed the first time it is opened.")
 	}
 
 	return nil
@@ -581,7 +597,7 @@ func runWhoAmI(ctx context.Context, args []string) error {
 	return nil
 }
 
-func runLogout(_ context.Context, args []string) error {
+func runLogout(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("logout", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 
@@ -600,14 +616,26 @@ func runLogout(_ context.Context, args []string) error {
 		return err
 	}
 
-	removed, err := pv.DeleteStoredAuthToken(client.BaseURL())
+	hasStoredToken, err := pv.AttachStoredAuthToken(client)
 	if err != nil {
 		return err
 	}
 
-	if !removed {
+	if !hasStoredToken {
 		fmt.Printf("No saved login for %s\n", client.BaseURL())
 		return nil
+	}
+
+	// Revoke the session server-side so a copied token stops working too. This
+	// is best effort: the local token is removed even if the server is unreachable.
+	revokeCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	if err := client.SignOut(revokeCtx); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: could not revoke the session on the server: %v\n", err)
+	}
+	cancel()
+
+	if _, err := pv.DeleteStoredAuthToken(client.BaseURL()); err != nil {
+		return err
 	}
 
 	fmt.Printf("Removed saved login for %s\n", client.BaseURL())
@@ -659,6 +687,39 @@ func runGet(ctx context.Context, args []string) error {
 		return err
 	}
 
+	// Look before opening: opening a burn-after-read share destroys it, so
+	// missing keys or passwords must be caught first.
+	meta, err := client.GetFileShareMeta(ctx, ref.Slug)
+	if err == nil {
+		if err := pv.CheckShareAccess(meta, ref, password); err != nil {
+			return err
+		}
+	} else {
+		// Servers without the meta endpoint answer 404; the regular lookup
+		// below reports a genuinely missing share the same way.
+		var apiErr *pv.APIRequestError
+		if !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusNotFound {
+			return err
+		}
+	}
+
+	targetDir := *outDir
+	targetDescription := targetDir
+	if targetDir == "" {
+		targetDir = "."
+		targetDescription = "current directory"
+	}
+
+	// Also before opening: a burned share cannot be fetched again, so the
+	// output directory must be usable first.
+	if err := pv.EnsureWritableDir(targetDir); err != nil {
+		return err
+	}
+
+	if meta.BurnAfterRead {
+		fmt.Fprintln(os.Stderr, "This share burns after reading; opening it now destroys it on the server.")
+	}
+
 	share, err := client.GetFileShare(ctx, ref.Slug)
 	if err != nil {
 		return err
@@ -670,24 +731,38 @@ func runGet(ctx context.Context, args []string) error {
 	}
 
 	manifest, err := pv.DecryptFileShareManifest(share.ManifestCiphertext, share.ManifestNonce, key, share.Metadata.Slug)
+	// A burned share only exists in memory now, so allow password retries
+	// instead of losing it to a typo.
+	for attempt := 1; err != nil && share.Salt != "" && share.DownloadGrant != "" && attempt < 3 && term.IsTerminal(int(os.Stdin.Fd())); attempt++ {
+		fmt.Fprintln(os.Stderr, "Incorrect password. The share has already been opened and destroyed on the server; try again.")
+		password, err = pv.PromptForPassword("Password: ")
+		if err != nil {
+			return err
+		}
+		key, err = pv.ResolveDownloadKey(ref, share, password)
+		if err != nil {
+			continue
+		}
+		manifest, err = pv.DecryptFileShareManifest(share.ManifestCiphertext, share.ManifestNonce, key, share.Metadata.Slug)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to decrypt manifest: %w", err)
 	}
 
-	targetDir := *outDir
-	targetDescription := targetDir
-	if targetDir == "" {
-		targetDir = "."
-		targetDescription = "current directory"
-	}
-
-	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+	// A burned share gets no second chance, so name clashes are resolved by
+	// renaming instead of aborting.
+	burned := share.DownloadGrant != ""
+	plan, err := pv.PlanDownload(manifest, targetDir, *overwrite, burned)
+	if err != nil {
 		return err
+	}
+	for _, renamed := range plan.Renamed {
+		fmt.Fprintf(os.Stderr, "%s already exists; saving as %s\n", renamed.From, renamed.To)
 	}
 
 	fmt.Fprintf(os.Stderr, "Downloading share %s into %s\n", share.Metadata.Slug, targetDescription)
 
-	if err := pv.DownloadManifest(ctx, client, manifest, key, share.Metadata.Slug, targetDir, *overwrite); err != nil {
+	if err := pv.DownloadManifest(ctx, client, manifest, key, share.Metadata.Slug, share.DownloadGrant, plan); err != nil {
 		return err
 	}
 

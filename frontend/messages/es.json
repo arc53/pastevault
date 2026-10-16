@@ -138,7 +138,16 @@
     "expiredTitle": "Files Expired",
     "expiredDesc": "This file share has expired and is no longer available.",
     "tooManyFiles": "Too many files selected. The current server limit is {count}.",
-    "shareTooLarge": "This selection exceeds the server limit of {size}."
+    "shareTooLarge": "This selection exceeds the server limit of {size}.",
+    "revealTitle": "Quemar después de leer",
+    "revealDescription": "Estos archivos se destruirán en cuanto los abras. Una vez abiertos, solo podrás descargarlos desde esta pestaña y el acceso termina 15 minutos después de tu última descarga.",
+    "revealPasswordDescription": "Estos archivos están protegidos con contraseña y se destruirán en cuanto los abras. Introduce la contraseña para mostrarlos.",
+    "reveal": "Mostrar archivos",
+    "burnedNotice": "Este recurso compartido se ha destruido en el servidor. Descarga tus archivos ahora: el acceso desde esta pestaña termina 15 minutos después de tu última descarga.",
+    "passwordRetryHint": "El recurso se abrió, pero la contraseña no coincide. Solo se conserva en esta pestaña: vuelve a intentarlo sin recargar la página.",
+    "burnedTitle": "Archivos quemados",
+    "burnedDesc": "Este recurso compartido estaba configurado para destruirse tras leerse y ya se ha abierto.",
+    "revealFailed": "No se pudo derivar la clave de descifrado en este navegador. Los archivos no se han abierto; inténtalo de nuevo."
   },
   "viewPaste": {
     "loadingPaste": "Cargando paste...",
@@ -157,7 +166,14 @@
     "expired": "Caducado",
     "daysRemaining": "{days}d {hours}h restantes",
     "hoursRemaining": "{hours}h {minutes}m restantes",
-    "minutesRemaining": "{minutes}m restantes"
+    "minutesRemaining": "{minutes}m restantes",
+    "revealTitle": "Quemar después de leer",
+    "revealDescription": "Esta nota se destruirá en cuanto la veas. Ábrela solo cuando estés listo para leerla.",
+    "revealPasswordDescription": "Esta nota está protegida con contraseña y se destruirá en cuanto la veas. Introduce la contraseña para mostrarla.",
+    "reveal": "Mostrar nota",
+    "burnedNotice": "Esta nota se ha destruido en el servidor. Ahora solo existe en esta pestaña, así que copia lo que necesites antes de salir.",
+    "passwordRetryHint": "La nota se abrió, pero la contraseña no coincide. Solo se conserva en esta pestaña: vuelve a intentarlo sin recargar la página.",
+    "revealFailed": "No se pudo derivar la clave de descifrado en este navegador. La nota no se ha abierto; inténtalo de nuevo."
   },
   "errors": {
     "pasteNotFound": "Paste No Encontrado",

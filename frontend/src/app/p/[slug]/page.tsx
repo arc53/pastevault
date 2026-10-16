@@ -1,6 +1,6 @@
 'use client'
 
-import { type ReactNode, useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useTranslations } from 'next-intl'
@@ -17,12 +17,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { MarkdownRenderer } from '@/components/markdown-renderer'
-import { useGetPaste } from '@/hooks/usePaste'
+import { useGetPaste, useGetPasteMeta } from '@/hooks/usePaste'
 import { AccountLink } from '@/components/account-link'
 import { CopyButton } from '@/components/copy-button'
 import {
+  base64urlDecode,
   decryptPaste,
   decryptPasteWithPassword,
+  deriveKeyFromPassword,
   extractKeyFromFragment,
 } from '@/lib/crypto'
 import { PasteContent } from '@/types'
@@ -42,8 +44,27 @@ export default function ViewPastePage() {
   const [decryptionError, setDecryptionError] = useState('')
   const [showPasswordPrompt, setShowPasswordPrompt] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  // Burn-after-read pastes are only fetched (and thereby destroyed) once the
+  // reader confirms. Password-protected ones derive the key first.
+  const [revealRequested, setRevealRequested] = useState(false)
+  const revealKeyRef = useRef<Uint8Array | null>(null)
+  const [isRevealing, setIsRevealing] = useState(false)
+  const [revealError, setRevealError] = useState('')
 
-  const { data: paste, isLoading, error } = useGetPaste(slug)
+  const { data: meta, isLoading: isMetaLoading, error: metaError } = useGetPasteMeta(slug)
+  // Without a URL key a passwordless paste cannot be decrypted, so don't
+  // spend a view (or the only read) on it.
+  const hasDecryptionKey = Boolean(meta?.password_protected || extractKeyFromFragment())
+  const shouldFetchPaste = Boolean(
+    meta && hasDecryptionKey && (!meta.burn_after_read || revealRequested)
+  )
+  const {
+    data: paste,
+    isLoading: isPasteLoading,
+    error: pasteError,
+  } = useGetPaste(slug, shouldFetchPaste)
+  const isLoading = isMetaLoading || isPasteLoading
+  const error = metaError || pasteError
 
   useEffect(() => {
     if (!paste) return
@@ -71,6 +92,22 @@ export default function ViewPastePage() {
 
           setContent(decryptedContent)
         } else if (paste.salt && paste.kdf_params) {
+          // A working key is deliberately kept: if this effect runs again (React
+          // StrictMode does so in development) it must decrypt again rather
+          // than fall back to the retry prompt. A failing key is dropped.
+          const revealKey = revealKeyRef.current
+          if (revealKey) {
+            try {
+              setContent(
+                await decryptPaste(paste.ciphertext, paste.nonce, revealKey, paste.metadata.slug)
+              )
+              return
+            } catch {
+              // The ciphertext stays in memory, so the reader can retry below.
+              revealKeyRef.current = null
+              setDecryptionError(tErrors('incorrectPassword'))
+            }
+          }
           setShowPasswordPrompt(true)
         } else {
           setDecryptionError('Invalid paste format or missing decryption key')
@@ -84,7 +121,7 @@ export default function ViewPastePage() {
     }
 
     attemptDecryption()
-  }, [paste])
+  }, [paste, tErrors])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -105,6 +142,31 @@ export default function ViewPastePage() {
       window.removeEventListener('keydown', onKeyDown)
     }
   }, [mobileMenuOpen])
+
+  const handleReveal = async () => {
+    if (!meta) return
+
+    setRevealError('')
+
+    if (meta.password_protected) {
+      if (!password || !meta.salt) return
+
+      setIsRevealing(true)
+      try {
+        const { key } = await deriveKeyFromPassword(password, base64urlDecode(meta.salt))
+        revealKeyRef.current = key
+      } catch (revealFailure) {
+        // Nothing has been fetched yet, so the paste is still intact.
+        console.error('Key derivation failed:', revealFailure)
+        setRevealError(tView('revealFailed'))
+        return
+      } finally {
+        setIsRevealing(false)
+      }
+    }
+
+    setRevealRequested(true)
+  }
 
   const handlePasswordDecrypt = async () => {
     if (!paste || !password) return
@@ -180,7 +242,7 @@ export default function ViewPastePage() {
     </div>
   )
 
-  if (isLoading) {
+  if (isLoading || isRevealing) {
     return renderCenteredState(
       tView('loadingPaste'),
       tView('loadingPaste'),
@@ -220,6 +282,76 @@ export default function ViewPastePage() {
     )
   }
 
+  if (meta && !hasDecryptionKey) {
+    return renderCenteredState(
+      tErrors('decryptionFailed'),
+      tErrors('invalidFormat'),
+      tErrors('createNewPaste'),
+      () => router.push('/'),
+      <AlertCircle className="h-4 w-4 text-red-500" />
+    )
+  }
+
+  if (meta?.burn_after_read && !revealRequested) {
+    return (
+      <div className="app-frame py-8">
+        <div className="mx-auto max-w-md tool-panel">
+          <div className="tool-panel-header">
+            <div className="min-w-0">
+              <p className="tool-label">{slug}</p>
+              <h1 className="text-lg font-semibold">{tView('revealTitle')}</h1>
+            </div>
+            <span className="meta-chip text-orange-600 dark:text-orange-300">
+              <Flame className="h-3.5 w-3.5" />
+            </span>
+          </div>
+          <form
+            className="tool-panel-body space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void handleReveal()
+            }}
+          >
+            <p className="text-sm text-muted-foreground">
+              {meta.password_protected
+                ? tView('revealPasswordDescription')
+                : tView('revealDescription')}
+            </p>
+
+            {meta.password_protected && (
+              <div className="space-y-2">
+                <Label htmlFor="password">{t('password')}</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  autoComplete="off"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder={`${t('password')}...`}
+                />
+              </div>
+            )}
+
+            {revealError && (
+              <div className="rounded-sm border border-red-500/25 bg-red-500/10 p-3 text-sm text-red-700 dark:text-red-200">
+                {revealError}
+              </div>
+            )}
+
+            <Button
+              type="submit"
+              disabled={meta.password_protected && !password}
+              className="w-full"
+            >
+              <Eye className="h-4 w-4" />
+              {tView('reveal')}
+            </Button>
+          </form>
+        </div>
+      </div>
+    )
+  }
+
   if (showPasswordPrompt) {
     return (
       <div className="app-frame py-8">
@@ -231,7 +363,9 @@ export default function ViewPastePage() {
             </div>
           </div>
           <div className="tool-panel-body space-y-4">
-            <p className="text-sm text-muted-foreground">{tView('passwordPrompt')}</p>
+            <p className="text-sm text-muted-foreground">
+              {paste?.metadata.is_burned ? tView('passwordRetryHint') : tView('passwordPrompt')}
+            </p>
 
             <div className="space-y-2">
               <Label htmlFor="password">{t('password')}</Label>
@@ -511,7 +645,9 @@ export default function ViewPastePage() {
                 </div>
                 {paste.metadata.burn_after_read && (
                   <div className="rounded-sm border border-orange-500/25 bg-orange-500/10 p-3 text-orange-700 dark:text-orange-200">
-                    {tView('burnsAfterReading')}
+                    {paste.metadata.is_burned
+                      ? tView('burnedNotice')
+                      : tView('burnsAfterReading')}
                   </div>
                 )}
               </div>

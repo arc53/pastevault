@@ -33,6 +33,18 @@ export interface GetPasteResponse {
   kdf_params?: string
 }
 
+// Non-consuming view of a paste: safe for previews and for deciding whether to reveal.
+export interface PasteMetaResponse {
+  slug: string
+  created_at: Date
+  expires_at: Date | null
+  burn_after_read: boolean
+  is_burned: boolean
+  password_protected: boolean
+  salt?: string
+  kdf_params?: string
+}
+
 export interface FileShareMetadata {
   id: string
   slug: string
@@ -41,6 +53,8 @@ export interface FileShareMetadata {
   view_count: number
   file_count: number
   total_size_bytes: string
+  burn_after_read: boolean
+  is_burned: boolean
 }
 
 export interface CreateFileShareRequest {
@@ -50,11 +64,15 @@ export interface CreateFileShareRequest {
   expires_in_hours?: number
   file_count: number
   total_size_bytes: number
+  burn_after_read?: boolean
 }
 
 export interface CreateFileShareResponse {
   slug: string
   expires_at: Date | null
+  burn_after_read: boolean
+  // Required as X-Upload-Token for chunk uploads and completion; shown only once.
+  upload_token: string
 }
 
 export interface CompleteFileShareRequest {
@@ -68,6 +86,22 @@ export interface GetFileShareResponse {
   manifest_nonce: string
   salt?: string
   kdf_params?: string
+  // Burn-after-read shares only: send as X-Download-Grant to fetch chunks.
+  download_grant?: string
+  download_grant_expires_at?: Date
+}
+
+export interface FileShareMetaResponse {
+  slug: string
+  created_at: Date
+  expires_at: Date | null
+  burn_after_read: boolean
+  is_burned: boolean
+  password_protected: boolean
+  salt?: string
+  kdf_params?: string
+  file_count: number
+  total_size_bytes: string
 }
 
 export interface CapabilitiesResponse {
@@ -80,6 +114,7 @@ export interface CapabilitiesResponse {
     max_share_size_bytes: number
     max_files: number
     chunk_size_bytes: number
+    burn_after_read: boolean
   }
 }
 

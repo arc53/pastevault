@@ -40,6 +40,17 @@ export interface GetPasteResponse {
   kdf_params?: string
 }
 
+export interface PasteMetaResponse {
+  slug: string
+  created_at: string
+  expires_at: string | null
+  burn_after_read: boolean
+  is_burned: boolean
+  password_protected: boolean
+  salt?: string
+  kdf_params?: string
+}
+
 export interface FileShareMetadata {
   id: string
   slug: string
@@ -48,6 +59,8 @@ export interface FileShareMetadata {
   view_count: number
   file_count: number
   total_size_bytes: string
+  burn_after_read: boolean
+  is_burned: boolean
 }
 
 export interface CreateFileShareRequest {
@@ -57,11 +70,14 @@ export interface CreateFileShareRequest {
   expires_in_hours?: number
   file_count: number
   total_size_bytes: number
+  burn_after_read?: boolean
 }
 
 export interface CreateFileShareResponse {
   slug: string
   expires_at: string | null
+  burn_after_read: boolean
+  upload_token: string
 }
 
 export interface CompleteFileShareRequest {
@@ -75,6 +91,21 @@ export interface GetFileShareResponse {
   manifest_nonce: string
   salt?: string
   kdf_params?: string
+  download_grant?: string
+  download_grant_expires_at?: string
+}
+
+export interface FileShareMetaResponse {
+  slug: string
+  created_at: string
+  expires_at: string | null
+  burn_after_read: boolean
+  is_burned: boolean
+  password_protected: boolean
+  salt?: string
+  kdf_params?: string
+  file_count: number
+  total_size_bytes: string
 }
 
 export interface FileShareCapabilities {
@@ -82,6 +113,7 @@ export interface FileShareCapabilities {
   max_share_size_bytes: number
   max_files: number
   chunk_size_bytes: number
+  burn_after_read: boolean
 }
 
 export interface CapabilitiesResponse {
