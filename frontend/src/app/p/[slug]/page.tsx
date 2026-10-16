@@ -92,9 +92,9 @@ export default function ViewPastePage() {
 
           setContent(decryptedContent)
         } else if (paste.salt && paste.kdf_params) {
-          // The key is deliberately kept: if this effect runs again (React
+          // A working key is deliberately kept: if this effect runs again (React
           // StrictMode does so in development) it must decrypt again rather
-          // than fall back to the retry prompt.
+          // than fall back to the retry prompt. A failing key is dropped.
           const revealKey = revealKeyRef.current
           if (revealKey) {
             try {
@@ -104,7 +104,8 @@ export default function ViewPastePage() {
               return
             } catch {
               // The ciphertext stays in memory, so the reader can retry below.
-              setDecryptionError('Incorrect password or corrupted data')
+              revealKeyRef.current = null
+              setDecryptionError(tErrors('incorrectPassword'))
             }
           }
           setShowPasswordPrompt(true)
@@ -120,7 +121,7 @@ export default function ViewPastePage() {
     }
 
     attemptDecryption()
-  }, [paste])
+  }, [paste, tErrors])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

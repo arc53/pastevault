@@ -116,9 +116,9 @@ export default function ViewFileSharePage() {
           setManifest(decryptedManifest)
           setShowPasswordPrompt(false)
         } else if (share.salt && share.kdf_params) {
-          // The key is deliberately kept: if this effect runs again (React
+          // A working key is deliberately kept: if this effect runs again (React
           // StrictMode does so in development) it must decrypt again rather
-          // than fall back to the retry prompt.
+          // than fall back to the retry prompt. A failing key is dropped.
           const revealKey = revealKeyRef.current
           if (revealKey) {
             try {
@@ -134,6 +134,7 @@ export default function ViewFileSharePage() {
               return
             } catch {
               // The manifest stays in memory, so the reader can retry below.
+              revealKeyRef.current = null
               setDecryptionError(tErrors('incorrectPassword'))
             }
           }
