@@ -28,7 +28,7 @@
     "db:generate": "node scripts/prisma-runner.mjs generate",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "npm run build:cli && node tests/e2e-smoke.mjs",
+    "test:e2e": "npm run build:cli && node tests/run-e2e.mjs",
     "prepublishOnly": "npm run build:cli",
     "postinstall": "prisma generate --config prisma.config.js"
   },

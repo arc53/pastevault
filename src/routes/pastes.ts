@@ -4,20 +4,25 @@ import {
   recordOwnedShareView,
   markOwnedShareStatus,
 } from '../lib/account-shares.js'
-import { getOptionalAuthSession } from '../lib/auth-session.js'
 import { ensureAccountSystemSchema } from '../lib/account-schema.js'
+import { auditActorFor, recordShareEvent } from '../lib/audit.js'
 import { config } from '../lib/config.js'
 import { getPrisma } from '../lib/db.js'
-import { ensurePasteSchema } from '../lib/pastes-db.js'
+import { consumePasteView, ensurePasteSchema } from '../lib/pastes-db.js'
+import { getPrincipal, requireScope } from '../lib/principal.js'
 import {
   generateSlug,
-  calculateExpiryDate,
+  effectiveMaxViews,
   isExpired,
   isUniqueConstraintError,
+  resolveMaxViews,
+  resolveShareExpiry,
+  viewsRemaining,
 } from '../lib/utils.js'
 import {
   createPasteSchema,
   getPasteParamsSchema,
+  rejectUnsupportedRecipient,
   validationErrorHandler,
 } from '../lib/validation.js'
 import {
@@ -47,7 +52,15 @@ export async function pastesRoute(fastify: FastifyInstance) {
   }>('/pastes', async (request, reply) => {
     const prisma = getPrisma()
     const body = createPasteSchema.parse(request.body)
-    const session = await getOptionalAuthSession(request)
+    const principal = await getPrincipal(request)
+
+    // An authenticated create is always recorded as owned; a principal that
+    // may not create shares is refused rather than silently made anonymous.
+    if (principal) {
+      requireScope(principal, 'shares:create')
+    }
+
+    rejectUnsupportedRecipient(body.recipient)
 
     if (Buffer.from(body.ciphertext, 'base64').length > config.MAX_PASTE_SIZE_BYTES) {
       return reply.code(413).send({
@@ -57,9 +70,8 @@ export async function pastesRoute(fastify: FastifyInstance) {
     }
 
     const slug = body.slug || generateSlug()
-    const expiresAt = body.expires_in_hours 
-      ? calculateExpiryDate(body.expires_in_hours) 
-      : null
+    const expiresAt = resolveShareExpiry(body)
+    const maxViews = resolveMaxViews(body)
 
     try {
       const paste = await prisma.paste.create({
@@ -70,25 +82,42 @@ export async function pastesRoute(fastify: FastifyInstance) {
           salt: body.salt,
           kdf_params: body.kdf_params,
           expires_at: expiresAt,
-          burn_after_read: body.burn_after_read,
+          burn_after_read: maxViews === 1,
+          max_views: maxViews,
+          recipient_fingerprint: body.recipient?.fingerprint ?? null,
+          wrapped_key: body.recipient?.wrapped_key ?? null,
         },
       })
 
       const response: CreatePasteResponse = {
         slug: paste.slug,
         expires_at: paste.expires_at,
+        max_views: paste.max_views,
       }
 
-      if (session) {
+      if (principal) {
         try {
-          await createOwnedPasteRecord({
-            user_id: session.user.id,
+          const owned = await createOwnedPasteRecord({
+            user_id: principal.user.id,
             resource_id: paste.id,
             slug: paste.slug,
             expires_at: paste.expires_at,
             burn_after_read: paste.burn_after_read,
             is_password_protected: Boolean(paste.salt),
+            max_views: paste.max_views,
+            recipient_fingerprint: paste.recipient_fingerprint,
+            recipient_agent_id: paste.recipient_agent_id,
+            created_via_token_id: principal.token_id,
           })
+          await recordShareEvent(
+            owned,
+            'share.created',
+            auditActorFor(principal, owned.user_id),
+            {
+              request,
+              details: { max_views: paste.max_views, expires_at: paste.expires_at },
+            }
+          )
         } catch (error: unknown) {
           fastify.log.error({ err: error, pasteId: paste.id }, 'Failed to record owned paste')
         }
@@ -123,6 +152,10 @@ export async function pastesRoute(fastify: FastifyInstance) {
           is_burned: true,
           salt: true,
           kdf_params: true,
+          view_count: true,
+          max_views: true,
+          recipient_fingerprint: true,
+          recipient_user_id: true,
         },
       })
 
@@ -139,6 +172,7 @@ export async function pastesRoute(fastify: FastifyInstance) {
         return reply.code(410).send({ error: 'Paste has expired' })
       }
 
+      const maxViews = effectiveMaxViews(paste)
       const response: PasteMetaResponse = {
         slug: paste.slug,
         created_at: paste.created_at,
@@ -148,6 +182,12 @@ export async function pastesRoute(fastify: FastifyInstance) {
         password_protected: Boolean(paste.salt),
         salt: paste.salt || undefined,
         kdf_params: paste.kdf_params || undefined,
+        max_views: maxViews,
+        views_remaining: viewsRemaining(maxViews, paste.view_count),
+        recipient: paste.recipient_fingerprint
+          ? { fingerprint: paste.recipient_fingerprint }
+          : null,
+        requires_recipient_auth: Boolean(paste.recipient_user_id),
       }
 
       return reply.header('Cache-Control', 'no-store').send(response)
@@ -170,6 +210,8 @@ export async function pastesRoute(fastify: FastifyInstance) {
   }>('/pastes/:slug', { exposeHeadRoute: false }, async (request, reply) => {
     const prisma = getPrisma()
     const { slug } = getPasteParamsSchema.parse(request.params)
+    // Resolved before any view is consumed, so a bad token can't burn a share.
+    const principal = await getPrincipal(request)
 
     try {
       const paste = await prisma.paste.findUnique({
@@ -189,31 +231,22 @@ export async function pastesRoute(fastify: FastifyInstance) {
         return reply.code(410).send({ error: 'Paste has expired' })
       }
 
+      const maxViews = effectiveMaxViews(paste)
       let isBurned = false
       let viewCount: number
 
-      if (paste.burn_after_read) {
-        // Conditional update so exactly one concurrent reader wins the burn. The
-        // ciphertext is wiped in the same statement; only the winner returns the
-        // copy it read above.
-        const burned = await prisma.paste.updateMany({
-          where: { id: paste.id, is_burned: false },
-          data: {
-            is_burned: true,
-            view_count: { increment: 1 },
-            ciphertext: '',
-            nonce: '',
-            salt: null,
-            kdf_params: null,
-          },
-        })
+      if (maxViews !== null) {
+        // Conditional update so concurrent readers can't exceed the limit; the
+        // last view wipes the content in the same statement. Every reader that
+        // got a view returns the copy it read above.
+        const consumed = await consumePasteView(paste.id, maxViews)
 
-        if (burned.count === 0) {
+        if (!consumed) {
           return reply.code(410).send({ error: 'Paste has been burned' })
         }
 
-        isBurned = true
-        viewCount = paste.view_count + 1
+        isBurned = consumed.is_burned
+        viewCount = consumed.view_count
       } else {
         const updatedPaste = await prisma.paste.update({
           where: { id: paste.id },
@@ -224,13 +257,25 @@ export async function pastesRoute(fastify: FastifyInstance) {
         viewCount = updatedPaste.view_count
       }
 
-      await recordOwnedShareView({
+      const owned = await recordOwnedShareView({
         share_type: 'paste',
         resource_id: paste.id,
         next_status: isBurned ? 'burned' : undefined,
       }).catch((error: unknown) => {
         fastify.log.error({ err: error, pasteId: paste.id }, 'Failed to update owned paste metrics')
+        return null
       })
+
+      if (owned) {
+        const actor = auditActorFor(principal, owned.user_id)
+        await recordShareEvent(owned, 'share.viewed', actor, {
+          request,
+          details: { view: viewCount, max_views: maxViews },
+        })
+        if (isBurned) {
+          await recordShareEvent(owned, 'share.burned', actor, { request })
+        }
+      }
 
       const response: GetPasteResponse = {
         metadata: {
@@ -241,6 +286,8 @@ export async function pastesRoute(fastify: FastifyInstance) {
           burn_after_read: paste.burn_after_read,
           is_burned: isBurned,
           view_count: viewCount,
+          max_views: maxViews,
+          views_remaining: viewsRemaining(maxViews, viewCount),
           salt: paste.salt || undefined,
           kdf_params: paste.kdf_params || undefined,
         },
@@ -248,9 +295,11 @@ export async function pastesRoute(fastify: FastifyInstance) {
         nonce: paste.nonce,
         salt: paste.salt || undefined,
         kdf_params: paste.kdf_params || undefined,
+        wrapped_key: paste.wrapped_key || undefined,
+        recipient_fingerprint: paste.recipient_fingerprint || undefined,
       }
 
-      if (isBurned) {
+      if (maxViews !== null) {
         reply.header('Cache-Control', 'no-store')
       }
 

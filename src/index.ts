@@ -3,8 +3,7 @@ import cors from '@fastify/cors'
 import rateLimit from '@fastify/rate-limit'
 import { cleanupExpiredPastes } from './lib/cleanup.js'
 import { config } from './lib/config.js'
-import { fileSharesRoute } from './routes/file-shares.js'
-import { pastesRoute } from './routes/pastes.js'
+import { registerApiRoutes } from './routes/register.js'
 import * as cron from 'node-cron'
 
 const fastify = Fastify({
@@ -26,16 +25,7 @@ async function start() {
       timeWindow: config.RATE_LIMIT_WINDOW_MS,
     })
 
-    if (!config.DISABLE_AUTH) {
-      const [{ authRoute }, { accountRoute }] = await Promise.all([
-        import('./routes/auth.js'),
-        import('./routes/account.js'),
-      ])
-      await fastify.register(authRoute, { prefix: '/api' })
-      await fastify.register(accountRoute, { prefix: '/api' })
-    }
-    await fastify.register(pastesRoute, { prefix: '/api' })
-    await fastify.register(fileSharesRoute, { prefix: '/api' })
+    await registerApiRoutes(fastify)
 
     fastify.get('/', async () => {
       return {

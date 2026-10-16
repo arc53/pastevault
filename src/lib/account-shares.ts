@@ -1,5 +1,6 @@
 import { getPrisma } from './db.js'
 import { ensureAccountSystemSchema } from './account-schema.js'
+import { cursorWhere, recordShareEvent, SYSTEM_ACTOR } from './audit.js'
 import { config } from './config.js'
 
 export const OWNED_SHARE_TYPES = ['paste', 'file_share'] as const
@@ -38,6 +39,14 @@ async function findOwnedShareByResource(
   })
 }
 
+// Sharing options mirrored onto the owned-share record.
+export interface OwnedShareOptions {
+  max_views: number | null
+  recipient_fingerprint: string | null
+  recipient_agent_id: string | null
+  created_via_token_id: string | null
+}
+
 export async function createOwnedPasteRecord(input: {
   user_id: string
   resource_id: string
@@ -45,7 +54,7 @@ export async function createOwnedPasteRecord(input: {
   expires_at: Date | null
   burn_after_read: boolean
   is_password_protected: boolean
-}) {
+} & OwnedShareOptions) {
   await ensureAccountSystemSchema()
   const prisma = getPrisma()
 
@@ -59,6 +68,10 @@ export async function createOwnedPasteRecord(input: {
       expires_at: input.expires_at,
       burn_after_read: input.burn_after_read,
       is_password_protected: input.is_password_protected,
+      max_views: input.max_views,
+      recipient_fingerprint: input.recipient_fingerprint,
+      recipient_agent_id: input.recipient_agent_id,
+      created_via_token_id: input.created_via_token_id,
     },
   })
 }
@@ -72,7 +85,7 @@ export async function createOwnedFileShareRecord(input: {
   total_size_bytes: number
   burn_after_read: boolean
   is_password_protected: boolean
-}) {
+} & OwnedShareOptions) {
   await ensureAccountSystemSchema()
   const prisma = getPrisma()
 
@@ -88,6 +101,10 @@ export async function createOwnedFileShareRecord(input: {
       total_size_bytes: String(input.total_size_bytes),
       burn_after_read: input.burn_after_read,
       is_password_protected: input.is_password_protected,
+      max_views: input.max_views,
+      recipient_fingerprint: input.recipient_fingerprint,
+      recipient_agent_id: input.recipient_agent_id,
+      created_via_token_id: input.created_via_token_id,
     },
   })
 }
@@ -106,13 +123,21 @@ export async function markOwnedShareStatus(
   const deletedAt =
     status === 'active' ? null : status === 'uploading' ? null : new Date()
 
-  return prisma.ownedShare.update({
+  const updated = await prisma.ownedShare.update({
     where: { id: share.id },
     data: {
       status,
       deleted_at: deletedAt,
     },
   })
+
+  // Expiry is discovered lazily (on access) or by the cleanup job, so it is
+  // attributed to the system.
+  if (status === 'expired' && share.status !== 'expired') {
+    await recordShareEvent(updated, 'share.expired', SYSTEM_ACTOR)
+  }
+
+  return updated
 }
 
 export async function recordOwnedShareView(input: {
@@ -149,24 +174,36 @@ export async function recordOwnedShareView(input: {
   })
 }
 
+// Newest first. Without a limit every matching share is returned (what the
+// web account page expects); with one, `next_cursor` continues the listing.
 export async function listOwnedShares(input: {
   user_id: string
   share_type?: OwnedShareType
   status?: OwnedShareStatus
+  slug?: string
+  limit?: number
+  cursor?: { created_at: Date; id: string } | null
 }) {
   await ensureAccountSystemSchema()
   const prisma = getPrisma()
 
-  return prisma.ownedShare.findMany({
+  const rows = await prisma.ownedShare.findMany({
     where: {
       user_id: input.user_id,
       ...(input.share_type ? { share_type: input.share_type } : {}),
       ...(input.status ? { status: input.status } : {}),
+      ...(input.slug ? { slug: input.slug } : {}),
+      AND: [cursorWhere(input.cursor ?? null)],
     },
-    orderBy: {
-      created_at: 'desc',
-    },
+    orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+    ...(input.limit ? { take: input.limit + 1 } : {}),
   })
+
+  if (!input.limit || rows.length <= input.limit) {
+    return { shares: rows, has_more: false }
+  }
+
+  return { shares: rows.slice(0, input.limit), has_more: true }
 }
 
 export async function getOwnedShareForUser(id: string, userId: string) {

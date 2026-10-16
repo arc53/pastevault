@@ -13,6 +13,9 @@ export interface PasteMetadata {
   burn_after_read: boolean
   is_burned: boolean
   view_count: number
+  // Present on servers with capabilities.features.max_views.
+  max_views?: number | null
+  views_remaining?: number | null
   salt?: string
   kdf_params?: string
 }
@@ -30,6 +33,7 @@ export interface CreatePasteRequest {
 export interface CreatePasteResponse {
   slug: string
   expires_at: string | null
+  max_views?: number | null
 }
 
 export interface GetPasteResponse {
@@ -38,9 +42,24 @@ export interface GetPasteResponse {
   nonce: string
   salt?: string
   kdf_params?: string
+  // Shares sealed to a recipient key only.
+  wrapped_key?: string
+  recipient_fingerprint?: string
 }
 
-export interface PasteMetaResponse {
+export interface ShareRecipientMeta {
+  fingerprint: string
+}
+
+// Fields added with api_version 2; absent on older servers.
+export interface ShareLimitsMeta {
+  max_views?: number | null
+  views_remaining?: number | null
+  recipient?: ShareRecipientMeta | null
+  requires_recipient_auth?: boolean
+}
+
+export interface PasteMetaResponse extends ShareLimitsMeta {
   slug: string
   created_at: string
   expires_at: string | null
@@ -61,6 +80,8 @@ export interface FileShareMetadata {
   total_size_bytes: string
   burn_after_read: boolean
   is_burned: boolean
+  max_views?: number | null
+  views_remaining?: number | null
 }
 
 export interface CreateFileShareRequest {
@@ -77,6 +98,7 @@ export interface CreateFileShareResponse {
   slug: string
   expires_at: string | null
   burn_after_read: boolean
+  max_views?: number | null
   upload_token: string
 }
 
@@ -93,9 +115,11 @@ export interface GetFileShareResponse {
   kdf_params?: string
   download_grant?: string
   download_grant_expires_at?: string
+  wrapped_key?: string
+  recipient_fingerprint?: string
 }
 
-export interface FileShareMetaResponse {
+export interface FileShareMetaResponse extends ShareLimitsMeta {
   slug: string
   created_at: string
   expires_at: string | null
@@ -116,12 +140,30 @@ export interface FileShareCapabilities {
   burn_after_read: boolean
 }
 
+export interface CapabilitiesFeatures {
+  expires_in_minutes: boolean
+  max_views: boolean
+  api_tokens: boolean
+  agents: boolean
+  sealed_shares: boolean
+  secret_requests: boolean
+  audit: boolean
+}
+
 export interface CapabilitiesResponse {
   auth: {
     enabled: boolean
     signup_enabled: boolean
   }
   file_shares: FileShareCapabilities
+  // api_version 2 and later.
+  api_version?: number
+  features?: CapabilitiesFeatures
+  limits?: {
+    max_views: number
+    max_secret_request_bytes: number
+    min_secret_request_ttl_seconds: number
+  }
 }
 
 export type OwnedShareType = 'paste' | 'file_share'
@@ -150,10 +192,14 @@ export interface AccountShare {
   total_size_bytes: string | null
   is_password_protected: boolean
   can_delete: boolean
+  max_views?: number | null
+  recipient_fingerprint?: string | null
+  recipient_agent_name?: string | null
 }
 
 export interface ListAccountSharesResponse {
   shares: AccountShare[]
+  next_cursor?: string | null
 }
 
 export interface EncryptionResult {

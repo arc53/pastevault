@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest } from 'fastify'
 import { auth } from '../lib/auth.js'
 import { ensureAccountSystemSchema } from '../lib/account-schema.js'
 import { config } from '../lib/config.js'
+import { presentsApiToken } from '../lib/principal.js'
 
 function getRequestOrigin(request: FastifyRequest) {
   const forwardedProto = request.headers['x-forwarded-proto']
@@ -40,6 +41,18 @@ function buildRequestBody(request: FastifyRequest) {
 
 async function handleAuthRequest(request: FastifyRequest) {
   const url = new URL(request.url, getRequestOrigin(request))
+
+  // API tokens only work on the PasteVault API. They must never reach
+  // better-auth, where they could be mistaken for (or exchanged into) a session.
+  if (presentsApiToken(request)) {
+    return Response.json(
+      {
+        error: 'invalid_token',
+        message: 'API tokens are not accepted by the authentication endpoints',
+      },
+      { status: 401 }
+    )
+  }
 
   if (config.DISABLE_SIGNUP && /\/auth\/sign-up(?:\/|$)/.test(url.pathname)) {
     return Response.json(

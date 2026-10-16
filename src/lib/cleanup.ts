@@ -1,4 +1,6 @@
 import { markOwnedShareStatus } from './account-shares.js'
+import { purgeAuditEventsOlderThan } from './audit.js'
+import { config } from './config.js'
 import { getPrisma } from './db.js'
 import {
   deleteFileSharesByIds,
@@ -65,6 +67,11 @@ export async function cleanupExpiredPastes(): Promise<number> {
 
   const deletedFileShares = await deleteFileSharesByIds(
     fileShares.map((share) => share.id)
+  )
+
+  // Audit retention. Events are metadata only, but still don't keep them forever.
+  await purgeAuditEventsOlderThan(
+    new Date(now.getTime() - config.AUDIT_RETENTION_DAYS * 24 * 60 * 60 * 1000)
   )
 
   return result.count + deletedFileShares

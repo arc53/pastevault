@@ -5,11 +5,11 @@ import {
   recordOwnedShareView,
 } from '../lib/account-shares.js'
 import { ensureAccountSystemSchema } from '../lib/account-schema.js'
-import { getOptionalAuthSession } from '../lib/auth-session.js'
+import { auditActorFor, recordShareEvent } from '../lib/audit.js'
 import { config } from '../lib/config.js'
 import {
-  burnFileShareRecord,
   completeFileShareRecord,
+  consumeFileShareView,
   createFileShareRecord,
   deleteFileSharesByIds,
   ensureFileShareSchema,
@@ -24,21 +24,27 @@ import {
   isFileSharingConfigured,
   uploadFileShareChunk,
 } from '../lib/file-storage.js'
+import { getPrincipal, requireScope } from '../lib/principal.js'
 import {
-  calculateExpiryDate,
+  effectiveMaxViews,
   generateSecretToken,
   generateSlug,
   hashSecretToken,
   isExpired,
   isUniqueConstraintError,
   readHeader,
+  resolveMaxViews,
+  resolveShareExpiry,
   secretTokenMatches,
+  viewsRemaining,
 } from '../lib/utils.js'
 import {
   completeFileShareSchema,
   createFileShareSchema,
   fileShareChunkParamsSchema,
   getFileShareParamsSchema,
+  MAX_VIEWS_LIMIT,
+  rejectUnsupportedRecipient,
   validationErrorHandler,
 } from '../lib/validation.js'
 import {
@@ -53,6 +59,9 @@ import {
 const XCHACHA20POLY1305_TAG_BYTES = 16
 const UPLOAD_TOKEN_HEADER = 'x-upload-token'
 const DOWNLOAD_GRANT_HEADER = 'x-download-grant'
+// Bumped when clients need to tell new server features apart; `features`
+// says which ones this server actually has.
+const API_VERSION = 2
 // A burned share's chunks stay downloadable while the reader keeps fetching
 // them: every valid chunk request slides the grant forward by the idle window
 // (FILE_SHARE_DOWNLOAD_GRANT_SECONDS, 15 min by default). A fixed window would
@@ -126,7 +135,9 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
   )
 
   fastify.get('/capabilities', async (_request, reply) => {
+    const accountsEnabled = !config.DISABLE_AUTH
     const response: CapabilitiesResponse = {
+      api_version: API_VERSION,
       auth: {
         enabled: !config.DISABLE_AUTH,
         signup_enabled: !config.DISABLE_AUTH && !config.DISABLE_SIGNUP,
@@ -137,6 +148,21 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
         max_files: config.MAX_FILE_SHARE_FILES,
         chunk_size_bytes: config.FILE_CHUNK_SIZE_BYTES,
         burn_after_read: true,
+      },
+      // Later stages flip agents, sealed_shares and secret_requests on.
+      features: {
+        expires_in_minutes: true,
+        max_views: true,
+        api_tokens: accountsEnabled,
+        agents: false,
+        sealed_shares: false,
+        secret_requests: false,
+        audit: accountsEnabled,
+      },
+      limits: {
+        max_views: MAX_VIEWS_LIMIT,
+        max_secret_request_bytes: config.MAX_SECRET_REQUEST_BYTES,
+        min_secret_request_ttl_seconds: config.SECRET_REQUEST_MIN_TTL_SECONDS,
       },
     }
 
@@ -153,11 +179,19 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
     }
 
     const body = createFileShareSchema.parse(request.body)
-    const session = await getOptionalAuthSession(request)
+    const principal = await getPrincipal(request)
+
+    // See POST /pastes: authenticated creates are owned or refused.
+    if (principal) {
+      requireScope(principal, 'shares:create')
+    }
+
+    rejectUnsupportedRecipient(body.recipient)
+
     const slug = body.slug || generateSlug()
-    const expiresAt = body.expires_in_hours
-      ? calculateExpiryDate(body.expires_in_hours)
-      : null
+    const expiresAt = resolveShareExpiry(body)
+    const maxViews = resolveMaxViews(body)
+    const burnAfterRead = maxViews === 1
     const uploadToken = generateSecretToken()
 
     try {
@@ -168,29 +202,57 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
         kdf_params: body.kdf_params,
         file_count: body.file_count,
         total_size_bytes: body.total_size_bytes,
-        burn_after_read: body.burn_after_read,
+        burn_after_read: burnAfterRead,
+        max_views: maxViews,
+        recipient: body.recipient
+          ? {
+              fingerprint: body.recipient.fingerprint,
+              agent_id: null,
+              user_id: null,
+              wrapped_key: body.recipient.wrapped_key,
+            }
+          : null,
         upload_token_hash: hashSecretToken(uploadToken),
       })
 
       const response: CreateFileShareResponse = {
         slug,
         expires_at: expiresAt,
-        burn_after_read: body.burn_after_read,
+        burn_after_read: burnAfterRead,
+        max_views: maxViews,
         upload_token: uploadToken,
       }
 
-      if (session) {
+      if (principal) {
         try {
-          await createOwnedFileShareRecord({
-            user_id: session.user.id,
+          const owned = await createOwnedFileShareRecord({
+            user_id: principal.user.id,
             resource_id: shareId,
             slug,
             expires_at: expiresAt,
             file_count: body.file_count,
             total_size_bytes: body.total_size_bytes,
-            burn_after_read: body.burn_after_read,
+            burn_after_read: burnAfterRead,
             is_password_protected: Boolean(body.salt),
+            max_views: maxViews,
+            recipient_fingerprint: body.recipient?.fingerprint ?? null,
+            recipient_agent_id: null,
+            created_via_token_id: principal.token_id,
           })
+          await recordShareEvent(
+            owned,
+            'share.created',
+            auditActorFor(principal, owned.user_id),
+            {
+              request,
+              details: {
+                max_views: maxViews,
+                expires_at: expiresAt,
+                file_count: body.file_count,
+                total_size_bytes: body.total_size_bytes,
+              },
+            }
+          )
         } catch (error: unknown) {
           fastify.log.error({ err: error, shareId }, 'Failed to record owned file share')
         }
@@ -381,6 +443,7 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
       return reply.code(410).send({ error: 'File share has expired' })
     }
 
+    const maxViews = effectiveMaxViews(share)
     const response: FileShareMetaResponse = {
       slug: share.slug,
       created_at: share.created_at,
@@ -392,6 +455,12 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
       kdf_params: share.kdf_params || undefined,
       file_count: share.file_count,
       total_size_bytes: share.total_size_bytes,
+      max_views: maxViews,
+      views_remaining: viewsRemaining(maxViews, share.view_count),
+      recipient: share.recipient_fingerprint
+        ? { fingerprint: share.recipient_fingerprint }
+        : null,
+      requires_recipient_auth: Boolean(share.recipient_user_id),
     }
 
     return reply.header('Cache-Control', 'no-store').send(response)
@@ -404,6 +473,8 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
     Params: { slug: string }
   }>('/file-shares/:slug', { exposeHeadRoute: false }, async (request, reply) => {
     const { slug } = getFileShareParamsSchema.parse(request.params)
+    // Resolved before any view is consumed, so a bad token can't burn a share.
+    const principal = await getPrincipal(request)
     const share = await getFileShareRecordBySlug(slug)
 
     if (!share || !share.is_complete) {
@@ -420,41 +491,71 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
     }
 
     try {
+      const maxViews = effectiveMaxViews(share)
+      let viewCount: number
+      let isBurned = false
       let downloadGrant: string | undefined
       let downloadGrantExpiresAt: Date | undefined
 
-      if (share.burn_after_read) {
+      if (maxViews !== null) {
+        // The view that reaches the limit burns the share and receives the
+        // download grant its chunks require from then on.
         const burnedAt = new Date()
-        downloadGrant = generateSecretToken()
-        downloadGrantExpiresAt = nextDownloadGrantExpiry(share, burnedAt)
+        const grant = generateSecretToken()
+        const grantExpiresAt = nextDownloadGrantExpiry(share, burnedAt)
 
-        const burned = await burnFileShareRecord(
+        const consumed = await consumeFileShareView(
           share.id,
-          hashSecretToken(downloadGrant),
-          downloadGrantExpiresAt,
+          maxViews,
+          hashSecretToken(grant),
+          grantExpiresAt,
           burnedAt
         )
 
-        if (!burned) {
+        if (!consumed) {
           return reply.code(410).send({ error: 'File share has been burned' })
         }
 
-        schedulePurgeCheck(
-          share.id,
-          share.slug,
-          downloadGrantExpiresAt.getTime() - Date.now() + 1000
-        )
+        viewCount = consumed.view_count
+        isBurned = consumed.is_burned
+
+        if (isBurned) {
+          downloadGrant = grant
+          downloadGrantExpiresAt = grantExpiresAt
+          schedulePurgeCheck(
+            share.id,
+            share.slug,
+            grantExpiresAt.getTime() - Date.now() + 1000
+          )
+        }
       } else {
         await incrementFileShareViewCount(share.id)
+        viewCount = share.view_count + 1
       }
 
-      await recordOwnedShareView({
+      const owned = await recordOwnedShareView({
         share_type: 'file_share',
         resource_id: share.id,
-        next_status: share.burn_after_read ? 'burned' : undefined,
+        next_status: isBurned ? 'burned' : undefined,
       }).catch((error: unknown) => {
         fastify.log.error({ err: error, shareId: share.id }, 'Failed to update owned file share metrics')
+        return null
       })
+
+      if (owned) {
+        const actor = auditActorFor(principal, owned.user_id)
+        await recordShareEvent(owned, 'share.viewed', actor, {
+          request,
+          details: { view: viewCount, max_views: maxViews },
+        })
+        if (isBurned) {
+          await recordShareEvent(owned, 'share.burned', actor, { request })
+          await recordShareEvent(owned, 'share.download_granted', actor, {
+            request,
+            details: { expires_at: downloadGrantExpiresAt },
+          })
+        }
+      }
 
       const response: GetFileShareResponse = {
         metadata: {
@@ -462,11 +563,13 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
           slug: share.slug,
           created_at: share.created_at,
           expires_at: share.expires_at,
-          view_count: share.view_count + 1,
+          view_count: viewCount,
           file_count: share.file_count,
           total_size_bytes: share.total_size_bytes,
           burn_after_read: share.burn_after_read,
-          is_burned: share.burn_after_read,
+          is_burned: isBurned,
+          max_views: maxViews,
+          views_remaining: viewsRemaining(maxViews, viewCount),
         },
         manifest_ciphertext: share.manifest_ciphertext!,
         manifest_nonce: share.manifest_nonce!,
@@ -474,9 +577,11 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
         kdf_params: share.kdf_params || undefined,
         download_grant: downloadGrant,
         download_grant_expires_at: downloadGrantExpiresAt,
+        wrapped_key: share.wrapped_key || undefined,
+        recipient_fingerprint: share.recipient_fingerprint || undefined,
       }
 
-      if (share.burn_after_read) {
+      if (maxViews !== null) {
         reply.header('Cache-Control', 'no-store')
       }
 
@@ -510,13 +615,17 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
       return reply.code(410).send({ error: 'File share has expired' })
     }
 
-    if (share.burn_after_read) {
-      // Chunks of a burn-after-read share are only served to the reader that
-      // opened (and thereby burned) it, and only while its grant is valid.
-      if (!share.is_burned) {
+    const viewLimited = effectiveMaxViews(share) !== null
+
+    if (viewLimited && !share.is_burned) {
+      // Chunks of a view-limited share are only served once it has been
+      // opened, which consumes a view.
+      if (share.view_count === 0) {
         return reply.code(403).send({ error: 'Open the file share before downloading its files' })
       }
-
+    } else if (viewLimited) {
+      // Once burned, chunks are only served to the reader that took the last
+      // view, and only while its grant is valid.
       if (
         !share.download_grant_expires_at ||
         isExpired(share.download_grant_expires_at)
@@ -551,7 +660,7 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
         .type('application/octet-stream')
         .header(
           'Cache-Control',
-          share.burn_after_read ? 'no-store' : 'private, max-age=300'
+          viewLimited ? 'no-store' : 'private, max-age=300'
         )
         .send(chunk)
     } catch (error: unknown) {

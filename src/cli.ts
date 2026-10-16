@@ -53,7 +53,8 @@ program
       databaseUrl: options.databaseUrl,
       dataDir: options.dataDir,
       logLevel: options.logLevel,
-      noMigrations: options.noMigrations,
+      // Commander exposes --no-migrations as `migrations: false`.
+      noMigrations: options.migrations === false,
     })
 
     await startServer(args)
@@ -87,13 +88,11 @@ async function startServer(args: CliArgs) {
 
     const [
       { config },
-      { pastesRoute },
-      { fileSharesRoute },
+      { registerApiRoutes },
       { cleanupExpiredPastes },
     ] = await Promise.all([
       import('./lib/config.js'),
-      import('./routes/pastes.js'),
-      import('./routes/file-shares.js'),
+      import('./routes/register.js'),
       import('./lib/cleanup.js'),
     ])
 
@@ -136,16 +135,7 @@ async function startServer(args: CliArgs) {
     })
 
     // Register API routes
-    if (!config.DISABLE_AUTH) {
-      const [{ authRoute }, { accountRoute }] = await Promise.all([
-        import('./routes/auth.js'),
-        import('./routes/account.js'),
-      ])
-      await fastify.register(authRoute, { prefix: '/api' })
-      await fastify.register(accountRoute, { prefix: '/api' })
-    }
-    await fastify.register(pastesRoute, { prefix: '/api' })
-    await fastify.register(fileSharesRoute, { prefix: '/api' })
+    await registerApiRoutes(fastify)
 
     // Health check endpoint
     fastify.get('/health', async () => {
