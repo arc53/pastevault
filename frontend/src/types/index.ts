@@ -145,6 +145,8 @@ export interface Draft {
   burn_after_read: boolean
   password_protected: boolean
   saved_at: number
+  // Identifies a single write, so a tab only clears drafts it saved or restored itself.
+  id: string
 }
 
 export interface FileShareChunk {

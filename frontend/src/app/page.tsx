@@ -172,8 +172,8 @@ export default function CreatePastePage() {
   )
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-  // Serialized draft this page last restored or wrote to storage, or null if it owns none.
-  const lastSavedDraftRef = useRef<string | null>(null)
+  // Draft this page last restored or wrote to storage, or null if it owns none.
+  const ownedDraftRef = useRef<{ id: string; serialized: string } | null>(null)
   const { locale } = useLocale()
   const uploadSpeedRef = useRef(0)
   const createPaste = useCreatePaste()
@@ -244,14 +244,17 @@ export default function CreatePastePage() {
       setBurnAfterRead(draft.burn_after_read)
       setPasswordProtected(draft.password_protected)
       setRestoredDraftAt(draft.saved_at)
-      lastSavedDraftRef.current = serializeDraft({
-        title: draft.title,
-        body: draft.body,
-        language_hint: restoredFormat,
-        expires_in_hours: restoredExpiry,
-        burn_after_read: draft.burn_after_read,
-        password_protected: draft.password_protected,
-      })
+      ownedDraftRef.current = {
+        id: draft.id,
+        serialized: serializeDraft({
+          title: draft.title,
+          body: draft.body,
+          language_hint: restoredFormat,
+          expires_in_hours: restoredExpiry,
+          burn_after_read: draft.burn_after_read,
+          password_protected: draft.password_protected,
+        }),
+      }
     }
     setDraftReady(true)
   }, [])
@@ -271,20 +274,16 @@ export default function CreatePastePage() {
       password_protected: passwordProtected,
     }
     const serialized = serializeDraft(draft)
-    if (serialized === lastSavedDraftRef.current) {
+    if (serialized === ownedDraftRef.current?.serialized) {
       return
     }
 
     setRestoredDraftAt(null)
     if (isDraftEmpty(draft)) {
-      // Only clear a draft this page restored or wrote, never one saved by another tab.
-      if (lastSavedDraftRef.current !== null) {
-        clearDraft()
-      }
-      lastSavedDraftRef.current = null
+      releaseDraft()
     } else {
-      saveDraft(draft)
-      lastSavedDraftRef.current = serialized
+      const id = saveDraft(draft)
+      ownedDraftRef.current = id ? { id, serialized } : null
     }
   })
 
@@ -366,9 +365,16 @@ export default function CreatePastePage() {
     }
   }, [uploadTelemetry.phase, uploadTelemetry.lastNetworkActivityAt])
 
+  // Clears the stored draft only if this page still owns it, so a newer draft from another tab survives.
+  function releaseDraft() {
+    if (ownedDraftRef.current) {
+      clearDraft(ownedDraftRef.current.id)
+    }
+    ownedDraftRef.current = null
+  }
+
   const forgetDraft = () => {
-    clearDraft()
-    lastSavedDraftRef.current = null
+    releaseDraft()
     setRestoredDraftAt(null)
   }
 

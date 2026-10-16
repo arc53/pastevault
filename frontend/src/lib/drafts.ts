@@ -1,9 +1,10 @@
+import { nanoid } from 'nanoid'
 import { Draft } from '@/types'
 
 const DRAFT_KEY = 'pastevault_draft'
 const DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
-export type DraftContent = Omit<Draft, 'saved_at'>
+export type DraftContent = Omit<Draft, 'saved_at' | 'id'>
 
 export function isDraftEmpty(draft: DraftContent): boolean {
   return !draft.title && !draft.body
@@ -21,16 +22,20 @@ export function serializeDraft(draft: DraftContent): string {
   ])
 }
 
-export function saveDraft(draft: DraftContent): void {
-  const draftWithTimestamp: Draft = {
+// Returns the id of the stored write, or null if it could not be saved.
+export function saveDraft(draft: DraftContent): string | null {
+  const storedDraft: Draft = {
     ...draft,
     saved_at: Date.now(),
+    id: nanoid(12),
   }
 
   try {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(draftWithTimestamp))
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(storedDraft))
+    return storedDraft.id
   } catch (error) {
     console.warn('Failed to save draft:', error)
+    return null
   }
 }
 
@@ -41,7 +46,7 @@ export function loadDraft(): Draft | null {
 
     const parsed: unknown = JSON.parse(saved)
     if (!parsed || typeof parsed !== 'object') {
-      clearDraft()
+      removeDraft()
       return null
     }
 
@@ -52,7 +57,7 @@ export function loadDraft(): Draft | null {
       typeof raw.saved_at !== 'number' ||
       raw.saved_at < Date.now() - DRAFT_MAX_AGE_MS
     ) {
-      clearDraft()
+      removeDraft()
       return null
     }
 
@@ -65,6 +70,8 @@ export function loadDraft(): Draft | null {
       burn_after_read: raw.burn_after_read === true,
       password_protected: raw.password_protected === true,
       saved_at: raw.saved_at,
+      // Drafts from older builds have no id; their timestamp identifies the write.
+      id: typeof raw.id === 'string' ? raw.id : String(raw.saved_at),
     }
   } catch (error) {
     console.warn('Failed to load draft:', error)
@@ -72,7 +79,14 @@ export function loadDraft(): Draft | null {
   }
 }
 
-export function clearDraft(): void {
+// Clears the stored draft only if it is still the write identified by `id`.
+export function clearDraft(id: string): void {
+  if (loadDraft()?.id === id) {
+    removeDraft()
+  }
+}
+
+function removeDraft(): void {
   try {
     localStorage.removeItem(DRAFT_KEY)
   } catch (error) {
