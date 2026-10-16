@@ -24,8 +24,11 @@ var defaultPasswordKDFParams = PasswordKDFParams{
 	KeyLen:     32,
 }
 
+// PrepareFileShareEncryption returns a random key, or with a password the
+// PBKDF2 key (salt and kdf_params for the server). The password is used
+// exactly as given, like the web app does; callers reject blank passwords.
 func PrepareFileShareEncryption(password string) (FileShareEncryption, error) {
-	if strings.TrimSpace(password) == "" {
+	if password == "" {
 		key, err := randomBytes(chacha20poly1305.KeySize)
 		if err != nil {
 			return FileShareEncryption{}, err

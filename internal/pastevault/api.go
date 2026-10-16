@@ -40,7 +40,7 @@ func NewClient(server, version string) (*Client, error) {
 		baseURL:     baseURL,
 		apiBaseURL:  apiURL,
 		authBaseURL: resolveAuthBaseURL(apiURL),
-		httpClient:  &http.Client{Timeout: 90 * time.Second},
+		httpClient:  &http.Client{Timeout: 90 * time.Second, CheckRedirect: refuseRedirects},
 		userAgent:   fmt.Sprintf("pastevault/%s", version),
 		chunkRetryDelays: []time.Duration{
 			time.Second,
@@ -49,6 +49,15 @@ func NewClient(server, version string) (*Client, error) {
 			8 * time.Second,
 		},
 	}, nil
+}
+
+// refuseRedirects stops the client from following redirects. The API never
+// redirects, and following one would forward the Authorization header (Go
+// keeps it for the same host on another port or scheme) and the upload token
+// and download grant headers (kept for any target). The 3xx answer is
+// returned to the caller and reported as an error instead.
+func refuseRedirects(*http.Request, []*http.Request) error {
+	return http.ErrUseLastResponse
 }
 
 func (c *Client) BaseURL() string {
@@ -383,6 +392,17 @@ func (c *Client) doBytesAtBase(ctx context.Context, baseURL *url.URL, method, re
 	}
 	defer response.Body.Close()
 
+	if response.StatusCode >= 300 && response.StatusCode < 400 {
+		return &APIRequestError{
+			Method:     method,
+			Path:       requestURL.Path,
+			StatusCode: response.StatusCode,
+			Status:     response.Status,
+			ErrorDescription: fmt.Sprintf("the server answered with a redirect to %q, which PasteVault does not follow (credentials could leak); check the server URL, e.g. use https:// directly",
+				redactLocation(response.Header.Get("Location"))),
+		}
+	}
+
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		data, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
 		apiError := APIErrorResponse{}
@@ -455,4 +475,18 @@ func normalizeServerURL(raw string) (*url.URL, *url.URL, error) {
 	apiURL := *baseURL
 	apiURL.Path = path.Join("/", strings.TrimRight(baseURL.Path, "/"), "api")
 	return baseURL, &apiURL, nil
+}
+
+// redactLocation keeps a redirect target's scheme, host and path for an error
+// message, dropping query and fragment, which may carry secrets.
+func redactLocation(location string) string {
+	parsed, err := url.Parse(location)
+	if err != nil {
+		return "(unparseable location)"
+	}
+
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+	parsed.User = nil
+	return parsed.String()
 }

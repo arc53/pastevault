@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	pv "github.com/arc53/pastevault/internal/pastevault"
@@ -126,13 +127,21 @@ func runGet(ctx context.Context, a *app, args []string) error {
 	// Credentials identify the reader (audit) and prove a sealed share's
 	// recipient account (recipient auth).
 	// PASTEVAULT_TOKEN is only sent to the configured server.
-	if _, err := pv.AttachCredentials(client, common.server); err != nil {
+	credential, err := pv.AttachCredentials(client, common.server)
+	if err != nil {
 		return err
 	}
 
 	// Look before opening: opening consumes a view (the last one burns the
 	// share), so everything that can fail must fail first.
 	meta, err := lookupShareMeta(ctx, client, ref)
+	if err != nil && credential.IsAPIToken() && isInvalidToken(err) {
+		// A public share doesn't need the token; a bad one shouldn't block
+		// it. Sealed shares that need an account fail below without it.
+		out.warnf("the %s is invalid (revoked, expired or unknown); continuing without it", describeCredential(credential))
+		client.SetAuthToken("")
+		meta, err = lookupShareMeta(ctx, client, ref)
+	}
 	if err != nil {
 		return err
 	}
@@ -195,11 +204,61 @@ func runGet(ctx context.Context, a *app, args []string) error {
 		out.infof("This share burns after reading; opening it now destroys it on the server.")
 	}
 
-	if meta.kind == pv.ShareKindPaste {
+	switch meta.kind {
+	case pv.ShareKindPaste:
 		return getPaste(ctx, a, out, client, ref, derivedKey, password, options)
+	case pv.ShareKindUnknown:
+		// It may turn out to be a paste, so the same rule as above applies.
+		if out.json() && destinations == 0 && len(ref.Key) > 0 {
+			return pv.UsageError("with --json, choose where the paste goes: --stdout (adds it to the JSON as content), -o FILE or --out DIR")
+		}
+		return getLegacyShare(ctx, a, out, client, ref, meta, password, options)
 	}
 
 	return getFileShare(ctx, a, out, client, ref, meta, derivedKey, password, options)
+}
+
+// getLegacyShare opens a slug of unknown kind on a server without /meta
+// endpoints. With a key, pastes are tried first: a missing paste answers 404
+// without consuming anything, and an existing one is delivered (its view is
+// used either way). Without a key (password only) only file shares are
+// tried, as before /meta existed, so a paste is never opened that could not
+// be decrypted.
+func getLegacyShare(ctx context.Context, a *app, out *output, client *pv.Client, ref pv.ShareReference, meta shareMeta, password string, options getOptions) error {
+	if len(ref.Key) > 0 {
+		paste, err := client.GetPaste(ctx, ref.Slug)
+		if err == nil {
+			return deliverPaste(a, out, ref, paste, nil, password, options)
+		}
+		if !pv.IsStatus(err, 404) {
+			return err
+		}
+	}
+
+	// Now known to be a file share (or missing): file-share checks before
+	// it is opened.
+	meta.kind = pv.ShareKindFileShare
+	if out.json() && options.toStdout {
+		return pv.UsageError("--stdout with --json is only supported for pastes; use -o FILE or --out DIR")
+	}
+	if err := checkGetDestination(meta, options); err != nil {
+		return err
+	}
+
+	return getFileShare(ctx, a, out, client, ref, meta, nil, password, options)
+}
+
+func isInvalidToken(err error) bool {
+	var apiErr *pv.APIRequestError
+	return errors.As(err, &apiErr) && apiErr.StatusCode == 401 && apiErr.ErrorCode == "invalid_token"
+}
+
+func describeCredential(source pv.CredentialSource) string {
+	if source == pv.CredentialEnvToken {
+		return pv.EnvToken + " token"
+	}
+
+	return "stored API token"
 }
 
 // lookupShareMeta fetches the non-consuming metadata. A reference without a
@@ -244,6 +303,10 @@ func lookupShareMeta(ctx context.Context, client *pv.Client, ref pv.ShareReferen
 
 			requiresRecipientAuth: fileMeta.RequiresRecipientAuth,
 		}, nil
+	case pv.IsStatus(err, 404) && ref.Kind == pv.ShareKindUnknown:
+		// No paste and no file share meta: missing, or a server without
+		// /meta endpoints (getLegacyShare).
+		return shareMeta{kind: pv.ShareKindUnknown, lookupErr: err}, nil
 	case pv.IsStatus(err, 404):
 		return shareMeta{kind: pv.ShareKindFileShare, lookupErr: err}, nil
 	default:
@@ -297,12 +360,25 @@ func getPaste(
 		return err
 	}
 
+	return deliverPaste(a, out, ref, paste, key, password, options)
+}
+
+// deliverPaste decrypts an opened paste and writes it out.
+func deliverPaste(a *app, out *output, ref pv.ShareReference, paste pv.GetPasteResponse, key []byte, password string, options getOptions) error {
+	var err error
 	if options.sealedTo != nil {
 		key, err = unwrapShareKey(options.sealedTo, paste.WrappedKey, paste.RecipientFingerprint, pv.PasteWrapContext(ref.Slug))
 		if err != nil {
 			return err
 		}
 	} else if key == nil {
+		if paste.Salt != "" && password == "" && a.stdinIsTerminal() {
+			// Only on servers without /meta: the paste turned out to be
+			// password-protected after it was opened.
+			if password, err = a.promptPassword("Password: "); err != nil {
+				return err
+			}
+		}
 		key, err = pv.DerivePasteKey(ref.Key, paste.Salt, paste.KDFParams, password)
 		if err != nil {
 			return err
@@ -461,11 +537,12 @@ func getFileShare(
 		result.SizeBytes = fileEntry.Size
 
 		if options.outFile != "" {
-			if err := downloadToFile(ctx, client, fileEntry, key, share, options); err != nil {
+			target, err := downloadToFile(ctx, out, client, fileEntry, key, share, options)
+			if err != nil {
 				return err
 			}
-			result.WrittenTo = options.outFile
-			result.Files[0].Path = options.outFile
+			result.WrittenTo = target
+			result.Files[0].Path = target
 		} else {
 			// runGet refused --stdout with --json for file shares, so file
 			// bytes never mix with the JSON object.
@@ -487,9 +564,10 @@ func getFileShare(
 		targetDescription = "current directory"
 	}
 
-	// A burned share gets no second chance, so name clashes are resolved by
-	// renaming instead of aborting.
-	plan, err := pv.PlanDownload(manifest, targetDir, options.overwrite, burned)
+	// The share has been opened, so its view is used: a name clash must not
+	// throw that away. Without --overwrite, clashing files are saved as
+	// "name (1).ext" instead.
+	plan, err := pv.PlanDownload(manifest, targetDir, options.overwrite, true)
 	if err != nil {
 		return pv.WrapError(pv.ExitLocalFile, pv.CodeLocalFile, err, "cannot save the share")
 	}
@@ -517,13 +595,19 @@ func getFileShare(
 
 // downloadToFile streams the only file of a share into a new private file.
 // A partial file is removed on failure.
-func downloadToFile(ctx context.Context, client *pv.Client, fileEntry pv.FileShareManifestFile, key []byte, share pv.GetFileShareResponse, options getOptions) error {
-	file, err := pv.CreatePrivateFile(options.outFile, options.overwrite)
-	if err != nil {
-		if errors.Is(err, os.ErrExist) {
-			return pv.NewError(pv.ExitLocalFile, pv.CodeLocalFile, "%s already exists; remove it first or pass --overwrite", options.outFile)
+func downloadToFile(ctx context.Context, out *output, client *pv.Client, fileEntry pv.FileShareManifestFile, key []byte, share pv.GetFileShareResponse, options getOptions) (string, error) {
+	target := options.outFile
+	file, err := pv.CreatePrivateFile(target, options.overwrite)
+	if errors.Is(err, os.ErrExist) {
+		// The file appeared after the pre-open check; the share is already
+		// opened, so save next to it instead of losing the view.
+		if target, err = choosePasteTarget(filepath.Dir(options.outFile), filepath.Base(options.outFile), false); err == nil {
+			out.warnf("%s appeared meanwhile; saving as %s", options.outFile, target)
+			file, err = pv.CreatePrivateFile(target, false)
 		}
-		return pv.WrapError(pv.ExitLocalFile, pv.CodeLocalFile, err, "could not write %s", options.outFile)
+	}
+	if err != nil {
+		return "", pv.WrapError(pv.ExitLocalFile, pv.CodeLocalFile, err, "could not write %s", target)
 	}
 
 	writeErr := pv.DownloadFileTo(ctx, client, fileEntry, key, share.Metadata.Slug, share.DownloadGrant, file)
@@ -532,10 +616,11 @@ func downloadToFile(ctx context.Context, client *pv.Client, fileEntry pv.FileSha
 		writeErr = closeErr
 	}
 	if writeErr != nil {
-		_ = os.Remove(options.outFile)
+		_ = os.Remove(target)
+		return "", writeErr
 	}
 
-	return writeErr
+	return target, nil
 }
 
 // unwrapShareKey opens a sealed share's wrapped key with the local agent key.

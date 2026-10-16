@@ -168,6 +168,8 @@ func ExitCodeForStatus(status int) (int, string) {
 		return ExitConflict, CodeConflict
 	case status == http.StatusTooManyRequests:
 		return ExitRateLimited, CodeRateLimited
+	case status >= 300 && status < 400:
+		return ExitNetwork, CodeNetwork
 	case status == http.StatusNotImplemented:
 		return ExitUnsupported, CodeUnsupported
 	case status >= 500:

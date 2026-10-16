@@ -166,6 +166,8 @@ export interface CapabilitiesResponse {
   }
   limits: {
     max_views: number
+    max_paste_size_bytes: number
+    max_paste_request_bytes: number
     max_secret_request_bytes: number
     min_secret_request_ttl_seconds: number
   }

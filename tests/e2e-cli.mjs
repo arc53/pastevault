@@ -237,6 +237,24 @@ await runSuite('cli', {}, async ({ startServer, temporaryRoot }) => {
     assert.equal(viaStdin.stdout, 'keyed')
   }
 
+  // ── paste size: the request body limit is checked before upload ────
+  {
+    const capabilities = await request(baseUrl, '/api/capabilities')
+    assert.equal(capabilities.body.limits.max_paste_size_bytes, 1048576)
+    assert.equal(capabilities.body.limits.max_paste_request_bytes, 1048576)
+
+    const fits = cli(['put', '-', '-q'], { input: 'a'.repeat(700 * 1024) })
+    expectExit(fits, 0, '700 KiB paste')
+    const opened = cli(['get', fits.stdout.trim(), '--stdout'])
+    assert.equal(opened.stdout.length, 700 * 1024)
+
+    // Under MAX_PASTE_SIZE_BYTES but over the body limit once base64-encoded:
+    // refused locally instead of a 413 from the server.
+    const tooBig = cli(['put', '-', '--json'], { input: 'a'.repeat(900 * 1024) })
+    expectExit(tooBig, 2, '900 KiB paste')
+    assert.equal(json(tooBig).error.code, 'too_large')
+  }
+
   // ── view limits and gone/missing exit codes ────────────────────────
   {
     const twice = putJson(['-', '--max-views', '2'], { input: 'two views' })
@@ -265,6 +283,35 @@ await runSuite('cli', {}, async ({ startServer, temporaryRoot }) => {
     assert.equal(json(missing).error.code, 'not_found')
   }
 
+  // ── file shares: a name clash after opening renames, never wastes a view ─
+  {
+    const sourceDirectory = path.join(temporaryRoot, 'clash-source')
+    const outDirectory = path.join(temporaryRoot, 'clash-out')
+    mkdirSync(sourceDirectory, { recursive: true })
+    mkdirSync(outDirectory, { recursive: true })
+    writeFileSync(path.join(sourceDirectory, 'report.txt'), 'shared report\n')
+    writeFileSync(path.join(sourceDirectory, 'data.csv'), 'a,b\n1,2\n')
+    writeFileSync(path.join(outDirectory, 'report.txt'), 'my local file\n')
+
+    const created = putJson(['report.txt', 'data.csv', '--max-views', '3'], { cwd: sourceDirectory })
+    assert.equal(created.kind, 'file_share')
+    const opened = cli(['get', created.url, '--out', outDirectory, '--json'])
+    expectExit(opened, 0, 'get --out with a clashing file name')
+    const result = json(opened)
+    assert.equal(result.views_remaining, 2)
+    assert.match(opened.stderr, /report\.txt already exists; saving as .*report \(1\)\.txt/)
+    assert.equal(readFileSync(path.join(outDirectory, 'report.txt'), 'utf8'), 'my local file\n', 'the existing file is untouched')
+    assert.equal(readFileSync(path.join(outDirectory, 'report (1).txt'), 'utf8'), 'shared report\n')
+    assert.equal(readFileSync(path.join(outDirectory, 'data.csv'), 'utf8'), 'a,b\n1,2\n')
+    assert.deepEqual(result.files.map((file) => path.basename(file.path)).sort(), ['data.csv', 'report (1).txt'])
+
+    // -o onto an existing file is refused before opening (no view used).
+    const single = putJson(['report.txt', '--as', 'files', '--max-views', '2'], { cwd: sourceDirectory })
+    expectExit(cli(['get', single.url, '-o', path.join(outDirectory, 'data.csv')]), 13, '-o onto an existing file')
+    const meta = await request(baseUrl, `/api/file-shares/${single.slug}/meta`)
+    assert.equal(meta.body.views_remaining, 2)
+  }
+
   // ── accounts: session, API tokens, list, status, audit, revoke ─────
   {
     const owner = await signUp(baseUrl, 'cli')
@@ -290,8 +337,22 @@ await runSuite('cli', {}, async ({ startServer, temporaryRoot }) => {
     expectExit(plainCreate, 0, 'token create -q')
     assert.match(plainCreate.stdout.trim(), /^pv_pat_[a-z2-7]{52}$/)
 
+    // --out writes the token 0600 and keeps it out of stdout and JSON.
+    const tokenFile = path.join(temporaryRoot, 'saved.token')
+    const savedCreate = cli(['token', 'create', '--name', 'saved', '--out', tokenFile, '--json'], asSession)
+    expectExit(savedCreate, 0, 'token create --out')
+    const saved = json(savedCreate)
+    assert.equal(saved.token, undefined)
+    assert.equal(saved.token_file, tokenFile)
+    assert.match(readFileSync(tokenFile, 'utf8'), /^pv_pat_[a-z2-7]{52}\n$/)
+    if (process.platform !== 'win32') {
+      assert.equal(statSync(tokenFile).mode & 0o777, 0o600)
+    }
+    expectExit(cli(['token', 'create', '--name', 'again', '--out', tokenFile], asSession), 13, 'token create --out onto an existing file')
+    expectExit(cli(['token', 'revoke', saved.prefix], asSession), 0, 'revoke the saved token')
+
     const listed = json(cli(['token', 'list', '--json'], asSession))
-    assert.deepEqual(listed.tokens.map((entry) => entry.name).sort(), ['ci', 'plain'])
+    assert.deepEqual(listed.tokens.map((entry) => entry.name).sort(), ['ci', 'plain', 'saved'])
     assert(!JSON.stringify(listed).includes(token.token), 'token list never shows tokens')
 
     const tokenOnly = { env: { PASTEVAULT_TOKEN: token.token, PASTEVAULT_CONFIG_DIR: newConfigDir() } }

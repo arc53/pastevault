@@ -1,6 +1,7 @@
 package pastevault
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -504,5 +506,113 @@ func TestLooksLikeAPIToken(t *testing.T) {
 		if LooksLikeAPIToken(value) {
 			t.Errorf("accepted %q", value)
 		}
+	}
+}
+
+// M2: the client never follows redirects, so credentials, upload tokens and
+// download grants never reach another host, port or scheme.
+func TestClientRefusesRedirects(t *testing.T) {
+	t.Parallel()
+
+	var leaked []string
+	var mu sync.Mutex
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		leaked = append(leaked, r.Header.Get("Authorization")+"|"+r.Header.Get(DownloadGrantHeader))
+		mu.Unlock()
+		w.WriteHeader(200)
+	}))
+	defer target.Close()
+
+	// Same host (127.0.0.1), another port: Go would keep Authorization.
+	redirector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+r.URL.Path+"?sig=secret", http.StatusTemporaryRedirect)
+	}))
+	defer redirector.Close()
+
+	client, err := NewClient(redirector.URL, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.SetAuthToken(APITokenPrefix + strings.Repeat("a", 52))
+	client.chunkRetryDelays = nil
+
+	_, err = client.GetPasteMeta(context.Background(), "abcdef")
+	cliErr := Classify(err)
+	if cliErr.Exit != ExitNetwork || !strings.Contains(cliErr.Error(), "redirect") || strings.Contains(cliErr.Error(), "secret") {
+		t.Fatalf("redirect: exit %d %v", cliErr.Exit, cliErr)
+	}
+
+	if _, err := client.DownloadFileShareChunk(context.Background(), "abcdef", "grant-value", "file_id_0001", 0); err == nil {
+		t.Fatal("a redirected chunk download must fail")
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(leaked) != 0 {
+		t.Fatalf("the redirect target was contacted: %v", leaked)
+	}
+}
+
+// L1: the request body (base64 ciphertext) is limited as well as the
+// decoded ciphertext.
+func TestPasteLimits(t *testing.T) {
+	t.Parallel()
+
+	defaults := PasteLimitsFor(CapabilitiesResponse{})
+	if defaults.MaxCiphertextBytes != DefaultMaxPasteBytes || defaults.MaxRequestBytes != DefaultMaxPasteRequestBytes {
+		t.Fatalf("defaults: %+v", defaults)
+	}
+
+	fits := PasteContent{Body: strings.Repeat("a", 700*1024), RenderMode: RenderModePlain}
+	if err := defaults.Check(fits); err != nil {
+		t.Fatalf("700 KiB: %v", err)
+	}
+	// Under MAX_PASTE_SIZE_BYTES, but ~1.2 MiB once base64-encoded.
+	tooBig := PasteContent{Body: strings.Repeat("a", 900*1024), RenderMode: RenderModePlain}
+	if err := defaults.Check(tooBig); Classify(err).Code != CodeTooLarge {
+		t.Fatalf("900 KiB: %v", err)
+	}
+	// JSON escaping counts: 300k newlines become 600 KiB of "\n".
+	escaped := PasteContent{Body: strings.Repeat("\n", 400*1024), RenderMode: RenderModePlain}
+	if err := defaults.Check(escaped); Classify(err).Code != CodeTooLarge {
+		t.Fatalf("escaped newlines: %v", err)
+	}
+
+	larger := PasteLimitsFor(CapabilitiesResponse{Limits: CapabilityLimits{MaxPasteSizeBytes: 4 << 20, MaxPasteRequestBytes: 8 << 20}})
+	if err := larger.Check(tooBig); err != nil {
+		t.Fatalf("server-reported limits: %v", err)
+	}
+
+	request := CreatePasteRequest{Ciphertext: strings.Repeat("a", DefaultMaxPasteRequestBytes), Nonce: "n"}
+	if err := defaults.CheckRequestSize(request); Classify(err).Code != CodeTooLarge {
+		t.Fatalf("CheckRequestSize: %v", err)
+	}
+}
+
+// M1: a password is used as typed (no trimming), and only "" means none.
+func TestPasswordIsUsedAsTyped(t *testing.T) {
+	t.Parallel()
+
+	padded, err := PrepareFileShareEncryption(" pw ")
+	if err != nil || padded.Salt == "" {
+		t.Fatalf("padded password must derive a key: %+v %v", padded, err)
+	}
+	blank, err := PrepareFileShareEncryption("   ")
+	if err != nil || blank.Salt == "" {
+		t.Fatalf("a whitespace password is still a password here (callers reject it): %+v", blank)
+	}
+	none, _ := PrepareFileShareEncryption("")
+	if none.Salt != "" || len(none.Key) != 32 {
+		t.Fatalf("no password: %+v", none)
+	}
+
+	trimmed, err := DerivePasteKey(nil, padded.Salt, padded.KDFParams, "pw")
+	if err != nil || bytes.Equal(trimmed, padded.Key) {
+		t.Fatal("the trimmed password must derive a different key")
+	}
+	exact, _ := DerivePasteKey(nil, padded.Salt, padded.KDFParams, " pw ")
+	if !bytes.Equal(exact, padded.Key) {
+		t.Fatal("the exact password must derive the same key")
 	}
 }

@@ -36,8 +36,10 @@ type CapabilityLimits struct {
 	MaxViews                   int `json:"max_views"`
 	MaxSecretRequestBytes      int `json:"max_secret_request_bytes"`
 	MinSecretRequestTTLSeconds int `json:"min_secret_request_ttl_seconds"`
-	// Not reported by current servers; DefaultMaxPasteBytes applies then.
-	MaxPasteSizeBytes int `json:"max_paste_size_bytes"`
+	// Paste limits (servers before PR2 Stage 3 fixes omit them; the
+	// defaults in PasteLimitsFor apply then).
+	MaxPasteSizeBytes    int `json:"max_paste_size_bytes"`
+	MaxPasteRequestBytes int `json:"max_paste_request_bytes"`
 }
 
 type FileShareCapabilities struct {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -9,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	pv "github.com/arc53/pastevault/internal/pastevault"
@@ -27,6 +29,19 @@ type app struct {
 
 	// jsonMode is resolved once per run from --json and PASTEVAULT_JSON.
 	jsonMode bool
+	// helpText collects usage text in JSON mode, where it is printed as
+	// {"usage": ...} instead of on stderr.
+	helpText bytes.Buffer
+}
+
+// helpOutput is where usage and flag-parsing text goes: stderr, or in JSON
+// mode a buffer (stdout must hold exactly one JSON object).
+func (a *app) helpOutput() io.Writer {
+	if a.jsonMode {
+		return &a.helpText
+	}
+
+	return a.stderr
 }
 
 func newApp() *app {
@@ -76,11 +91,14 @@ func findCommand(name string) *command {
 
 // run executes one CLI invocation and returns the process exit code.
 func (a *app) run(ctx context.Context, args []string) int {
-	a.jsonMode = envJSONEnabled() || argsWantJSON(args)
+	a.jsonMode = envJSONEnabled()
+	if value, explicit := argsJSONSetting(args); explicit {
+		a.jsonMode = value
+	}
 
 	if len(args) == 0 {
 		a.usage()
-		return pv.ExitUsage
+		return a.reportError(pv.UsageError("no command given; run pastevault help"))
 	}
 
 	var err error
@@ -92,6 +110,7 @@ func (a *app) run(ctx context.Context, args []string) int {
 			err = findCommand(args[1]).run(ctx, a, []string{"--help"})
 		} else {
 			a.usage()
+			err = errHelpShown
 		}
 	default:
 		cmd := findCommand(name)
@@ -103,7 +122,13 @@ func (a *app) run(ctx context.Context, args []string) int {
 		}
 	}
 
-	if err == nil || errors.Is(err, errHelpShown) {
+	if errors.Is(err, errHelpShown) {
+		if a.jsonMode {
+			_ = writeJSON(a.stdout, map[string]string{"usage": a.helpText.String()})
+		}
+		return pv.ExitOK
+	}
+	if err == nil {
 		return pv.ExitOK
 	}
 	if ctx.Err() != nil && !errors.As(err, new(*pv.CLIError)) {
@@ -142,20 +167,28 @@ func envJSONEnabled() bool {
 	return false
 }
 
-// argsWantJSON spots --json before flags are parsed, so even flag errors are
-// reported as JSON.
-func argsWantJSON(args []string) bool {
+// argsJSONSetting spots --json / --json=BOOL before flags are parsed, so
+// even flag errors are reported as JSON, and --json=false overrides
+// PASTEVAULT_JSON. The last occurrence wins, as in flag parsing.
+func argsJSONSetting(args []string) (value bool, explicit bool) {
 	for _, arg := range args {
 		if arg == "--" {
-			return false
+			break
 		}
-		switch arg {
-		case "--json", "-json", "--json=true", "-json=true":
-			return true
+		name := strings.TrimPrefix(strings.TrimPrefix(arg, "-"), "-")
+		if name == arg {
+			continue
+		}
+		if name == "json" {
+			value, explicit = true, true
+		} else if raw, found := strings.CutPrefix(name, "json="); found {
+			if parsed, err := strconv.ParseBool(raw); err == nil {
+				value, explicit = parsed, true
+			}
 		}
 	}
 
-	return false
+	return value, explicit
 }
 
 // errHelpShown ends a command after -h/--help printed its usage.
@@ -181,9 +214,9 @@ func (a *app) newFlagSet(name, usageLine string) (*flag.FlagSet, *commonFlags) {
 
 func (a *app) newBareFlagSet(name, usageLine string) *flag.FlagSet {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
-	fs.SetOutput(a.stderr)
+	fs.SetOutput(a.helpOutput())
 	fs.Usage = func() {
-		fmt.Fprintf(a.stderr, "Usage:\n  %s\n\nFlags:\n", usageLine)
+		fmt.Fprintf(fs.Output(), "Usage:\n  %s\n\nFlags:\n", usageLine)
 		fs.PrintDefaults()
 	}
 	return fs
@@ -200,8 +233,8 @@ func parseArgs(fs *flag.FlagSet, args []string) ([]string, error) {
 			if errors.Is(err, flag.ErrHelp) {
 				return nil, errHelpShown
 			}
-			if name, found := strings.CutPrefix(err.Error(), "flag provided but not defined: -"); found && pv.IsValidSlug(strings.SplitN(name, "#", 2)[0]) && len(name) >= 6 {
-				return nil, pv.UsageError("%v (if -%s is a share slug, pass it after --, e.g. pastevault get -- -%s)", err, name, name)
+			if name, found := strings.CutPrefix(err.Error(), "flag provided but not defined: -"); found && len(name) >= 6 && pv.IsValidSlug(strings.SplitN(name, "#", 2)[0]) {
+				return nil, pv.UsageError(`%v (a share slug that starts with "-" must come after --, e.g. pastevault get -- <slug>)`, err)
 			}
 			return nil, pv.UsageError("%v", err)
 		}
@@ -294,17 +327,18 @@ func readLine(r io.Reader, limit int64) (string, error) {
 }
 
 func (a *app) usage() {
-	fmt.Fprintln(a.stderr, "PasteVault CLI: end-to-end encrypted sharing")
-	fmt.Fprintln(a.stderr)
-	fmt.Fprintln(a.stderr, "Usage:")
-	fmt.Fprintln(a.stderr, "  pastevault <command> [flags] [arguments]")
-	fmt.Fprintln(a.stderr)
-	fmt.Fprintln(a.stderr, "Commands:")
+	w := a.helpOutput()
+	fmt.Fprintln(w, "PasteVault CLI: end-to-end encrypted sharing")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Usage:")
+	fmt.Fprintln(w, "  pastevault <command> [flags] [arguments]")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Commands:")
 	for _, cmd := range commands {
-		fmt.Fprintf(a.stderr, "  %-8s %s\n", cmd.name, cmd.summary)
+		fmt.Fprintf(w, "  %-8s %s\n", cmd.name, cmd.summary)
 	}
-	fmt.Fprintf(a.stderr, "  %-8s %s\n", "version", "Show version information")
-	fmt.Fprint(a.stderr, `
+	fmt.Fprintf(w, "  %-8s %s\n", "version", "Show version information")
+	fmt.Fprint(w, `
 Common flags:
   --server URL   PasteVault server (default $PASTEVAULT_SERVER or https://api.pastevault.dev)
   --json         One JSON object on stdout; errors as {"error":{...}} (or PASTEVAULT_JSON=1)
@@ -398,12 +432,60 @@ func validateSession(ctx context.Context, client *pv.Client) error {
 	return nil
 }
 
+// Server features account commands depend on (see requireFeature).
+const (
+	featureAccounts = "accounts"
+	featureAudit    = "audit"
+	featureTokens   = "api_tokens"
+)
+
+// requireFeature checks /capabilities before an account command does
+// anything else, so a server without the feature (an old version, or
+// DISABLE_AUTH=true) gives exit 14 instead of a confusing 401 or 404.
+func requireFeature(ctx context.Context, client *pv.Client, feature string) (pv.CapabilitiesResponse, error) {
+	capabilities, err := fetchCapabilities(ctx, client)
+	if err != nil {
+		return capabilities, err
+	}
+
+	if !capabilities.Auth.Enabled {
+		return capabilities, pv.UnsupportedError("%s has accounts disabled (or is too old), so this command is not available", client.BaseURL())
+	}
+	switch {
+	case feature == featureAudit && !capabilities.Features.Audit:
+		return capabilities, pv.UnsupportedError("%s does not support the audit log; update the server", client.BaseURL())
+	case feature == featureTokens && !capabilities.Features.APITokens:
+		return capabilities, pv.UnsupportedError("%s does not support API tokens; update the server", client.BaseURL())
+	}
+
+	return capabilities, nil
+}
+
+// accountClient is authenticatedClient (credentials required) for commands
+// that need an account feature on the server.
+func accountClient(ctx context.Context, common *commonFlags, feature string) (*pv.Client, pv.CredentialSource, pv.CapabilitiesResponse, error) {
+	probe, err := newClient(common.server)
+	if err != nil {
+		return nil, pv.CredentialNone, pv.CapabilitiesResponse{}, err
+	}
+	capabilities, err := requireFeature(ctx, probe, feature)
+	if err != nil {
+		return nil, pv.CredentialNone, capabilities, err
+	}
+
+	client, source, err := authenticatedClient(ctx, common, true)
+	return client, source, capabilities, err
+}
+
 // sessionClient returns a client authenticated with the stored login
 // session only. Token management is session-only on the server, so API
 // tokens (PASTEVAULT_TOKEN or a stored token) are deliberately not used.
 func sessionClient(ctx context.Context, common *commonFlags) (*pv.Client, error) {
 	client, err := newClient(common.server)
 	if err != nil {
+		return nil, err
+	}
+	if _, err := requireFeature(ctx, client, featureTokens); err != nil {
 		return nil, err
 	}
 

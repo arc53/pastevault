@@ -40,7 +40,7 @@ func runList(ctx context.Context, a *app, args []string) error {
 		return pv.UsageError("--limit must be between 1 and 200")
 	}
 
-	client, _, err := authenticatedClient(ctx, common, true)
+	client, _, _, err := accountClient(ctx, common, featureAccounts)
 	if err != nil {
 		return err
 	}
@@ -94,7 +94,7 @@ func runRevoke(ctx context.Context, a *app, args []string) error {
 		return pv.UsageError("name at least one share to revoke (slug, URL or id from pastevault list)")
 	}
 
-	client, _, err := authenticatedClient(ctx, common, true)
+	client, _, _, err := accountClient(ctx, common, featureAccounts)
 	if err != nil {
 		return err
 	}
@@ -150,32 +150,50 @@ func runRevoke(ctx context.Context, a *app, args []string) error {
 	return firstErr
 }
 
+// ownedShareIDScanLimit caps how many shares an id lookup pages through.
+const ownedShareIDScanLimit = 1000
+
 // findOwnedShare resolves a slug, share URL, pv://share handle or owned-share
 // id to one of the account's shares.
 func findOwnedShare(ctx context.Context, client *pv.Client, common *commonFlags, arg string) (pv.AccountShare, error) {
 	ref, refErr := pv.ParseShareReference(arg, common.server, pv.ResolvePublicBaseURL(common.server))
 	if refErr == nil {
+		// A link to another server names a share this account can't own here.
+		if !pv.SameServer(ref.Server, common.server) {
+			return pv.AccountShare{}, pv.UsageError("%s is a share on %s, not on %s; pass --server %s", redactRef(arg), ref.Server, client.BaseURL(), ref.Server)
+		}
+
 		response, err := client.ListAccountShares(ctx, pv.AccountSharesQuery{Slug: ref.Slug, Limit: 10})
 		if err != nil {
 			return pv.AccountShare{}, err
 		}
+		// Servers without the slug filter return every share: match it here.
 		for _, share := range response.Shares {
-			if ref.Kind == pv.ShareKindUnknown || share.ShareType == string(ref.Kind) {
+			if share.Slug == ref.Slug && (ref.Kind == pv.ShareKindUnknown || share.ShareType == string(ref.Kind)) {
 				return share, nil
 			}
 		}
 	}
 
-	// Not a slug of ours: it may be an owned-share id from "list".
+	// Not a slug of ours: it may be an owned-share id from "list". Page
+	// through the newest shares, up to a bound.
 	if pv.IsValidSlug(arg) {
-		response, err := client.ListAccountShares(ctx, pv.AccountSharesQuery{})
-		if err != nil {
-			return pv.AccountShare{}, err
-		}
-		for _, share := range response.Shares {
-			if share.ID == arg {
-				return share, nil
+		cursor := ""
+		for scanned := 0; scanned < ownedShareIDScanLimit; {
+			response, err := client.ListAccountShares(ctx, pv.AccountSharesQuery{Limit: 200, Cursor: cursor})
+			if err != nil {
+				return pv.AccountShare{}, err
 			}
+			for _, share := range response.Shares {
+				if share.ID == arg {
+					return share, nil
+				}
+			}
+			scanned += len(response.Shares)
+			if response.NextCursor == nil || len(response.Shares) == 0 {
+				break
+			}
+			cursor = *response.NextCursor
 		}
 	}
 
@@ -222,7 +240,7 @@ func runStatus(ctx context.Context, a *app, args []string) error {
 		return err
 	}
 
-	client, _, err := authenticatedClient(ctx, common, true)
+	client, _, capabilities, err := accountClient(ctx, common, featureAccounts)
 	if err != nil {
 		return err
 	}
@@ -232,6 +250,9 @@ func runStatus(ctx context.Context, a *app, args []string) error {
 		return err
 	}
 
+	if condition == "burned" && share.MaxViews == nil && !share.BurnAfterRead {
+		return pv.UsageError("share %s has no view limit, so it never burns; use --wait viewed", share.Slug)
+	}
 	if condition != "" {
 		share, err = waitForShare(ctx, client, share, condition, waitTimeout, pollInterval, out)
 		if err != nil {
@@ -239,12 +260,15 @@ func runStatus(ctx context.Context, a *app, args []string) error {
 		}
 	}
 
-	events, err := client.ListShareEvents(ctx, share.ID)
-	if err != nil {
-		return err
-	}
-	if events.Events == nil {
-		events.Events = []pv.AuditEvent{}
+	// Servers without the audit log have no per-share events.
+	events := pv.ListShareEventsResponse{Events: []pv.AuditEvent{}}
+	if capabilities.Features.Audit {
+		if events, err = client.ListShareEvents(ctx, share.ID); err != nil {
+			return err
+		}
+		if events.Events == nil {
+			events.Events = []pv.AuditEvent{}
+		}
 	}
 
 	result := statusOutput{AccountShare: share, Events: events.Events, WaitedFor: condition}
@@ -360,7 +384,7 @@ func runAudit(ctx context.Context, a *app, args []string) error {
 		return pv.UsageError("--limit must be between 1 and 200")
 	}
 
-	client, _, err := authenticatedClient(ctx, common, true)
+	client, _, _, err := accountClient(ctx, common, featureAudit)
 	if err != nil {
 		return err
 	}

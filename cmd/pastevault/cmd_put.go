@@ -148,14 +148,11 @@ func runPut(ctx context.Context, a *app, args []string) error {
 	if options.to != "" && !capabilities.Features.Agents {
 		return pv.UnsupportedError("this server does not support agents; use --to-key with the agent's public key, or update the server")
 	}
-	maxPasteBytes := capabilities.Limits.MaxPasteSizeBytes
-	if maxPasteBytes <= 0 {
-		maxPasteBytes = pv.DefaultMaxPasteBytes
-	}
+	pasteLimits := pv.PasteLimitsFor(capabilities)
 
 	// Decide between a paste and a file share before anything is created.
 	if paste != nil && !textSet {
-		data, err := pv.ReadTextInput(a.stdin, int64(maxPasteBytes))
+		data, err := pv.ReadTextInput(a.stdin, int64(pasteLimits.MaxInputBytes()))
 		if err != nil {
 			return err
 		}
@@ -166,7 +163,7 @@ func runPut(ctx context.Context, a *app, args []string) error {
 		}
 	}
 	if files != nil {
-		paste, err = filePasteCandidate(files, options.as, maxPasteBytes)
+		paste, err = filePasteCandidate(files, options.as, pasteLimits)
 		if err != nil {
 			return err
 		}
@@ -192,6 +189,11 @@ func runPut(ctx context.Context, a *app, args []string) error {
 		}
 		if password == "" {
 			return pv.NewError(pv.ExitUsage, pv.CodePasswordNeeded, "--password needs a password: use --password-file, PASTEVAULT_PASSWORD or a terminal prompt")
+		}
+		// A blank password would protect nothing. Other whitespace is kept
+		// as typed, as in the web app.
+		if strings.TrimSpace(password) == "" {
+			return pv.UsageError("the password cannot be only whitespace")
 		}
 	}
 
@@ -221,7 +223,7 @@ func runPut(ctx context.Context, a *app, args []string) error {
 
 	var result putOutput
 	if paste != nil {
-		result, err = createPaste(ctx, client, out, paste, options, encryption, expiry, maxPasteBytes, common.server)
+		result, err = createPaste(ctx, client, out, paste, options, encryption, expiry, pasteLimits, common.server)
 	} else {
 		result, err = createFileShare(ctx, client, out, files, options, encryption, expiry, capabilities, common.server)
 	}
@@ -320,8 +322,8 @@ func validatePutFlags(options *putOptions, out *output, expires string, expiresH
 const sealedDefaultExpiresMinutes = 60
 
 // filePasteCandidate returns the paste for "--as paste", or for "--as auto"
-// with a single dotenv file that fits the paste limit; nil means file share.
-func filePasteCandidate(files []string, as string, maxPasteBytes int) (*pasteInput, error) {
+// with a single dotenv file that fits the paste limits; nil means file share.
+func filePasteCandidate(files []string, as string, limits pv.PasteLimits) (*pasteInput, error) {
 	if as == "files" {
 		return nil, nil
 	}
@@ -340,11 +342,11 @@ func filePasteCandidate(files []string, as string, maxPasteBytes int) (*pasteInp
 	if info.IsDir() {
 		return nil, pv.NewError(pv.ExitLocalFile, pv.CodeLocalFile, "%s is a directory", path)
 	}
-	if info.Size() > int64(maxPasteBytes) {
+	if info.Size() > int64(limits.MaxInputBytes()) {
 		if as == "auto" {
 			return nil, nil
 		}
-		return nil, pv.NewError(pv.ExitUsage, pv.CodeTooLarge, "%s is larger than the %d-byte paste limit; share it with --as files", path, maxPasteBytes)
+		return nil, pv.NewError(pv.ExitUsage, pv.CodeTooLarge, "%s is too large for a paste on this server; share it with --as files", path)
 	}
 
 	data, err := os.ReadFile(path)
@@ -364,11 +366,10 @@ func filePasteCandidate(files []string, as string, maxPasteBytes int) (*pasteInp
 	}
 	candidate := &pasteInput{content: content, fromFile: path}
 
-	if as == "auto" {
-		size, err := pv.PasteEncryptedSize(applyPasteOptions(content, putOptions{}))
-		if err != nil || size > maxPasteBytes {
-			return nil, nil
-		}
+	// Too big once JSON-escaped, encrypted and base64-encoded: auto mode
+	// falls back to a file share; --as paste fails in createPaste.
+	if as == "auto" && limits.Check(applyPasteOptions(content, putOptions{})) != nil {
+		return nil, nil
 	}
 
 	return candidate, nil
@@ -425,21 +426,17 @@ func createPaste(
 	options putOptions,
 	encryption pv.FileShareEncryption,
 	expiry pv.ExpiryFields,
-	maxPasteBytes int,
+	limits pv.PasteLimits,
 	server string,
 ) (putOutput, error) {
 	content := applyPasteOptions(paste.content, options)
 
-	size, err := pv.PasteEncryptedSize(content)
-	if err != nil {
-		return putOutput{}, err
-	}
-	if size > maxPasteBytes {
+	if err := limits.Check(content); err != nil {
 		hint := "split it, or share it as a file"
 		if paste.fromFile != "" {
 			hint = "share it with --as files"
 		}
-		return putOutput{}, pv.NewError(pv.ExitUsage, pv.CodeTooLarge, "the paste is %d bytes encrypted but the server limit is %d bytes; %s", size, maxPasteBytes, hint)
+		return putOutput{}, pv.NewError(pv.ExitUsage, pv.CodeTooLarge, "%v; %s", err, hint)
 	}
 
 	slug, err := pv.GeneratePasteSlug()
@@ -457,8 +454,7 @@ func createPaste(
 		}
 	}
 
-	out.infof("Creating paste %s", slug)
-	response, err := client.CreatePaste(ctx, pv.CreatePasteRequest{
+	request := pv.CreatePasteRequest{
 		Ciphertext:       ciphertext,
 		Nonce:            nonce,
 		Slug:             slug,
@@ -469,7 +465,13 @@ func createPaste(
 		BurnAfterRead:    options.maxViews == 1,
 		MaxViews:         maxViewsField(options.maxViews),
 		Recipient:        recipient,
-	})
+	}
+	if err := limits.CheckRequestSize(request); err != nil {
+		return putOutput{}, err
+	}
+
+	out.infof("Creating paste %s", slug)
+	response, err := client.CreatePaste(ctx, request)
 	if err != nil {
 		return putOutput{}, err
 	}

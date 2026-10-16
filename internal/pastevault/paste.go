@@ -2,6 +2,7 @@ package pastevault
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -86,7 +87,8 @@ func MarshalPasteContent(content PasteContent) ([]byte, error) {
 	return bytes.TrimSuffix(buffer.Bytes(), []byte("\n")), nil
 }
 
-// PasteEncryptedSize is the size the server checks against its paste limit.
+// PasteEncryptedSize is the decoded ciphertext size the server checks
+// against MAX_PASTE_SIZE_BYTES.
 func PasteEncryptedSize(content PasteContent) (int, error) {
 	plaintext, err := MarshalPasteContent(content)
 	if err != nil {
@@ -94,6 +96,75 @@ func PasteEncryptedSize(content PasteContent) (int, error) {
 	}
 
 	return len(plaintext) + chacha20poly1305.Overhead, nil
+}
+
+// PasteLimits bounds a paste: the decoded ciphertext (MAX_PASTE_SIZE_BYTES)
+// and the whole JSON request body, which carries the ciphertext as base64url
+// and is capped by the server's body limit (1 MiB by default).
+type PasteLimits struct {
+	MaxCiphertextBytes int
+	MaxRequestBytes    int
+}
+
+// DefaultMaxPasteRequestBytes is Fastify's default body limit.
+const DefaultMaxPasteRequestBytes = 1024 * 1024
+
+// pasteRequestOverhead covers everything in a paste request besides the
+// ciphertext: nonce, slug, salt, kdf_params, expiry, view limit and a sealed
+// recipient (well under this).
+const pasteRequestOverhead = 1024
+
+// PasteLimitsFor reads the limits from capabilities, with the server
+// defaults for servers that don't report them.
+func PasteLimitsFor(capabilities CapabilitiesResponse) PasteLimits {
+	limits := PasteLimits{
+		MaxCiphertextBytes: capabilities.Limits.MaxPasteSizeBytes,
+		MaxRequestBytes:    capabilities.Limits.MaxPasteRequestBytes,
+	}
+	if limits.MaxCiphertextBytes <= 0 {
+		limits.MaxCiphertextBytes = DefaultMaxPasteBytes
+	}
+	if limits.MaxRequestBytes <= 0 {
+		limits.MaxRequestBytes = DefaultMaxPasteRequestBytes
+	}
+
+	return limits
+}
+
+// MaxInputBytes is an upper bound on paste text worth reading: anything
+// larger cannot fit either limit.
+func (l PasteLimits) MaxInputBytes() int {
+	return min(l.MaxCiphertextBytes, l.MaxRequestBytes)
+}
+
+// Check reports whether content fits both limits, estimating the request
+// size from the base64url ciphertext plus pasteRequestOverhead.
+func (l PasteLimits) Check(content PasteContent) error {
+	ciphertextSize, err := PasteEncryptedSize(content)
+	if err != nil {
+		return err
+	}
+
+	requestSize := base64.RawURLEncoding.EncodedLen(ciphertextSize) + pasteRequestOverhead
+	if ciphertextSize > l.MaxCiphertextBytes || requestSize > l.MaxRequestBytes {
+		maxText := min(l.MaxCiphertextBytes, (l.MaxRequestBytes-pasteRequestOverhead)*3/4) - chacha20poly1305.Overhead
+		return NewError(ExitUsage, CodeTooLarge, "the paste is too large for this server (about %d bytes of text including JSON escaping; the limit is about %d)", ciphertextSize-chacha20poly1305.Overhead, maxText)
+	}
+
+	return nil
+}
+
+// CheckRequestSize checks the exact encoded request against the body limit.
+func (l PasteLimits) CheckRequestSize(request CreatePasteRequest) error {
+	data, err := json.Marshal(request)
+	if err != nil {
+		return err
+	}
+	if len(data) > l.MaxRequestBytes {
+		return NewError(ExitUsage, CodeTooLarge, "the paste request is %d bytes but the server accepts at most %d", len(data), l.MaxRequestBytes)
+	}
+
+	return nil
 }
 
 // EncryptPaste encrypts content for slug with a fresh random nonce and returns

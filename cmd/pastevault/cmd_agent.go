@@ -36,7 +36,7 @@ func runAgent(ctx context.Context, a *app, args []string) error {
 	case "default":
 		return runAgentDefault(ctx, a, args[1:])
 	case "--help", "-h", "help":
-		fmt.Fprintln(a.stderr, `Usage:
+		fmt.Fprintln(a.helpOutput(), `Usage:
   pastevault agent init [--name N] [--force] [--default]   Create this machine's agent key and register it
   pastevault agent list [--all]                            Agents of the account (* = key on this machine)
   pastevault agent show [NAME]                             Fingerprint and key file of an agent

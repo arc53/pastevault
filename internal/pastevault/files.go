@@ -342,7 +342,9 @@ func PromptForPassword(prompt string) (string, error) {
 		return "", err
 	}
 
-	return strings.TrimSpace(string(password)), nil
+	// Used exactly as typed, like the web app: surrounding spaces are part of
+	// the password.
+	return string(password), nil
 }
 
 func pathExists(targetPath string) bool {

@@ -25,7 +25,7 @@ func runToken(ctx context.Context, a *app, args []string) error {
 	case "revoke", "rm":
 		return runTokenRevoke(ctx, a, args[1:])
 	case "--help", "-h", "help":
-		fmt.Fprintln(a.stderr, "Usage:\n  pastevault token create --name N [--scopes a,b] [--expires 90d|never] [--agent NAME]\n  pastevault token list\n  pastevault token revoke <id | prefix>")
+		fmt.Fprintln(a.helpOutput(), "Usage:\n  pastevault token create --name N [--scopes a,b] [--expires 90d|never] [--agent NAME] [--out FILE]\n  pastevault token list\n  pastevault token revoke <id | prefix>")
 		return errHelpShown
 	default:
 		return pv.UsageError("unknown token command %q (expected create, list or revoke)", args[0])
@@ -44,6 +44,7 @@ func runTokenCreate(ctx context.Context, a *app, args []string) error {
 	scopes := fs.String("scopes", "", "Comma-separated scopes (default: all except agents:write)")
 	expires := fs.String("expires", "90d", "Lifetime in days (1d-365d) or never")
 	agent := fs.String("agent", "", "Bind the token to this agent (name or pvk1_ fingerprint); revoking the agent revokes the token")
+	outFile := fs.String("out", "", "Write the token to this new file (mode 0600) instead of stdout")
 
 	positional, err := parseArgs(fs, args)
 	if err != nil {
@@ -78,6 +79,12 @@ func runTokenCreate(ctx context.Context, a *app, args []string) error {
 		return err
 	}
 
+	if *outFile != "" {
+		if err := pv.CheckWritableTarget(*outFile, false); err != nil {
+			return err
+		}
+	}
+
 	client, err := sessionClient(ctx, common)
 	if err != nil {
 		return err
@@ -93,12 +100,29 @@ func runTokenCreate(ctx context.Context, a *app, args []string) error {
 		return tokenAPIError(err)
 	}
 
+	if *outFile != "" {
+		if err := pv.WritePrivateFile(*outFile, []byte(created.Token+"\n"), false); err != nil {
+			// Don't leave a live token nobody holds.
+			if _, revokeErr := client.RevokeAPIToken(ctx, created.ID); revokeErr != nil {
+				out.warnf("could not revoke the unsaved token %s (%s): %v", created.Prefix, created.ID, revokeErr)
+			}
+			return err
+		}
+	}
+
 	if out.json() {
+		if *outFile != "" {
+			return out.emitJSON(tokenFileOutput{CreateAPITokenResponse: created, TokenFile: *outFile})
+		}
 		return out.emitJSON(created)
 	}
 
-	// The token alone on stdout, so "token create -q > file" works.
-	out.printf("%s\n", created.Token)
+	if *outFile != "" {
+		out.infof("Token written to %s", *outFile)
+	} else {
+		// The token alone on stdout, so it can be captured.
+		out.printf("%s\n", created.Token)
+	}
 	expiry := "never expires"
 	if created.ExpiresAt != nil {
 		expiry = "expires " + formatTime(*created.ExpiresAt)
@@ -106,6 +130,14 @@ func runTokenCreate(ctx context.Context, a *app, args []string) error {
 	out.infof("Created token %q (%s, id %s, %s) with scopes: %s", created.Name, created.Prefix, created.ID, expiry, strings.Join(created.Scopes, " "))
 	out.infof("This is the only time the token is shown. Use it as PASTEVAULT_TOKEN or with pastevault login --with-token.")
 	return nil
+}
+
+// tokenFileOutput is token create --json with --out: the token itself stays
+// in the file.
+type tokenFileOutput struct {
+	pv.CreateAPITokenResponse
+	Token     string `json:"token,omitempty"`
+	TokenFile string `json:"token_file"`
 }
 
 func runTokenList(ctx context.Context, a *app, args []string) error {

@@ -30,6 +30,10 @@ type fakeServer struct {
 	consumed     int
 	capabilities map[string]any
 	lastCreate   map[string]any
+	// noMeta makes the /meta endpoints 404, like servers before PR1.
+	noMeta bool
+	// badToken is answered with 401 invalid_token on every /api route.
+	badToken string
 }
 
 type fakePaste struct {
@@ -45,8 +49,9 @@ func newFakeServer(t *testing.T) *fakeServer {
 		pastes: map[string]*fakePaste{},
 		capabilities: map[string]any{
 			"api_version": 2,
+			"auth":        map[string]any{"enabled": true},
 			"file_shares": map[string]any{"enabled": false},
-			"features":    map[string]any{"expires_in_minutes": true, "max_views": true},
+			"features":    map[string]any{"expires_in_minutes": true, "max_views": true, "api_tokens": true, "audit": true},
 			"limits":      map[string]any{"max_views": 1000},
 		},
 	}
@@ -123,7 +128,20 @@ func newFakeServer(t *testing.T) *fakeServer {
 		writeTestJSON(w, 200, response)
 	})
 
-	server.Server = httptest.NewServer(mux)
+	server.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		server.mu.Lock()
+		badToken, noMeta := server.badToken, server.noMeta
+		server.mu.Unlock()
+		if badToken != "" && r.Header.Get("Authorization") == "Bearer "+badToken {
+			writeTestJSON(w, 401, map[string]any{"error": "invalid_token"})
+			return
+		}
+		if noMeta && strings.HasSuffix(r.URL.Path, "/meta") {
+			http.NotFound(w, r)
+			return
+		}
+		mux.ServeHTTP(w, r)
+	}))
 	t.Cleanup(server.Close)
 	return server
 }
@@ -599,5 +617,195 @@ func TestParseArgsInterspersed(t *testing.T) {
 	}
 	if strings.Join(positional, " ") != "one two --three -q" || !common.json || !*verbose || common.quiet {
 		t.Fatalf("positional %q json %v v %v quiet %v", positional, common.json, *verbose, common.quiet)
+	}
+}
+
+// H2: on a server without /meta endpoints, put's own "get SLUG#k=KEY" hint
+// must work for a paste, and a missing slug must not consume anything.
+func TestGetBareSlugOnServerWithoutMeta(t *testing.T) {
+	server := newFakeServer(t)
+	isolate(t, server.URL)
+
+	put := runCLI(t, "legacy paste", false, "put", "-")
+	if put.exit != 0 {
+		t.Fatalf("put: %+v", put)
+	}
+	hint := strings.Fields(strings.Split(put.stdout, "\n")[1]) // pastevault get SLUG#k=KEY
+	if len(hint) != 3 || !strings.Contains(hint[2], "#k=") {
+		t.Fatalf("unexpected hint %q", put.stdout)
+	}
+	server.mu.Lock()
+	server.noMeta = true
+	server.mu.Unlock()
+
+	got := runCLI(t, "", false, "get", hint[2])
+	if got.exit != 0 || got.stdout != "legacy paste" {
+		t.Fatalf("get %s without /meta: %+v", hint[2], got)
+	}
+
+	before := server.consumed
+	slug, key, _ := strings.Cut(hint[2], "#")
+	if missing := runCLI(t, "", false, "get", "nosuchslug1#"+key); missing.exit != pv.ExitNotFound {
+		t.Fatalf("missing slug with key: exit %d (%s)", missing.exit, missing.stderr)
+	}
+	if missing := runCLI(t, "", false, "get", slug+"x"); missing.exit != pv.ExitNotFound {
+		t.Fatalf("missing slug without key: exit %d", missing.exit)
+	}
+	if server.consumed != before {
+		t.Fatalf("lookups of missing shares consumed %d views", server.consumed-before)
+	}
+
+	// --json still needs a destination before anything is opened.
+	if result := runCLI(t, "", false, "get", hint[2], "--json"); result.exit != pv.ExitUsage || server.consumed != before {
+		t.Fatalf("--json without destination: exit %d", result.exit)
+	}
+}
+
+// M1: passwords are used exactly as given; blank ones are refused.
+func TestPutPasswordWhitespace(t *testing.T) {
+	server := newFakeServer(t)
+	isolate(t, server.URL)
+	dir := t.TempDir()
+	blank := filepath.Join(dir, "blank")
+	if err := os.WriteFile(blank, []byte("   \n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	before := len(server.pastes)
+	if result := runCLI(t, "x", false, "put", "-", "--password-file", blank); result.exit != pv.ExitUsage || len(server.pastes) != before {
+		t.Fatalf("blank password: exit %d (%s)", result.exit, result.stderr)
+	}
+	t.Setenv(pv.EnvPassword, "   ")
+	if result := runCLI(t, "x", false, "put", "-", "--password"); result.exit != pv.ExitUsage || len(server.pastes) != before {
+		t.Fatalf("blank env password: exit %d", result.exit)
+	}
+
+	t.Setenv(pv.EnvPassword, " padded ")
+	put := runCLI(t, "padded secret", false, "put", "-", "--password", "--json")
+	if put.exit != 0 || decodeJSON(t, put.stdout)["password_protected"] != true || server.lastCreate["salt"] == nil {
+		t.Fatalf("padded password must protect the share: %+v %v", put, server.lastCreate)
+	}
+	slug := decodeJSON(t, put.stdout)["slug"].(string)
+
+	t.Setenv(pv.EnvPassword, "padded")
+	if result := runCLI(t, "", false, "get", slug, "--stdout"); result.exit != pv.ExitDecrypt {
+		t.Fatalf("trimmed password must not open it: exit %d", result.exit)
+	}
+	t.Setenv(pv.EnvPassword, " padded ")
+	if result := runCLI(t, "", false, "get", slug, "--stdout"); result.exit != 0 || result.stdout != "padded secret" {
+		t.Fatalf("exact password: %+v", result)
+	}
+}
+
+// L1: a paste that fits MAX_PASTE_SIZE_BYTES but not the 1 MiB request body
+// (base64 grows it by 4/3) is refused before upload, and in auto mode a big
+// .env falls back to a file share.
+func TestPasteRequestSizeLimit(t *testing.T) {
+	server := newFakeServer(t)
+	isolate(t, server.URL)
+
+	big := strings.Repeat("A", 900*1024)
+	result := runCLI(t, big, false, "put", "-", "--json")
+	if result.exit != pv.ExitUsage || decodeJSON(t, result.stdout)["error"].(map[string]any)["code"] != pv.CodeTooLarge || server.lastCreate != nil {
+		t.Fatalf("900 KiB paste: %+v", result)
+	}
+	if ok := runCLI(t, strings.Repeat("A", 700*1024), false, "put", "-", "-q"); ok.exit != 0 {
+		t.Fatalf("700 KiB paste: %+v", ok)
+	}
+
+	// A larger server limit from capabilities is honoured.
+	server.mu.Lock()
+	server.capabilities["limits"] = map[string]any{"max_views": 1000, "max_paste_size_bytes": 4 << 20, "max_paste_request_bytes": 8 << 20}
+	server.mu.Unlock()
+	if ok := runCLI(t, big, false, "put", "-", "-q"); ok.exit != 0 {
+		t.Fatalf("900 KiB paste with a larger server limit: %+v", ok)
+	}
+	server.mu.Lock()
+	server.capabilities["limits"] = map[string]any{"max_views": 1000}
+	server.mu.Unlock()
+
+	envPath := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(envPath, []byte("BIG="+big+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// The fake has no file sharing, so falling back to a file share is exit 14.
+	if fallback := runCLI(t, "", true, "put", envPath); fallback.exit != pv.ExitUnsupported || !strings.Contains(fallback.stderr, "file sharing") {
+		t.Fatalf("big .env should fall back to a file share: %+v", fallback)
+	}
+}
+
+// L4: account commands check the server's features first (exit 14).
+func TestAccountCommandsNeedServerFeatures(t *testing.T) {
+	server := newFakeServer(t)
+	isolate(t, server.URL)
+	t.Setenv(pv.EnvToken, pv.APITokenPrefix+strings.Repeat("a", 52))
+
+	server.mu.Lock()
+	server.capabilities["auth"] = map[string]any{"enabled": false}
+	server.mu.Unlock()
+	for _, args := range [][]string{{"list"}, {"status", "abcdef"}, {"revoke", "abcdef"}, {"audit"}, {"whoami"}, {"token", "list"}} {
+		if result := runCLI(t, "", false, args...); result.exit != pv.ExitUnsupported {
+			t.Errorf("%v with accounts disabled: exit %d (%s)", args, result.exit, result.stderr)
+		}
+	}
+
+	server.mu.Lock()
+	server.capabilities["auth"] = map[string]any{"enabled": true}
+	server.capabilities["features"] = map[string]any{}
+	server.mu.Unlock()
+	for _, args := range [][]string{{"audit"}, {"token", "list"}} {
+		if result := runCLI(t, "", false, args...); result.exit != pv.ExitUnsupported {
+			t.Errorf("%v on a server without the feature: exit %d (%s)", args, result.exit, result.stderr)
+		}
+	}
+}
+
+// L5: an invalid API token does not block reading a public share.
+func TestGetIgnoresInvalidTokenForPublicShares(t *testing.T) {
+	server := newFakeServer(t)
+	isolate(t, server.URL)
+
+	put := runCLI(t, "public text", false, "put", "-", "--json")
+	url := decodeJSON(t, put.stdout)["url"].(string)
+
+	bad := pv.APITokenPrefix + strings.Repeat("z", 52)
+	server.mu.Lock()
+	server.badToken = bad
+	server.mu.Unlock()
+	t.Setenv(pv.EnvToken, bad)
+
+	got := runCLI(t, "", false, "get", url, "--stdout")
+	if got.exit != 0 || got.stdout != "public text" || !strings.Contains(got.stderr, "PASTEVAULT_TOKEN token is invalid") {
+		t.Fatalf("get with an invalid token: %+v", got)
+	}
+	if strings.Contains(got.stderr, bad) {
+		t.Fatal("the warning echoed the token")
+	}
+
+	// Commands that need the token still fail with exit 3.
+	if result := runCLI(t, "x", false, "put", "-"); result.exit != pv.ExitAuth {
+		t.Fatalf("put with an invalid token: exit %d", result.exit)
+	}
+}
+
+func TestJSONModeHelpAndOverride(t *testing.T) {
+	server := newFakeServer(t)
+	isolate(t, server.URL)
+
+	noArgs := runCLI(t, "", false, "--json")
+	if noArgs.exit != pv.ExitUsage || decodeJSON(t, noArgs.stdout)["error"] == nil {
+		t.Fatalf("no command with --json: %+v", noArgs)
+	}
+	t.Setenv("PASTEVAULT_JSON", "1")
+	help := runCLI(t, "", false, "put", "--help")
+	if help.exit != 0 || !strings.Contains(decodeJSON(t, help.stdout)["usage"].(string), "--max-views") {
+		t.Fatalf("help in JSON mode: %+v", help)
+	}
+	if top := runCLI(t, "", false, "help"); top.exit != 0 || decodeJSON(t, top.stdout)["usage"] == nil {
+		t.Fatalf("top-level help in JSON mode: %+v", top)
+	}
+	plain := runCLI(t, "text", false, "put", "-", "--json=false", "-q")
+	if plain.exit != 0 || !strings.HasPrefix(plain.stdout, server.URL+"/p/") {
+		t.Fatalf("--json=false must override PASTEVAULT_JSON: %+v", plain)
 	}
 }

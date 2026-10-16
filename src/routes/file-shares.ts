@@ -162,6 +162,11 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
       },
       limits: {
         max_views: MAX_VIEWS_LIMIT,
+        // A paste's decoded ciphertext may not exceed max_paste_size_bytes,
+        // and its whole JSON request body (base64, so ~4/3 larger) may not
+        // exceed max_paste_request_bytes.
+        max_paste_size_bytes: config.MAX_PASTE_SIZE_BYTES,
+        max_paste_request_bytes: fastify.initialConfig.bodyLimit ?? 1048576,
         max_secret_request_bytes: config.MAX_SECRET_REQUEST_BYTES,
         min_secret_request_ttl_seconds: config.SECRET_REQUEST_MIN_TTL_SECONDS,
       },

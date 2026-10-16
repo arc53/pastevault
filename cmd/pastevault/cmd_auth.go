@@ -38,10 +38,14 @@ func runLogin(ctx context.Context, a *app, args []string) error {
 // loginWithToken stores an API token read from stdin, after checking it
 // with the server. The token never appears in argv or output.
 func loginWithToken(ctx context.Context, a *app, out *output, client *pv.Client) error {
+	var data string
+	var err error
 	if a.stdinIsTerminal() {
-		out.infof("Paste the API token and press Enter:")
+		// Read without echo, so the token doesn't stay on screen.
+		data, err = a.promptPassword("API token: ")
+	} else {
+		data, err = readLine(a.stdin, 4096)
 	}
-	data, err := readLine(a.stdin, 4096)
 	if err != nil {
 		return err
 	}
@@ -218,7 +222,7 @@ func runWhoAmI(ctx context.Context, a *app, args []string) error {
 		return pv.UsageError("whoami does not take positional arguments")
 	}
 
-	client, source, err := authenticatedClient(ctx, common, true)
+	client, source, _, err := accountClient(ctx, common, featureAccounts)
 	if err != nil {
 		return err
 	}
