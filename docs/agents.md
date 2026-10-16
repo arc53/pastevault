@@ -102,9 +102,9 @@ pastevault status abc123 --wait viewed --json        # read receipt
 |---|---|---|
 | `send_text` | Share text (defaults: 1 view, 1h; `to` seals it to an agent). Returns the link. | open world |
 | `send_file` | Share files inside the allowed roots. | open world |
-| `receive` | Open a share into `output_path` (inside the roots, `0600`) or the local store (`save_as`). Returns content only with `--allow-plaintext` + `allow_plaintext` and never if it looks like a secret. | destructive (uses a view) |
+| `receive` | Open a share on the configured server into `output_path` (inside the roots, `0600`; default `pastevault-received/`; safe file names) or the local store (`save_as`). Returns content only with `--allow-plaintext` + `allow_plaintext` and never if it looks like a secret. | destructive (uses a view), open world |
 | `request_secret` | Ask the user for a secret; returns a `pv://secret/NAME` handle, never the value. | open world |
-| `request_status` | Check a request; stores the answer when it has arrived. | read-only |
+| `request_status` | Check (or wait up to 55 s for) a request; stores the answer when it has arrived. | writes the local store |
 | `list_secrets` | Handles in the local store (no values). | read-only |
 | `share_status` | Status, views and activity of a share you made; can wait for a read receipt. | read-only |
 | `audit` | The account's audit log. | read-only |
@@ -114,16 +114,18 @@ There is deliberately no tool that reads a secret's value: agents use `pastevaul
 
 How `request_secret` reaches the user:
 
-- If the client supports **URL-mode elicitation**, the server asks the client to show the request page; the user opens it, answers, and the tool returns the handle (waiting up to `timeout_seconds`, default 300).
+- If the client supports **URL-mode elicitation**, the server asks the client to show the request page; the user opens it, answers, and the tool returns the handle (waiting up to `timeout_seconds`, default 50). If the answer takes longer, the tool returns `pending` and the agent calls `request_status` with `wait_seconds` (up to 55) until it is `delivered`. The defaults stay under Codex's 60-second tool timeout (`tool_timeout_sec`) and Gemini CLI's (600 s by default); raise `timeout_seconds` only if your client's timeout allows it.
 - Otherwise the tool returns at once with `status: "pending"`, the `url` and the key fingerprint. The agent shows you the link, and calls `request_status` until it gets the handle.
 
 Options:
 
 ```
-pastevault mcp [--agent NAME] [--root DIR]... [--allow-plaintext] [--server URL]
+pastevault mcp [--agent NAME] [--root DIR]... [--allow-plaintext] [--allow-any-host] [--allow-home-root] [--server URL]
 ```
 
-- File tools are confined to roots: `--root` directories, plus the client's MCP roots; without either, the working directory (never the home directory or `/`). Credential directories (`~/.ssh`, `~/.aws`, ...) and the PasteVault config directory are refused even inside a root, symlinks may not lead out, and files are never overwritten unless the call says `overwrite`.
+- File tools are confined to roots: `--root` directories, plus the client's MCP roots; without either, the working directory. The home directory, `/` and their ancestors are never roots unless you pass `--allow-home-root`. `.git`, credential directories and files (`~/.ssh`, `~/.aws`, `~/.netrc`, `~/.npmrc`, ...), agent harness state (`~/.claude`, `~/.codex`, `~/.gemini`) and the PasteVault config directory are refused even inside a root (ignoring case), and symlinks may not lead out.
+- `receive` picks the file names: sender-chosen names that tools or agents would load (dot files, `.mcp.json`, `CLAUDE.md`, `package.json`, scripts, ...) become `received-<slug>-<name>`, it never writes into `.git`, `.github`, `.claude`, `.vscode`, `node_modules` and similar, and `overwrite` only replaces files it wrote earlier in the same session. Without `output_path` or `save_as` it writes to `pastevault-received/` in the first root.
+- `receive` only opens shares on the configured server (and its web links); `--allow-any-host` lifts that.
 - The server uses the same configuration as the CLI: `PASTEVAULT_SERVER`, the stored login or token (or `PASTEVAULT_TOKEN`), the default agent (or `PASTEVAULT_AGENT`/`--agent`), `PASTEVAULT_CONFIG_DIR`. Some harnesses start MCP servers with a reduced environment: set these in the server's `env` block if you rely on them.
 - Logs go to stderr; stdout carries only MCP messages.
 
@@ -149,7 +151,7 @@ claude mcp add --transport stdio --scope user pastevault -- pastevault mcp
 claude mcp add --transport stdio --scope user --env PASTEVAULT_SERVER=https://paste.example.com pastevault -- pastevault mcp --root /path/to/project
 ```
 
-Claude Code supports URL elicitation, so `request_secret` shows the request page directly. The plugin starts `pastevault mcp` with the default server and your stored login; for a self-hosted server, add the server with `claude mcp add … --env PASTEVAULT_SERVER=…` instead of (or as well as) the plugin.
+Claude Code's MCP documentation lists URL-mode elicitation, in which case `request_secret` shows the request page directly; otherwise the agent shows you the link. The plugin starts `pastevault mcp` with the default server and your stored login; for a self-hosted server, add the server with `claude mcp add … --env PASTEVAULT_SERVER=…` instead of (or as well as) the plugin.
 
 ### Codex
 
@@ -170,7 +172,7 @@ env_vars = ["PASTEVAULT_SERVER", "PASTEVAULT_TOKEN"]
 tool_timeout_sec = 900
 ```
 
-Codex passes only selected environment variables to MCP servers: list the PasteVault ones in `env_vars` (or set them under `[mcp_servers.pastevault.env]`). Raise `tool_timeout_sec` (default 60) so `request_secret` can wait for you. Without the plugin, copy `integrations/pastevault/skills/pastevault` to `~/.agents/skills/` or `.agents/skills/` in the project, or add [`integrations/AGENTS.snippet.md`](../integrations/AGENTS.snippet.md) to `AGENTS.md`.
+Codex passes only selected environment variables to MCP servers: list the PasteVault ones in `env_vars` (or set them under `[mcp_servers.pastevault.env]`). `request_secret` and `request_status` wait at most 50–55 s per call by default, within Codex's default `tool_timeout_sec` of 60; the sample config raises it to 900 so you can pass a larger `timeout_seconds`. Without the plugin, copy `integrations/pastevault/skills/pastevault` to `~/.agents/skills/` or `.agents/skills/` in the project, or add [`integrations/AGENTS.snippet.md`](../integrations/AGENTS.snippet.md) to `AGENTS.md`.
 
 ### Gemini CLI
 

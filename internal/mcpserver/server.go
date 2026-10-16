@@ -49,6 +49,11 @@ type Options struct {
 	Roots []string
 	// AllowPlaintext permits receive to return non-secret-like content.
 	AllowPlaintext bool
+	// AllowAnyHost lets receive open shares on other servers than Server.
+	AllowAnyHost bool
+	// AllowHomeRoot accepts the home directory, filesystem roots and
+	// ancestors of the home directory as roots.
+	AllowHomeRoot bool
 	// Version is the CLI version reported to clients.
 	Version string
 
@@ -72,6 +77,10 @@ type Server struct {
 	localLock sync.Mutex
 	// noRoots remembers sessions whose client does not answer roots/list.
 	noRoots sync.Map
+	// placed are the files receive wrote in this session (localLock).
+	placed placedFiles
+	// requestLocks serialise request_secret/request_status per request id.
+	requestLocks sync.Map
 }
 
 const instructions = `PasteVault shares text and files end-to-end encrypted, and collects secrets from the user without them passing through this conversation.
@@ -96,6 +105,7 @@ func New(opts Options) (*Server, error) {
 	s := &Server{
 		opts:     opts,
 		stateKey: key,
+		placed:   placedFiles{},
 		logger:   slog.New(slog.NewTextHandler(opts.Log, &slog.HandlerOptions{Level: slog.LevelWarn})),
 	}
 	s.mcp = mcp.NewServer(&mcp.Implementation{
@@ -367,20 +377,23 @@ func usesSessionlessProtocol(req *mcp.CallToolRequest) bool {
 
 // ── request state (multi round-trip) ─────────────────────────────────────
 
-// signState returns an opaque requestState for value, so a retried call
-// can only resume requests this server process created.
-func (s *Server) signState(value string) string {
+// signState returns an opaque requestState for value, bound to tool, so a
+// retried call can only resume what this server process asked that tool's
+// client for.
+func (s *Server) signState(tool, value string) string {
+	payload := tool + "\x00" + value
 	mac := hmac.New(sha256.New, s.stateKey)
-	mac.Write([]byte(value))
-	return base64.RawURLEncoding.EncodeToString([]byte(value)) + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+	mac.Write([]byte(payload))
+	return base64.RawURLEncoding.EncodeToString([]byte(payload)) + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
-func (s *Server) verifyState(state string) (string, bool) {
+// verifyState returns the value of a requestState signed for tool.
+func (s *Server) verifyState(tool, state string) (string, bool) {
 	encoded, signature, found := strings.Cut(state, ".")
 	if !found {
 		return "", false
 	}
-	value, err := base64.RawURLEncoding.DecodeString(encoded)
+	payload, err := base64.RawURLEncoding.DecodeString(encoded)
 	if err != nil {
 		return "", false
 	}
@@ -389,7 +402,20 @@ func (s *Server) verifyState(state string) (string, bool) {
 		return "", false
 	}
 	mac := hmac.New(sha256.New, s.stateKey)
-	mac.Write(value)
+	mac.Write(payload)
+	if !hmac.Equal(got, mac.Sum(nil)) {
+		return "", false
+	}
+	boundTool, value, found := strings.Cut(string(payload), "\x00")
+	if !found || boundTool != tool {
+		return "", false
+	}
+	return value, true
+}
 
-	return string(value), hmac.Equal(got, mac.Sum(nil))
+// requestLock serialises the request tools per request id, so one answer is
+// never collected twice concurrently.
+func (s *Server) requestLock(id string) *sync.Mutex {
+	lock, _ := s.requestLocks.LoadOrStore(id, &sync.Mutex{})
+	return lock.(*sync.Mutex)
 }

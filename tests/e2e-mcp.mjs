@@ -7,7 +7,7 @@
 // Builds cmd/pastevault with Go, or uses PASTEVAULT_CLI_BIN.
 import assert from 'node:assert/strict'
 import { spawn, spawnSync } from 'node:child_process'
-import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { projectRoot, runSuite, signUp, sleep } from './lib/harness.mjs'
 
@@ -277,10 +277,12 @@ await runSuite('mcp', {}, async ({ startServer, temporaryRoot }) => {
     }
     const byName = Object.fromEntries(result.tools.map((tool) => [tool.name, tool]))
     assert.equal(byName.revoke_share.annotations.destructiveHint, true)
-    for (const name of ['request_status', 'list_secrets', 'share_status', 'audit']) {
+    for (const name of ['list_secrets', 'share_status', 'audit']) {
       assert.equal(byName[name].annotations.readOnlyHint, true, `${name} is read-only`)
     }
+    assert.equal(byName.request_status.annotations.readOnlyHint, false, 'request_status writes the store')
     assert.equal(byName.send_text.annotations.openWorldHint, true)
+    assert.equal(byName.receive.annotations.openWorldHint, true)
   }
 
   // ── send_text → receive to a file ───────────────────────────────────
@@ -326,8 +328,10 @@ await runSuite('mcp', {}, async ({ startServer, temporaryRoot }) => {
     const [row] = await database.query('SELECT "view_count" FROM "Paste" WHERE "slug" = $1', sent.slug)
     assert.equal(Number(row.view_count), 0, 'a refused receive opens nothing')
 
-    const { error: noDestination } = await mcp.callTool('receive', { ref: sent.url })
-    assert.equal(noDestination.exit_code, 2)
+    // Without a destination, receive uses pastevault-received/ in the root.
+    const { structured: defaulted } = await mcp.callTool('receive', { ref: sent.url })
+    assert.equal(path.dirname(defaulted.written_to), path.join(workdir, 'pastevault-received'))
+    assert.equal(readFileSync(defaulted.written_to, 'utf8'), 'confined')
     const { error: noPlaintext } = await mcp.callTool('receive', { ref: sent.url, allow_plaintext: true })
     assert.match(noPlaintext.message, /--allow-plaintext/)
 
@@ -338,6 +342,30 @@ await runSuite('mcp', {}, async ({ startServer, temporaryRoot }) => {
     const { structured: got } = await mcp.callTool('receive', { ref: file.url, output_path: 'downloads/' })
     assert.equal(readFileSync(path.join(workdir, 'downloads', 'report.txt'), 'utf8'), 'quarterly numbers\n')
     assert.equal(got.files.length, 1)
+  }
+
+  // ── sender-chosen names never become config files ───────────────────
+  {
+    const { structured: planted } = await mcp.callTool('send_text', { text: '{"mcpServers":{"evil":{"command":"sh"}}}', title: '.mcp.json' })
+    const { structured: got } = await mcp.callTool('receive', { ref: planted.url, output_path: 'inbox/' })
+    assert(!existsSync(path.join(workdir, 'inbox', '.mcp.json')), 'a title .mcp.json must not land as .mcp.json')
+    assert.equal(path.basename(got.written_to), `received-${planted.slug}-mcp.json`)
+    assert.equal(readFileSync(got.written_to, 'utf8'), '{"mcpServers":{"evil":{"command":"sh"}}}')
+
+    // Explicit risky names and overwriting files receive didn't write are refused before opening.
+    writeFileSync(path.join(workdir, 'CLAUDE.md'), 'project rules')
+    const { structured: second } = await mcp.callTool('send_text', { text: 'replace the rules', max_views: 2 })
+    for (const args of [{ output_path: 'CLAUDE.md', overwrite: true }, { output_path: '.envrc' }, { output_path: '.github/workflows/x.yml' }]) {
+      const { error } = await mcp.callTool('receive', { ref: second.url, ...args })
+      assert.equal(error.code, 'path_refused', JSON.stringify(args))
+    }
+    assert.equal(readFileSync(path.join(workdir, 'CLAUDE.md'), 'utf8'), 'project rules')
+    const [row] = await database.query('SELECT "view_count" FROM "Paste" WHERE "slug" = $1', second.slug)
+    assert.equal(Number(row.view_count), 0, 'refused receives open nothing')
+
+    // Shares on other hosts are refused.
+    const { error: foreign } = await mcp.callTool('receive', { ref: 'https://other.example/p/abcdefghijkl', output_path: 'x.txt' })
+    assert.equal(foreign.code, 'host_not_allowed')
   }
 
   // ── sealed to an agent (to:) ────────────────────────────────────────
@@ -365,7 +393,7 @@ await runSuite('mcp', {}, async ({ startServer, temporaryRoot }) => {
 
     let status
     for (let attempt = 0; attempt < 20; attempt++) {
-      ;({ structured: status } = await mcp.callTool('request_status', { request_id: requested.request_id }))
+      ;({ structured: status } = await mcp.callTool('request_status', { request_id: requested.request_id, wait_seconds: attempt === 0 ? 10 : 0 }))
       if (status.status !== 'pending') {
         break
       }

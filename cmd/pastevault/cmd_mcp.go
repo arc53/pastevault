@@ -28,11 +28,13 @@ func init() {
 // runMCP serves the PasteVault MCP server on stdin/stdout (spec §9). Only
 // protocol messages go to stdout; diagnostics go to stderr.
 func runMCP(ctx context.Context, a *app, args []string) error {
-	fs, common := a.newFlagSet("mcp", "pastevault mcp [--agent NAME] [--root DIR]... [--allow-plaintext] [--server URL]")
+	fs, common := a.newFlagSet("mcp", "pastevault mcp [--agent NAME] [--root DIR]... [--allow-plaintext] [--allow-any-host] [--allow-home-root] [--server URL]")
 	agent := fs.String("agent", "", "Agent identity to act as (default: the default agent)")
 	var roots stringList
 	fs.Var(&roots, "root", "Directory send_file and receive may use (repeatable; default: the client's MCP roots, else the working directory)")
 	allowPlaintext := fs.Bool("allow-plaintext", false, "Let receive return share content that does not look like a secret (allow_plaintext=true per call)")
+	allowAnyHost := fs.Bool("allow-any-host", false, "Let receive open shares on other servers than --server")
+	allowHomeRoot := fs.Bool("allow-home-root", false, "Accept the home directory, / and their ancestors as roots (--root or client roots)")
 
 	positional, err := parseArgs(fs, args)
 	if err != nil {
@@ -49,6 +51,9 @@ func runMCP(ctx context.Context, a *app, args []string) error {
 		if err != nil || !info.IsDir() {
 			return pv.UsageError("--root %s is not a directory", root)
 		}
+		if !*allowHomeRoot && mcpserver.TooBroadRoot(root) {
+			return pv.UsageError("--root %s is the home directory, a filesystem root or an ancestor of the home directory; name a project directory, or pass --allow-home-root", root)
+		}
 	}
 	if *agent != "" {
 		if !pv.ValidAgentName(*agent) {
@@ -64,6 +69,16 @@ func runMCP(ctx context.Context, a *app, args []string) error {
 		}
 	}
 
+	// stdout carries only protocol messages. The transport keeps the real
+	// stdout; os.Stdout points at stderr for the whole session, swapped once
+	// here, before the server (or anything else) starts, and restored after
+	// it has stopped, so no concurrent code ever sees the swap happen.
+	protocolOut := a.stdout
+	if file, ok := protocolOut.(*os.File); ok && file == os.Stdout {
+		os.Stdout = os.Stderr
+		defer func() { os.Stdout = file }()
+	}
+
 	server := common.server
 	options := mcpserver.Options{
 		Server:         server,
@@ -71,6 +86,8 @@ func runMCP(ctx context.Context, a *app, args []string) error {
 		Agent:          *agent,
 		Roots:          roots,
 		AllowPlaintext: *allowPlaintext,
+		AllowAnyHost:   *allowAnyHost,
+		AllowHomeRoot:  *allowHomeRoot,
 		Version:        version,
 		RunCLI:         a.mcpCommandRunner(),
 		NewClient: func(ctx context.Context) (*pv.Client, error) {
@@ -82,14 +99,6 @@ func runMCP(ctx context.Context, a *app, args []string) error {
 	mcpServer, err := mcpserver.New(options)
 	if err != nil {
 		return err
-	}
-
-	// stdout carries only protocol messages: anything else that writes to
-	// os.Stdout during the session ends up on stderr.
-	protocolOut := a.stdout
-	if file, ok := protocolOut.(*os.File); ok && file == os.Stdout {
-		os.Stdout = os.Stderr
-		defer func() { os.Stdout = file }()
 	}
 
 	fmt.Fprintf(a.stderr, "PasteVault MCP server %s for %s on stdio\n", version, server)

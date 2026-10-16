@@ -338,7 +338,7 @@ func TestPathPolicy(t *testing.T) {
 	writeTestFile(t, filepath.Join(root, ".ssh", "id_ed25519"), "key")
 	writeTestFile(t, filepath.Join(root, ".git", "config"), "[core]")
 	writeTestFile(t, filepath.Join(outside, "secret.txt"), "secret")
-	policy := newPathPolicy([]string{root}, nil)
+	policy := newPathPolicy([]string{root}, nil, false)
 	realRoot := policy.roots[0]
 
 	if got, err := policy.resolveRead("notes.txt"); err != nil || got != filepath.Join(realRoot, "notes.txt") {
@@ -358,7 +358,7 @@ func TestPathPolicy(t *testing.T) {
 
 	configDir, _ := pv.ConfigDir()
 	writeTestFile(t, filepath.Join(configDir, "auth.json"), "{}")
-	inRoot := newPathPolicy([]string{root, configDir}, nil)
+	inRoot := newPathPolicy([]string{root, configDir}, nil, false)
 	_, err = inRoot.resolveRead(filepath.Join(configDir, "auth.json"))
 	refusedPath(t, err, "config dir even when it is a root")
 
@@ -439,14 +439,10 @@ func TestClientRootsAndFallback(t *testing.T) {
 
 // ── receive ───────────────────────────────────────────────────────────────
 
-func TestReceiveNeedsDestination(t *testing.T) {
+func TestReceivePlaintextNeedsServerFlag(t *testing.T) {
 	isolate(t)
 	session := connect(t, testSetup{})
-	failure := toolError(t, callTool(t, session, ToolReceive, map[string]any{"ref": "abc"}))
-	if failure.ExitCode != pv.ExitUsage || !strings.Contains(failure.Message, "nothing was opened") {
-		t.Fatalf("no destination: %+v", failure)
-	}
-	failure = toolError(t, callTool(t, session, ToolReceive, map[string]any{"ref": "abc", "allow_plaintext": true}))
+	failure := toolError(t, callTool(t, session, ToolReceive, map[string]any{"ref": "abcdefghijkl", "allow_plaintext": true}))
 	if failure.ExitCode != pv.ExitUsage || !strings.Contains(failure.Message, "--allow-plaintext") {
 		t.Fatalf("plaintext without --allow-plaintext: %+v", failure)
 	}
