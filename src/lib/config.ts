@@ -9,6 +9,26 @@ const defaultNodeEnv =
     ? process.env.NODE_ENV
     : 'development'
 
+// Fastify trustProxy: "false" (default), "true", a hop count, or a
+// comma-separated list of proxy addresses/CIDRs.
+function parseTrustProxy(
+  value: string
+): boolean | string | ((address: string, hop: number) => boolean) {
+  const trimmed = value.trim()
+  if (trimmed === '' || trimmed === 'false') {
+    return false
+  }
+  if (trimmed === 'true') {
+    return true
+  }
+  if (/^\d+$/.test(trimmed)) {
+    // Trust the nearest N hops.
+    const hops = Number(trimmed)
+    return (_address: string, hop: number) => hop < hops
+  }
+  return trimmed
+}
+
 const configSchema = z.object({
   DATABASE_URL: z.string().default('file:./pastevault.db'),
   DATABASE_PROVIDER: z.enum(['postgresql', 'sqlite']).default('sqlite'),
@@ -40,6 +60,9 @@ const configSchema = z.object({
   // Audit log privacy: "off" stores no IP at all, "truncated" stores the /24
   // (IPv4) or /48 (IPv6) network only.
   AUDIT_IP_MODE: z.enum(['off', 'truncated']).default('off'),
+  // Set when running behind a reverse proxy, so client IPs (audit) and the
+  // request origin (CSRF/CORS checks) come from X-Forwarded-* headers.
+  TRUST_PROXY: z.string().default('false').transform(parseTrustProxy),
   AUDIT_RETENTION_DAYS: z
     .string()
     .default('90')

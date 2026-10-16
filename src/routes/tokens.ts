@@ -4,6 +4,7 @@ import {
   countActiveApiTokens,
   createApiToken,
   DEFAULT_TOKEN_SCOPES,
+  deleteApiToken,
   getApiTokenForUser,
   listApiTokens,
   parseScopes,
@@ -30,14 +31,14 @@ const MAX_ACTIVE_TOKENS_PER_USER = 100
 
 type ApiTokenRow = Awaited<ReturnType<typeof listApiTokens>>[number]
 
-async function loadAgents(ids: Array<string | null>) {
+async function loadAgents(ids: Array<string | null>, { activeOnly = false } = {}) {
   const agentIds = [...new Set(ids.filter((id): id is string => Boolean(id)))]
   if (agentIds.length === 0) {
     return new Map<string, { id: string; name: string; fingerprint: string }>()
   }
 
   const agents = await getPrisma().agentIdentity.findMany({
-    where: { id: { in: agentIds } },
+    where: { id: { in: agentIds }, ...(activeOnly ? { revoked_at: null } : {}) },
     select: { id: true, name: true, fingerprint: true },
   })
   return new Map(agents.map((agent) => [agent.id, agent]))
@@ -70,7 +71,7 @@ export async function tokensRoute(fastify: FastifyInstance) {
   fastify.get('/me', async (request, reply) => {
     const principal = await requirePrincipal(request)
     const agent = principal.agent_id
-      ? (await loadAgents([principal.agent_id])).get(principal.agent_id)
+      ? (await loadAgents([principal.agent_id], { activeOnly: true })).get(principal.agent_id)
       : undefined
 
     const response: MeResponse = {
@@ -108,10 +109,13 @@ export async function tokensRoute(fastify: FastifyInstance) {
       }
     }
 
-    if ((await countActiveApiTokens(principal.user.id)) >= MAX_ACTIVE_TOKENS_PER_USER) {
-      return reply.code(409).send({
+    const tooManyTokens = () =>
+      reply.code(409).send({
         error: `An account can have at most ${MAX_ACTIVE_TOKENS_PER_USER} active tokens; revoke some first`,
       })
+
+    if ((await countActiveApiTokens(principal.user.id)) >= MAX_ACTIVE_TOKENS_PER_USER) {
+      return tooManyTokens()
     }
 
     const { record, token } = await createApiToken({
@@ -124,6 +128,14 @@ export async function tokensRoute(fastify: FastifyInstance) {
           : new Date(Date.now() + body.expires_in_days * 24 * 60 * 60 * 1000),
       agent_id: body.agent_id ?? null,
     })
+
+    // Concurrent creates can all pass the check above, so count again with
+    // the new token in place and back out if the cap was overshot. Racing
+    // requests may all back out; none can push the account past the cap.
+    if ((await countActiveApiTokens(principal.user.id)) > MAX_ACTIVE_TOKENS_PER_USER) {
+      await deleteApiToken(record.id)
+      return tooManyTokens()
+    }
 
     await recordAuditEvent({
       user_id: principal.user.id,

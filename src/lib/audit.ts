@@ -183,6 +183,67 @@ export function recordShareEvent(
   })
 }
 
+// Views of shares without a view limit are unbounded, so they are folded into
+// one share.viewed event per actor per window instead of one row per GET.
+export const VIEW_COALESCE_WINDOW_MS = 10 * 60 * 1000
+
+// share.viewed. View-limited shares log every view (at most max_views rows).
+// Unlimited shares extend the actor's latest share.viewed from the last
+// VIEW_COALESCE_WINDOW_MS when there is one: details.view becomes the latest
+// view number and details.views counts the views folded into the event.
+export async function recordShareView(
+  share: { id: string; user_id: string; share_type: string; slug: string },
+  actor: AuditActor,
+  view: { view: number; max_views: number | null },
+  request?: FastifyRequest
+) {
+  if (view.max_views !== null || config.DISABLE_AUTH) {
+    return recordShareEvent(share, 'share.viewed', actor, { details: view, request })
+  }
+
+  try {
+    await ensureAccountSystemSchema()
+    const prisma = getPrisma()
+    const recent = await prisma.auditEvent.findFirst({
+      where: {
+        user_id: share.user_id,
+        subject_id: share.id,
+        event: 'share.viewed',
+        actor_kind: actor.kind,
+        actor_token_id: actor.token_id ?? null,
+        created_at: { gte: new Date(Date.now() - VIEW_COALESCE_WINDOW_MS) },
+      },
+      orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+    })
+
+    if (recent) {
+      const previous = parseDetails(recent.details)
+      const views = typeof previous?.views === 'number' ? previous.views : 1
+      // Approximate under concurrency (read-modify-write); it's a counter in a
+      // metadata log, not an access control.
+      await prisma.auditEvent.update({
+        where: { id: recent.id },
+        data: {
+          details: JSON.stringify({
+            ...view,
+            views: views + 1,
+            last_viewed_at: new Date(),
+          }),
+        },
+      })
+      return
+    }
+  } catch (error: unknown) {
+    const logger = request?.log ?? console
+    logger.error({ err: error }, 'Failed to coalesce share.viewed')
+  }
+
+  return recordShareEvent(share, 'share.viewed', actor, {
+    details: { ...view, views: 1 },
+    request,
+  })
+}
+
 export async function purgeAuditEventsOlderThan(cutoff: Date) {
   if (config.DISABLE_AUTH) {
     return 0

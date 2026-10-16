@@ -5,7 +5,7 @@ import {
   recordOwnedShareView,
 } from '../lib/account-shares.js'
 import { ensureAccountSystemSchema } from '../lib/account-schema.js'
-import { auditActorFor, recordShareEvent } from '../lib/audit.js'
+import { auditActorFor, recordShareEvent, recordShareView } from '../lib/audit.js'
 import { config } from '../lib/config.js'
 import {
   completeFileShareRecord,
@@ -254,7 +254,10 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
             }
           )
         } catch (error: unknown) {
+          // See POST /pastes: never leave an authenticated create anonymous.
           fastify.log.error({ err: error, shareId }, 'Failed to record owned file share')
+          await deleteFileSharesByIds([shareId])
+          return reply.code(500).send({ error: 'Internal server error' })
         }
       }
 
@@ -544,10 +547,7 @@ export async function fileSharesRoute(fastify: FastifyInstance) {
 
       if (owned) {
         const actor = auditActorFor(principal, owned.user_id)
-        await recordShareEvent(owned, 'share.viewed', actor, {
-          request,
-          details: { view: viewCount, max_views: maxViews },
-        })
+        await recordShareView(owned, actor, { view: viewCount, max_views: maxViews }, request)
         if (isBurned) {
           await recordShareEvent(owned, 'share.burned', actor, { request })
           await recordShareEvent(owned, 'share.download_granted', actor, {

@@ -442,6 +442,28 @@ await runSuite('e2e-tokens', { postgres: true }, async ({ startServer, createDat
   assert.equal(asBoolean(wipedFile.is_burned), true)
   assert.equal(Number(wipedFile.view_count), 2)
 
+  // Concurrent openers of a view-limited file share: exactly max_views of them
+  // get the manifest, and only the one that took the last view gets a grant.
+  const racedFile = await createCompletedFileShare(baseUrl, { max_views: 3 })
+  const racedOpens = await Promise.all(
+    Array.from({ length: 20 }, () => request(baseUrl, `/api/file-shares/${racedFile.slug}`))
+  )
+  const racedOpenWinners = racedOpens.filter(({ response }) => response.status === 200)
+  assert.equal(racedOpenWinners.length, 3)
+  assert.equal(racedOpens.filter(({ response }) => response.status === 410).length, 17)
+  assert(racedOpenWinners.every(({ body }) => body.manifest_ciphertext === manifestCiphertext))
+  const racedGrants = racedOpenWinners.filter(({ body }) => body.download_grant)
+  assert.equal(racedGrants.length, 1)
+  assert.equal(racedGrants[0].body.metadata.is_burned, true)
+  assert.deepEqual(
+    racedOpenWinners.map(({ body }) => body.metadata.view_count).sort(),
+    [1, 2, 3]
+  )
+  assert.equal(
+    (await downloadChunk(baseUrl, racedFile.slug, racedGrants[0].body.download_grant)).status,
+    200
+  )
+
   // Raw-key recipients are stored and returned; agent recipients come later.
   const fingerprint = `pvk1_${'a'.repeat(32)}`
   const wrappedKey = 'A'.repeat(140)

@@ -96,6 +96,18 @@ export async function findActiveApiToken(token: string) {
     return null
   }
 
+  // A token bound to an agent dies with it. Revoking an agent also revokes its
+  // tokens; this check covers anything that slipped past that.
+  if (record.agent_id) {
+    const agent = await prisma.agentIdentity.findUnique({
+      where: { id: record.agent_id },
+      select: { revoked_at: true, user_id: true },
+    })
+    if (!agent || agent.revoked_at || agent.user_id !== record.user_id) {
+      return null
+    }
+  }
+
   // Coarse last-used tracking: at most one write per token per minute.
   if (
     !record.last_used_at ||
@@ -140,6 +152,11 @@ export async function createApiToken(input: {
   })
 
   return { record, token }
+}
+
+// Only for backing out a token that was never handed out.
+export async function deleteApiToken(id: string) {
+  await getPrisma().apiToken.deleteMany({ where: { id } })
 }
 
 export async function countActiveApiTokens(userId: string) {

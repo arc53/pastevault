@@ -166,7 +166,7 @@ export async function accountRoute(fastify: FastifyInstance) {
       next_cursor: has_more ? encodeCursor(shares[shares.length - 1]!) : null,
     }
 
-    return reply.send(response)
+    return reply.header('Cache-Control', 'no-store').send(response)
   })
 
   fastify.get<{

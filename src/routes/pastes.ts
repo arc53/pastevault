@@ -5,7 +5,7 @@ import {
   markOwnedShareStatus,
 } from '../lib/account-shares.js'
 import { ensureAccountSystemSchema } from '../lib/account-schema.js'
-import { auditActorFor, recordShareEvent } from '../lib/audit.js'
+import { auditActorFor, recordShareEvent, recordShareView } from '../lib/audit.js'
 import { config } from '../lib/config.js'
 import { getPrisma } from '../lib/db.js'
 import { consumePasteView, ensurePasteSchema } from '../lib/pastes-db.js'
@@ -119,7 +119,11 @@ export async function pastesRoute(fastify: FastifyInstance) {
             }
           )
         } catch (error: unknown) {
+          // An authenticated create must not quietly become an anonymous,
+          // unrevocable share: undo it and report the failure.
           fastify.log.error({ err: error, pasteId: paste.id }, 'Failed to record owned paste')
+          await prisma.paste.deleteMany({ where: { id: paste.id } })
+          return reply.code(500).send({ error: 'Internal server error' })
         }
       }
 
@@ -268,10 +272,7 @@ export async function pastesRoute(fastify: FastifyInstance) {
 
       if (owned) {
         const actor = auditActorFor(principal, owned.user_id)
-        await recordShareEvent(owned, 'share.viewed', actor, {
-          request,
-          details: { view: viewCount, max_views: maxViews },
-        })
+        await recordShareView(owned, actor, { view: viewCount, max_views: maxViews }, request)
         if (isBurned) {
           await recordShareEvent(owned, 'share.burned', actor, { request })
         }

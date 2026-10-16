@@ -7,6 +7,7 @@ import {
   Scope,
 } from './api-tokens.js'
 import { config } from './config.js'
+import { isTrustedOrigin } from './origins.js'
 import { HttpError } from './validation.js'
 
 export { SCOPES, DEFAULT_TOKEN_SCOPES } from './api-tokens.js'
@@ -54,31 +55,57 @@ export function presentsApiToken(request: FastifyRequest) {
   return Boolean(bearer && isApiTokenString(bearer))
 }
 
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
+
+// CSRF defence for cookie sessions. A browser attaches the session cookie to
+// cross-site requests too, and SameSite=Lax doesn't cover same-site origins
+// (sibling subdomains, other localhost ports), so a state-changing request
+// carrying a cookie must come from a trusted origin. Browsers always send
+// Origin on such requests; clients without one (CLI, curl) are not browsers.
+// Bearer credentials can't be attached by another site, so they're exempt.
+function assertCookieWriteOrigin(request: FastifyRequest) {
+  if (SAFE_METHODS.has(request.method) || readBearerToken(request)) {
+    return
+  }
+
+  const origin = request.headers.origin
+  if (origin !== undefined && !isTrustedOrigin(origin, request)) {
+    throw new HttpError(403, { error: 'origin_not_allowed' })
+  }
+}
+
 async function resolveSession(request: FastifyRequest): Promise<Principal | null> {
+  let session: Awaited<ReturnType<typeof getBetterAuthSession>>
   try {
-    const [{ fromNodeHeaders }, { auth }] = await Promise.all([
-      import('better-auth/node'),
-      import('./auth.js'),
-    ])
-    const session = await auth.api.getSession({
-      headers: fromNodeHeaders(request.raw.headers),
-    })
-
-    if (!session) {
-      return null
-    }
-
-    const user = session.user as { id: string; name: string; username?: string | null }
-    return {
-      kind: 'session',
-      user: { id: user.id, name: user.name, username: user.username ?? null },
-      scopes: SCOPES,
-      token_id: null,
-      agent_id: null,
-    }
+    session = await getBetterAuthSession(request)
   } catch {
     return null
   }
+
+  if (!session) {
+    return null
+  }
+
+  assertCookieWriteOrigin(request)
+
+  const user = session.user as { id: string; name: string; username?: string | null }
+  return {
+    kind: 'session',
+    user: { id: user.id, name: user.name, username: user.username ?? null },
+    scopes: SCOPES,
+    token_id: null,
+    agent_id: null,
+  }
+}
+
+async function getBetterAuthSession(request: FastifyRequest) {
+  const [{ fromNodeHeaders }, { auth }] = await Promise.all([
+    import('better-auth/node'),
+    import('./auth.js'),
+  ])
+  return auth.api.getSession({
+    headers: fromNodeHeaders(request.raw.headers),
+  })
 }
 
 async function resolve(request: FastifyRequest): Promise<Principal | null> {

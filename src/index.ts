@@ -3,10 +3,12 @@ import cors from '@fastify/cors'
 import rateLimit from '@fastify/rate-limit'
 import { cleanupExpiredPastes } from './lib/cleanup.js'
 import { config } from './lib/config.js'
+import { corsOptionsDelegator } from './lib/origins.js'
 import { registerApiRoutes } from './routes/register.js'
 import * as cron from 'node-cron'
 
 const fastify = Fastify({
+  trustProxy: config.TRUST_PROXY,
   logger: {
     level: config.NODE_ENV === 'production' ? 'warn' : 'info',
   },
@@ -14,11 +16,7 @@ const fastify = Fastify({
 
 async function start() {
   try {
-    await fastify.register(cors, {
-      origin: config.NODE_ENV === 'production' ? config.CORS_ORIGIN : true,
-      credentials: true,
-      methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    })
+    await fastify.register(cors, { delegator: corsOptionsDelegator })
 
     await fastify.register(rateLimit, {
       max: config.RATE_LIMIT_MAX,

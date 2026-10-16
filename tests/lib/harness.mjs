@@ -218,7 +218,8 @@ export async function runSuite(name, { postgres = false } = {}, body) {
       return database
     },
 
-    async startServer({ label = 'server', database, environment = {} } = {}) {
+    // `migrations: true` boots like a plain `pastevault up` (migrations on).
+    async startServer({ label = 'server', database, environment = {}, migrations = false } = {}) {
       const db = database ?? (await context.createDatabase(label))
       const port = await reservePort()
       const baseUrl = `http://127.0.0.1:${port}`
@@ -238,7 +239,7 @@ export async function runSuite(name, { postgres = false } = {}, body) {
           dataDirectory,
           '--log-level',
           'warn',
-          '--no-migrations',
+          ...(migrations ? [] : ['--no-migrations']),
         ],
         {
           cwd: projectRoot,
@@ -254,14 +255,20 @@ export async function runSuite(name, { postgres = false } = {}, body) {
         }
       )
 
-      child.stdout.on('data', (chunk) => serverOutput.push(chunk.toString()))
-      child.stderr.on('data', (chunk) => serverOutput.push(chunk.toString()))
+      const ownOutput = []
+      const capture = (chunk) => {
+        serverOutput.push(chunk.toString())
+        ownOutput.push(chunk.toString())
+      }
+      child.stdout.on('data', capture)
+      child.stderr.on('data', capture)
 
       const server = {
         baseUrl,
         database: db,
         dataDirectory,
         child,
+        output: () => ownOutput.join(''),
         async stop() {
           servers.delete(server)
           await stopChild(child)
@@ -320,9 +327,16 @@ export async function signUp(baseUrl, label = 'owner') {
     signUpResponse.response.headers.get('set-auth-token') || signUpResponse.body.token
   assert(sessionToken)
 
+  // The browser-style credential: the session cookie(s) better-auth set.
+  const cookie = signUpResponse.response.headers
+    .getSetCookie()
+    .map((value) => value.split(';')[0])
+    .join('; ')
+
   return {
     user: signUpResponse.body.user,
     sessionToken,
+    cookie,
     headers: { authorization: `Bearer ${sessionToken}` },
   }
 }
