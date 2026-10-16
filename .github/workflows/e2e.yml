@@ -76,7 +76,7 @@ jobs:
       - run: npm run test:e2e
 
   e2e-postgres:
-    name: E2E (Postgres migrations and tokens)
+    name: E2E (Postgres migrations, tokens and security)
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -105,7 +105,7 @@ jobs:
       - run: npm ci
         working-directory: frontend
       - run: npm run build:cli
-      - name: Migrations match schema.postgres.prisma (also after a server boot)
-        run: node tests/check-postgres-migrations.mjs --boot
-      - name: Tokens suite on Postgres
-        run: node tests/run-e2e.mjs tokens
+      - name: Migrations match schema.postgres.prisma (fresh, plain up, PR1 upgrade)
+        run: node tests/check-postgres-migrations.mjs
+      - name: Tokens and security suites on Postgres
+        run: node tests/run-e2e.mjs tokens security
