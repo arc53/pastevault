@@ -39,20 +39,26 @@ import {
   RequestKeyCheck,
 } from '@/components/secret-request/key-check'
 
+// The header shares the content column's width, so the title and the
+// account link line up with the panels instead of the window edges.
+const COLUMN = 'mx-auto w-full max-w-3xl'
+
 function Shell({ title, label, children }: { title: ReactNode; label: string; children: ReactNode }) {
   return (
     <div className="pb-8">
       <header className="sticky top-0 z-40 border-b border-border/80 bg-background/86 backdrop-blur-xl">
-        <div className="app-frame flex flex-wrap items-center justify-between gap-3 py-3">
-          <div className="min-w-0">
-            <p className="tool-label">{label}</p>
-            <h1 className="break-all font-mono text-xl font-semibold sm:text-2xl">{title}</h1>
+        <div className="app-frame py-3">
+          <div className={cn(COLUMN, 'flex flex-wrap items-center justify-between gap-3')}>
+            <div className="min-w-0">
+              <p className="tool-label">{label}</p>
+              <h1 className="break-all font-mono text-xl font-semibold sm:text-2xl">{title}</h1>
+            </div>
+            <AccountLink compact />
           </div>
-          <AccountLink compact />
         </div>
       </header>
-      <div className="app-frame py-6">
-        <div className="mx-auto max-w-2xl space-y-4">{children}</div>
+      <div className="app-frame py-6 sm:py-8">
+        <div className={cn(COLUMN, 'space-y-4')}>{children}</div>
       </div>
     </div>
   )
@@ -369,7 +375,9 @@ function RequestDetails({
           )}
         </Panel>
       ) : (
-        <FinalState request={request} agentName={agentName} sentHere={sentHere} />
+        <Panel label={t('answerLabel')}>
+          <FinalState request={request} agentName={agentName} sentHere={sentHere} />
+        </Panel>
       )}
     </Shell>
   )
@@ -566,11 +574,13 @@ function FinalState({
   }
 
   return (
-    <section className="space-y-3" aria-live="polite">
+    <div className="space-y-4" aria-live="polite">
       {content}
-      <Button asChild variant="outline" size="sm">
-        <Link href="/account">{t('toAccount')}</Link>
-      </Button>
-    </section>
+      <div className="flex justify-end">
+        <Button asChild variant="outline" size="sm">
+          <Link href="/account">{t('toAccount')}</Link>
+        </Button>
+      </div>
+    </div>
   )
 }
