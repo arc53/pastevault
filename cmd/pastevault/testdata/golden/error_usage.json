@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "usage",
+    "exit_code": 2,
+    "message": "--as must be auto, paste or files"
+  }
+}

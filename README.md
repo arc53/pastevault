@@ -27,14 +27,38 @@ Usage:
 ```bash
 pastevault login
 pastevault put ./report.pdf
-pastevault put --burn-after-read --expires-hours 1 ./secret.txt
+pastevault put --burn --expires 1h ./secret.txt
+echo "some text" | pastevault put -
 pastevault get https://your-server.example/f/abc123#k=yourkey
-pastevault get abc123#k=yourkey
+pastevault get abc123#k=yourkey --stdout
 pastevault whoami
 pastevault logout
 ```
 
+Every command, flag, JSON output shape and exit code is listed in [docs/cli-reference.md](docs/cli-reference.md).
+
 The native CLI talks to `https://api.pastevault.dev` by default and emits public share links on `https://pastevault.dev`. `pastevault login` uses a browser link or short code flow on `/device`, and logged-in CLI uploads show up later in the web account dashboard. Override the defaults with `PASTEVAULT_SERVER`, `PASTEVAULT_PUBLIC_URL`, or `--server` when testing against another deployment.
+
+### For AI agents
+
+PasteVault gives coding agents a way to get secrets **without them passing through the chat**, and to share files with people and other agents end to end encrypted:
+
+```bash
+pastevault agent init --name laptop                       # this machine's agent key
+pastevault request OPENAI_API_KEY --why "run the evals" --wait
+# → you open the printed /r/… link signed in and enter the value; the agent gets pv://secret/OPENAI_API_KEY
+echo 'OPENAI_API_KEY=pv://secret/OPENAI_API_KEY' > .env.pv
+pastevault run --env-file .env.pv -- npm test             # value in the environment, masked in output
+pastevault put .env --to build-bot                        # sealed to another agent: the link has no key
+```
+
+The same is available to agents as an MCP server (`pastevault mcp`) with a skill. In Claude Code:
+
+```
+/plugin install pastevault --marketplace arc53/pastevault
+```
+
+Codex, Gemini CLI, Cursor, Copilot and other MCP clients: see [docs/agents.md](docs/agents.md). What the server can and cannot see: [docs/security-model.md](docs/security-model.md).
 
 ### Native CLI updates
 
@@ -83,7 +107,8 @@ docker compose -f docker-compose.all.yml down
 - End-to-end encryption (XChaCha20-Poly1305) with client-side key generation
 - Zero-knowledge: decryption key kept in URL fragment (#), never sent to server
 - Optional password mode (PBKDF2) and per-paste expiry/burn-after-read
-- Native Go client for terminal upload/download workflows
+- Native Go client for terminal upload/download workflows, with `--json` output and stable exit codes
+- Agent-ready: API tokens, agent keys and shares sealed to an agent, secret requests answered in the browser, a local secret store with `pv://secret` handles for `pastevault run`, an audit log, and an MCP server
 - Markdown support with code syntax highlighting
 - Simple REST API with validation and rate limiting
 - SQLite (default) or PostgreSQL storage

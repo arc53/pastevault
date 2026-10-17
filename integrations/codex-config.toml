@@ -1,0 +1,16 @@
+# PasteVault MCP server for Codex without the plugin. Add to ~/.codex/config.toml
+# (or a project's .codex/config.toml), or run:
+#   codex mcp add pastevault -- pastevault mcp
+# Needs the pastevault CLI on PATH, logged in (pastevault login) or with
+# PASTEVAULT_TOKEN set. Add integrations/AGENTS.snippet.md to AGENTS.md, or
+# copy integrations/pastevault/skills/pastevault to ~/.agents/skills/, so the
+# agent knows to use request_secret instead of asking for secrets in chat.
+
+[mcp_servers.pastevault]
+command = "pastevault"
+args = ["mcp"]
+# Forward these from your environment when set (self-hosted server, API token).
+env_vars = ["PASTEVAULT_SERVER", "PASTEVAULT_PUBLIC_URL", "PASTEVAULT_TOKEN", "PASTEVAULT_CONFIG_DIR", "PASTEVAULT_AGENT"]
+startup_timeout_sec = 20
+# request_secret can wait up to timeout_seconds (default 300) for the user.
+tool_timeout_sec = 900

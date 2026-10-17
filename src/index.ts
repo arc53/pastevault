@@ -3,11 +3,12 @@ import cors from '@fastify/cors'
 import rateLimit from '@fastify/rate-limit'
 import { cleanupExpiredPastes } from './lib/cleanup.js'
 import { config } from './lib/config.js'
-import { fileSharesRoute } from './routes/file-shares.js'
-import { pastesRoute } from './routes/pastes.js'
+import { corsOptionsDelegator } from './lib/origins.js'
+import { registerApiRoutes } from './routes/register.js'
 import * as cron from 'node-cron'
 
 const fastify = Fastify({
+  trustProxy: config.TRUST_PROXY,
   logger: {
     level: config.NODE_ENV === 'production' ? 'warn' : 'info',
   },
@@ -15,27 +16,14 @@ const fastify = Fastify({
 
 async function start() {
   try {
-    await fastify.register(cors, {
-      origin: config.NODE_ENV === 'production' ? config.CORS_ORIGIN : true,
-      credentials: true,
-      methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    })
+    await fastify.register(cors, { delegator: corsOptionsDelegator })
 
     await fastify.register(rateLimit, {
       max: config.RATE_LIMIT_MAX,
       timeWindow: config.RATE_LIMIT_WINDOW_MS,
     })
 
-    if (!config.DISABLE_AUTH) {
-      const [{ authRoute }, { accountRoute }] = await Promise.all([
-        import('./routes/auth.js'),
-        import('./routes/account.js'),
-      ])
-      await fastify.register(authRoute, { prefix: '/api' })
-      await fastify.register(accountRoute, { prefix: '/api' })
-    }
-    await fastify.register(pastesRoute, { prefix: '/api' })
-    await fastify.register(fileSharesRoute, { prefix: '/api' })
+    await registerApiRoutes(fastify)
 
     fastify.get('/', async () => {
       return {

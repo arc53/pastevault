@@ -1,0 +1,27 @@
+{
+  "name": "pastevault",
+  "version": "0.1.6",
+  "description": "MCP server (pastevault mcp) and skill: ask the user for secrets without them entering the chat, use them via pastevault run, and share text and files end-to-end encrypted with people or other agents. Needs the pastevault CLI on PATH.",
+  "author": {
+    "name": "Arc53",
+    "url": "https://github.com/arc53"
+  },
+  "homepage": "https://pastevault.dev",
+  "repository": "https://github.com/arc53/pastevault",
+  "license": "GPL-3.0-only",
+  "keywords": ["secrets", "encryption", "e2ee", "sharing", "mcp", "agents"],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "PasteVault",
+    "shortDescription": "Secrets without the chat, encrypted sharing for agents",
+    "longDescription": "Ask the user for API keys and other secrets through a PasteVault page instead of the chat, use them in commands through pv://secret handles with pastevault run, and share text and files end-to-end encrypted with people or other agents.",
+    "developerName": "Arc53",
+    "category": "Developer Tools",
+    "websiteURL": "https://pastevault.dev",
+    "defaultPrompt": [
+      "Ask me for the OPENAI_API_KEY with PasteVault and run the tests with it",
+      "Share this log file with the build-bot agent through PasteVault"
+    ]
+  }
+}

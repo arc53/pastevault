@@ -43,3 +43,7 @@ The Homebrew cask is published to [`arc53/homebrew-DocsGPT-cli`](https://github.
 ```
 brew install --cask arc53/DocsGPT-cli/pastevault
 ```
+
+## Agent integrations
+
+The Claude Code plugin and marketplace (`.claude-plugin/`, `integrations/pastevault/.claude-plugin/`), the Codex plugin and marketplace (`integrations/pastevault/.codex-plugin/`, `.agents/plugins/marketplace.json`) and the Gemini CLI extension (`gemini-extension.json`, `integrations/pastevault/gemini-extension.json`) carry a version. Harnesses only pick up plugin changes when it changes, so bump all of them together with `package.json`'s version. `node scripts/check-integrations.mjs` (run in CI) fails when they differ; `--release-tag vX.Y.Z` additionally compares them with a release tag. The plugins run the `pastevault` binary from `PATH`, so they need the native CLI installed (above).

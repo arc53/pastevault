@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"strings"
 
 	"golang.org/x/crypto/chacha20poly1305"
@@ -25,8 +24,11 @@ var defaultPasswordKDFParams = PasswordKDFParams{
 	KeyLen:     32,
 }
 
+// PrepareFileShareEncryption returns a random key, or with a password the
+// PBKDF2 key (salt and kdf_params for the server). The password is used
+// exactly as given, like the web app does; callers reject blank passwords.
 func PrepareFileShareEncryption(password string) (FileShareEncryption, error) {
-	if strings.TrimSpace(password) == "" {
+	if password == "" {
 		key, err := randomBytes(chacha20poly1305.KeySize)
 		if err != nil {
 			return FileShareEncryption{}, err
@@ -154,155 +156,12 @@ func BuildShortShareRef(slug string, key []byte) string {
 	return slug + "#k=" + EncodeBase64URL(key)
 }
 
-func ParseShareReference(raw, defaultServer, defaultPublic string) (ShareReference, error) {
-	input := strings.TrimSpace(raw)
-	if input == "" {
-		return ShareReference{}, fmt.Errorf("share URL or slug is required")
-	}
-
-	if strings.Contains(input, "://") {
-		parsedURL, err := url.Parse(input)
-		if err != nil {
-			return ShareReference{}, err
-		}
-
-		segments := strings.Split(strings.Trim(parsedURL.Path, "/"), "/")
-		if len(segments) < 2 || segments[len(segments)-2] != "f" {
-			return ShareReference{}, fmt.Errorf("share URL must point to /f/<slug>")
-		}
-
-		prefixSegments := segments[:len(segments)-2]
-		serverURL := url.URL{
-			Scheme: parsedURL.Scheme,
-			Host:   parsedURL.Host,
-		}
-		if len(prefixSegments) > 0 {
-			serverURL.Path = "/" + strings.Join(prefixSegments, "/")
-		}
-
-		ref := ShareReference{
-			Server: serverURL.String(),
-			Slug:   segments[len(segments)-1],
-		}
-		if sameURLBase(ref.Server, defaultPublic) {
-			ref.Server = defaultServer
-		}
-
-		if parsedURL.Fragment != "" {
-			values, err := url.ParseQuery(parsedURL.Fragment)
-			if err == nil {
-				if keyValue := values.Get("k"); keyValue != "" {
-					key, err := DecodeBase64URL(keyValue)
-					if err != nil {
-						return ShareReference{}, err
-					}
-					ref.Key = key
-				}
-			}
-		}
-
-		return ref, nil
-	}
-
-	if !strings.Contains(input, "/") && strings.Contains(input, "#") {
-		parsedRef, err := parseShortShareReference(input, defaultServer)
-		if err != nil {
-			return ShareReference{}, err
-		}
-
-		return parsedRef, nil
-	}
-
-	return ShareReference{
-		Server: defaultServer,
-		Slug:   input,
-	}, nil
-}
-
-func parseShortShareReference(raw, defaultServer string) (ShareReference, error) {
-	parsedValue, err := url.Parse(raw)
-	if err != nil {
-		return ShareReference{}, err
-	}
-
-	ref := ShareReference{
-		Server: defaultServer,
-		Slug:   parsedValue.Path,
-	}
-	if strings.TrimSpace(ref.Slug) == "" {
-		return ShareReference{}, fmt.Errorf("share slug is required")
-	}
-
-	if parsedValue.Fragment != "" {
-		values, err := url.ParseQuery(parsedValue.Fragment)
-		if err == nil {
-			if keyValue := values.Get("k"); keyValue != "" {
-				key, err := DecodeBase64URL(keyValue)
-				if err != nil {
-					return ShareReference{}, err
-				}
-				ref.Key = key
-			}
-		}
-	}
-
-	return ref, nil
-}
-
-func sameURLBase(left, right string) bool {
-	leftURL, err := url.Parse(strings.TrimSpace(left))
-	if err != nil {
-		return false
-	}
-
-	rightURL, err := url.Parse(strings.TrimSpace(right))
-	if err != nil {
-		return false
-	}
-
-	return strings.EqualFold(leftURL.Scheme, rightURL.Scheme) &&
-		strings.EqualFold(leftURL.Host, rightURL.Host) &&
-		strings.TrimRight(leftURL.Path, "/") == strings.TrimRight(rightURL.Path, "/")
-}
-
-func ResolveDownloadKey(ref ShareReference, share GetFileShareResponse, password string) ([]byte, error) {
-	if share.Salt != "" {
-		if strings.TrimSpace(password) == "" {
-			return nil, fmt.Errorf("this share is password-protected; rerun with --password")
-		}
-
-		salt, err := DecodeBase64URL(share.Salt)
-		if err != nil {
-			return nil, fmt.Errorf("invalid server salt: %w", err)
-		}
-
-		params := defaultPasswordKDFParams
-		if strings.TrimSpace(share.KDFParams) != "" {
-			if err := json.Unmarshal([]byte(share.KDFParams), &params); err != nil {
-				return nil, fmt.Errorf("invalid kdf_params: %w", err)
-			}
-		}
-
-		return deriveKeyFromPassword(password, salt, params)
-	}
-
-	if len(ref.Key) == 0 {
-		return nil, fmt.Errorf("missing share key; provide the full URL or use --key")
-	}
-
-	return ref.Key, nil
-}
-
 func EncodeBase64URL(data []byte) string {
 	return base64.RawURLEncoding.EncodeToString(data)
 }
 
 func DecodeBase64URL(value string) ([]byte, error) {
 	return base64.RawURLEncoding.DecodeString(value)
-}
-
-func DecodeKeyString(value string) ([]byte, error) {
-	return DecodeBase64URL(value)
 }
 
 func GenerateSlug(size int) (string, error) {

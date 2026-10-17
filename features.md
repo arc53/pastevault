@@ -1,6 +1,6 @@
 # PasteVault Features
 
-PasteVault is a secure end-to-end encrypted paste sharing application with comprehensive features for creating, sharing, and managing encrypted text content.
+PasteVault is a secure end-to-end encrypted paste and file sharing application, with a native CLI and an MCP server that let coding agents share files and receive secrets without them passing through a chat.
 
 ## 🔐 Security & Encryption
 
@@ -15,6 +15,13 @@ PasteVault is a secure end-to-end encrypted paste sharing application with compr
 - **URL fragment storage** - encryption keys stored in URL hash (#k=...) never sent to server
 - **Password-based encryption** with PBKDF2 key derivation (600,000 iterations)
 - **Secure salt generation** for password-protected pastes
+
+### Agent Keys and Sealed Shares
+- **Agent identities** - X25519 key pairs created by `pastevault agent init`; only the public key is registered with the account
+- **Sealed shares** - pastes and file shares sealed to an agent (PVWRAP1 key wrap): the link carries no key, and only that agent can open it
+- **Recipient auth** - shares sealed to an account agent can only be opened (or burned) by that account
+- **Fingerprints and pinning** - `pvk1_…` fingerprints computed client-side, trust on first use, exit 8 / a blocking web error when a key changes
+- **Web "Share to agent"** - seal a paste or files to an agent from the browser
 
 ### Content Protection
 - **Associated data verification** includes paste ID and algorithm version
@@ -47,6 +54,8 @@ PasteVault is a secure end-to-end encrypted paste sharing application with compr
 
 ### Access Control
 - **Burn after read** - paste self-destructs after first view
+- **View limits** - destroy a paste or file share after N views (1-1000)
+- **Minute-level expiry** via the API and CLI (`--expires 15m`)
 - **View count tracking** for each paste
 - **Password protection** with PBKDF2 key derivation
 - **Unique slug generation** with collision prevention
@@ -97,7 +106,7 @@ PasteVault is a secure end-to-end encrypted paste sharing application with compr
 - **Structured logging** with configurable levels
 - **Health check endpoints** for monitoring
 
-### Frontend (Next.js 14)
+### Frontend (Next.js 16)
 - **App Router architecture** with server and client components
 - **React Query integration** for efficient data fetching
 - **TypeScript** for compile-time type safety
@@ -109,6 +118,33 @@ PasteVault is a secure end-to-end encrypted paste sharing application with compr
 - **Indexed queries** for optimized performance
 - **Migration system** with Prisma
 - **Data integrity constraints** and validation
+
+## 🤖 Agents & Automation
+
+### Accounts, Tokens and Audit
+- **API tokens** (`pv_pat_…`) - scoped, expiring, revocable, hashed at rest, optionally bound to one agent
+- **Owned shares** - list, status, read receipts (`status --wait viewed`) and revoke from the CLI or `/account`
+- **Audit log** - metadata-only events for shares, secret requests, agents and tokens (90-day retention, no IPs by default)
+
+### Secret Requests
+- **No secrets in chat** - an agent asks for a secret with `pastevault request NAME --why …` (or the MCP `request_secret` tool)
+- **Answered in the browser** - the human opens `/r/<code>#fp=…` signed in to the same account; the page verifies the request key and seals the answer to it
+- **One-time delivery** - the server only holds the encrypted answer until the agent acknowledges it (at most two minutes after delivery)
+
+### Local Secret Store and `run`
+- **`pv://secret/NAME` handles** - answers are stored sealed to the agent key in the local store
+- **`pastevault run --env-file .env.pv -- cmd`** - resolves handles into the command's environment and masks the values (and their base64, hex and URL encodings) in its output
+- **`pastevault inject`** - fills `{{ pv://… }}` placeholders in config templates
+
+### Native CLI
+- **`put` / `get`** for text, `.env` files and files, with `--json` output and stable exit codes for scripts and agents
+- **Signed self-update** and install scripts for macOS, Linux and Windows
+
+### MCP Server and Agent Integrations
+- **`pastevault mcp`** - stdio MCP server with `send_text`, `send_file`, `receive`, `request_secret`, `request_status`, `list_secrets`, `share_status`, `audit` and `revoke_share`; no tool ever returns a secret's value
+- **Confined file access** - roots, credential directory deny list, no symlink escapes, `0600` files, no overwrite without a flag
+- **URL elicitation** - clients that support it show the secret request page to the user directly
+- **Packaging** - Claude Code plugin and marketplace, Codex and Gemini CLI packaging, an Agent Skill, and an `AGENTS.md` snippet (see `docs/agents.md`)
 
 ## 🚀 Deployment & CLI
 
@@ -131,6 +167,7 @@ PasteVault is a secure end-to-end encrypted paste sharing application with compr
 - `npx pastevault up --port 3000 --host 0.0.0.0` - Custom configuration
 - `npx pastevault version` - Version information
 - Health check at `/health` endpoint
+- Native client: `pastevault put|get|list|status|revoke|audit|token|agent|request|await|secret|run|inject|mcp|login|whoami|logout` (see `docs/cli-reference.md`)
 
 ## 🧹 Maintenance & Operations
 
@@ -179,7 +216,7 @@ PasteVault is a secure end-to-end encrypted paste sharing application with compr
 ### Data Protection
 - **No server-side plaintext storage** - zero-knowledge architecture
 - **Minimal metadata collection** (only encrypted content + timestamps)
-- **No user accounts required** - anonymous paste creation
+- **No user accounts required** - anonymous paste creation; accounts are optional (and can be disabled with `DISABLE_AUTH=true`)
 - **Automatic data expiration** with configurable retention
 - **GDPR-friendly design** with minimal data collection
 
@@ -199,7 +236,6 @@ PasteVault is a secure end-to-end encrypted paste sharing application with compr
 ## 🎯 High Priority Features
 
 ### User Management & Organization
-- **User accounts with dashboard** - Personal paste management and history
 - **Paste collections/folders** - Organize pastes with custom tags and categories
 - **Favorites system** - Bookmark frequently accessed pastes
 - **Advanced search functionality** - Filter by date, format, size, tags, and content
@@ -209,8 +245,6 @@ PasteVault is a secure end-to-end encrypted paste sharing application with compr
 ### Enhanced Content Management
 - **Version history and revisions** - Track changes with diff viewing between versions
 - **Paste forking/branching** - Create derivatives of existing pastes
-- **Multi-file paste support** - GitHub Gist-style multiple files in one paste
-- **File upload and attachments** - Support for binary files with encryption
 - **Image paste and preview** - Drag-drop images with inline display
 - **Rich text WYSIWYG editor** - Alternative to markdown for non-technical users
 
@@ -228,7 +262,6 @@ PasteVault is a secure end-to-end encrypted paste sharing application with compr
 - **@mentions and notifications** - Alert users about relevant paste activity
 
 ### API & Integration Enhancements
-- **Comprehensive CLI tool** - Create, edit, delete, and manage pastes from terminal
 - **Browser extension** - Quick paste creation from any webpage
 - **IDE plugins** - VS Code, JetBrains, and other editor integrations
 - **Webhook notifications** - Real-time events for paste creation/updates
@@ -238,7 +271,8 @@ PasteVault is a secure end-to-end encrypted paste sharing application with compr
 
 ### Advanced Security Features
 - **Multi-factor authentication** - Additional security for password-protected pastes
-- **Digital signatures** - Verify paste authenticity and integrity
+- **Digital signatures** - Verify paste authenticity and integrity, including sender signatures for shares sealed to an agent (today sealed shares are confidential but not sender-authenticated)
+- **OS keychain storage** - Keep agent private keys in the OS keychain instead of `0600` files
 - **Advanced key derivation** - Argon2 and scrypt options for password-based encryption
 - **Hardware security keys** - WebAuthn support for enhanced authentication
 - **Self-destruct triggers** - Custom conditions for automatic paste deletion
@@ -297,7 +331,6 @@ PasteVault is a secure end-to-end encrypted paste sharing application with compr
 - **SSO integration** - SAML, OAuth, LDAP authentication support
 - **Private organizational instances** - Self-hosted solutions for enterprises
 - **Custom branding** - White-label options with organization themes
-- **Audit logs** - Comprehensive tracking of all user activities
 - **Compliance reporting** - GDPR, HIPAA, SOX compliance tools
 
 ### Administrative Features

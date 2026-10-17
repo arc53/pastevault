@@ -9,6 +9,26 @@ const defaultNodeEnv =
     ? process.env.NODE_ENV
     : 'development'
 
+// Fastify trustProxy: "false" (default), "true", a hop count, or a
+// comma-separated list of proxy addresses/CIDRs.
+function parseTrustProxy(
+  value: string
+): boolean | string | ((address: string, hop: number) => boolean) {
+  const trimmed = value.trim()
+  if (trimmed === '' || trimmed === 'false') {
+    return false
+  }
+  if (trimmed === 'true') {
+    return true
+  }
+  if (/^\d+$/.test(trimmed)) {
+    // Trust the nearest N hops.
+    const hops = Number(trimmed)
+    return (_address: string, hop: number) => hop < hops
+  }
+  return trimmed
+}
+
 const configSchema = z.object({
   DATABASE_URL: z.string().default('file:./pastevault.db'),
   DATABASE_PROVIDER: z.enum(['postgresql', 'sqlite']).default('sqlite'),
@@ -37,6 +57,28 @@ const configSchema = z.object({
     .default('900')
     .transform(Number)
     .pipe(z.number().int().positive()),
+  // Audit log privacy: "off" stores no IP at all, "truncated" stores the /24
+  // (IPv4) or /48 (IPv6) network only.
+  AUDIT_IP_MODE: z.enum(['off', 'truncated']).default('off'),
+  // Set when running behind a reverse proxy, so client IPs (audit) and the
+  // request origin (CSRF/CORS checks) come from X-Forwarded-* headers.
+  TRUST_PROXY: z.string().default('false').transform(parseTrustProxy),
+  AUDIT_RETENTION_DAYS: z
+    .string()
+    .default('90')
+    .transform(Number)
+    .pipe(z.number().int().positive()),
+  SECRET_REQUEST_MIN_TTL_SECONDS: z
+    .string()
+    .default('60')
+    .transform(Number)
+    .pipe(z.number().int().positive()),
+  // Defaults to MAX_PASTE_SIZE_BYTES (resolved below).
+  MAX_SECRET_REQUEST_BYTES: z
+    .string()
+    .optional()
+    .transform((value) => (value === undefined ? undefined : Number(value)))
+    .pipe(z.number().int().positive().optional()),
   S3_ENDPOINT: z.string().optional(),
   S3_REGION: z.string().default('us-east-1'),
   S3_BUCKET: z.string().optional(),
@@ -58,4 +100,10 @@ const configSchema = z.object({
     .transform((value) => value === 'true'),
 })
 
-export const config = configSchema.parse(process.env)
+const parsedConfig = configSchema.parse(process.env)
+
+export const config = {
+  ...parsedConfig,
+  MAX_SECRET_REQUEST_BYTES:
+    parsedConfig.MAX_SECRET_REQUEST_BYTES ?? parsedConfig.MAX_PASTE_SIZE_BYTES,
+}
