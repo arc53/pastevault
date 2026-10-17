@@ -10,6 +10,10 @@
   "files": [
     "dist/",
     "frontend/.next/",
+    "!frontend/.next/cache/",
+    "!frontend/.next/dev/",
+    "!frontend/.next/trace",
+    "!frontend/.next/trace-build",
     "frontend/public/",
     "frontend/next.config.js",
     "frontend/package.json",

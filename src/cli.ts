@@ -2,8 +2,7 @@
 
 import { Command } from 'commander'
 import { exec as execCallback } from 'node:child_process'
-import { readFileSync } from 'node:fs'
-import path from 'node:path'
+import { readFileSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import Fastify from 'fastify'
@@ -185,10 +184,10 @@ async function startServer(args: CliArgs) {
         return
       }
 
-      // Handle with Next.js for all other routes
-      return handle(request.raw, reply.raw).then(() => {
-        reply.sent = true
-      })
+      // Handle with Next.js for all other routes. Next writes the raw
+      // response itself, so Fastify must not send one.
+      reply.hijack()
+      await handle(request.raw, reply.raw)
     })
 
     // Setup cleanup cron job
@@ -231,8 +230,18 @@ async function startServer(args: CliArgs) {
   }
 }
 
-// Run the CLI if this file is executed directly
-if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+// Run the CLI if this file is executed directly. npx and global installs
+// start it through a node_modules/.bin symlink, so compare real paths.
+function isEntryPoint(): boolean {
+  if (!process.argv[1]) return false
+  try {
+    return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])
+  } catch {
+    return false
+  }
+}
+
+if (isEntryPoint()) {
   program.parse()
 }
 

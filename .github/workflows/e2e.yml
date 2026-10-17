@@ -84,6 +84,22 @@ jobs:
         working-directory: frontend
       # Builds backend and frontend, then runs every tests/e2e-*.mjs suite.
       - run: npm run test:e2e
+      # The published package: small enough for the registry (no Next.js
+      # build caches), and its bin works through the node_modules/.bin link
+      # npx uses.
+      - name: npm package size and installed launcher
+        run: |
+          dir="$(mktemp -d)"
+          npm pack --ignore-scripts --pack-destination "$dir"
+          tarball="$(ls "$dir"/pastevault-*.tgz)"
+          size="$(stat -c %s "$tarball")"
+          echo "package: $size bytes"
+          if [ "$size" -gt 20000000 ]; then
+            echo "npm package is over 20 MB; check package.json files"; exit 1
+          fi
+          mkdir "$dir/app" && cd "$dir/app" && npm init -y >/dev/null
+          npm install --no-audit --no-fund "$tarball"
+          test "$(node_modules/.bin/pastevault --version)" = "$(node -p "require('$GITHUB_WORKSPACE/package.json').version")"
 
   e2e-postgres:
     name: E2E (Postgres migrations, tokens, security, agents and requests)
