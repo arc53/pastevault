@@ -25,9 +25,9 @@
     --radius: 0.375rem;
     --panel-shadow: 0 0 0 1px rgba(15, 23, 42, 0.06), 0 24px 48px -30px rgba(15, 23, 42, 0.42);
     --grid-color: rgba(15, 23, 42, 0.08);
-    --font-sans: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
-    --font-display: "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
-    --font-mono: "JetBrains Mono", "IBM Plex Mono", "SFMono-Regular", monospace;
+    --font-sans: var(--font-plex-sans), "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
+    --font-display: var(--font-space-grotesk), "Space Grotesk", "Avenir Next", "Segoe UI", sans-serif;
+    --font-mono: var(--font-jetbrains-mono), "JetBrains Mono", "IBM Plex Mono", "SFMono-Regular", monospace;
   }
 
   .dark {
