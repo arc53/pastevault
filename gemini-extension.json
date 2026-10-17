@@ -1,6 +1,6 @@
 {
   "name": "pastevault",
-  "version": "0.1.6",
+  "version": "1.2.0",
   "description": "Ask the user for secrets without them entering the chat, use them via pastevault run, and share text and files end-to-end encrypted. Needs the pastevault CLI on PATH.",
   "mcpServers": {
     "pastevault": {

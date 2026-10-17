@@ -1,6 +1,6 @@
 {
   "name": "pastevault",
-  "version": "0.1.6",
+  "version": "1.2.0",
   "description": "MCP server (pastevault mcp) and skill: ask the user for secrets without them entering the chat, use them via pastevault run, and share text and files end-to-end encrypted with people or other agents. Needs the pastevault CLI on PATH.",
   "author": {
     "name": "Arc53",

@@ -1,6 +1,6 @@
 {
   "name": "pastevault",
-  "version": "0.1.6",
+  "version": "1.2.0",
   "description": "Secure end-to-end encrypted paste sharing",
   "type": "module",
   "main": "dist/index.js",
