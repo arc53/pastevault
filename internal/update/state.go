@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 )
 
@@ -187,7 +188,10 @@ func acquireStateLock(timeout time.Duration) (func(), error) {
 			_ = file.Close()
 			return func() { _ = os.Remove(lockPath) }, nil
 		}
-		if !os.IsExist(err) {
+		// On Windows, creating a file whose deletion by the previous holder
+		// is still pending fails with "Access is denied": wait as for a
+		// held lock.
+		if !os.IsExist(err) && !(runtime.GOOS == "windows" && os.IsPermission(err)) {
 			return nil, err
 		}
 		if info, statErr := os.Stat(lockPath); statErr == nil && time.Since(info.ModTime()) >= stateLockStaleAge {
