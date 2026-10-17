@@ -1,8 +1,27 @@
 import type { Metadata } from 'next'
+import { IBM_Plex_Sans, JetBrains_Mono, Space_Grotesk } from 'next/font/google'
 import './globals.css'
 import { Providers } from '@/components/providers'
 import { I18nProvider } from '@/components/i18n-provider'
 import { Footer } from '@/components/footer'
+
+// Self-hosted at build time by next/font (no requests to Google from the
+// browser). globals.css puts them first in --font-sans/-display/-mono.
+const sans = IBM_Plex_Sans({
+  subsets: ['latin', 'latin-ext', 'cyrillic'],
+  variable: '--font-plex-sans',
+  display: 'swap',
+})
+const display = Space_Grotesk({
+  subsets: ['latin', 'latin-ext'],
+  variable: '--font-space-grotesk',
+  display: 'swap',
+})
+const mono = JetBrains_Mono({
+  subsets: ['latin', 'latin-ext', 'cyrillic'],
+  variable: '--font-jetbrains-mono',
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
   title: 'PasteVault - Secure Encrypted Paste Sharing',
@@ -34,7 +53,11 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${sans.variable} ${display.variable} ${mono.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
         <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
