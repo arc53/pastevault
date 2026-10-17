@@ -238,12 +238,30 @@ func deniedPaths() []string {
 			continue
 		}
 		result = append(result, foldPath(abs))
-		if real, err := filepath.EvalSymlinks(abs); err == nil && real != abs {
+		if real, ok := resolveExisting(abs); ok && real != abs {
 			result = append(result, foldPath(real))
 		}
 	}
 
 	return result
+}
+
+// resolveExisting resolves symlinks (and, on Windows, 8.3 short names) in
+// the longest existing prefix of an absolute path and appends the rest:
+// /var/x/new.txt becomes /private/var/x/new.txt on macOS.
+func resolveExisting(path string) (string, bool) {
+	ancestor, rest := path, []string{}
+	for {
+		if real, err := filepath.EvalSymlinks(ancestor); err == nil {
+			return filepath.Join(append([]string{real}, rest...)...), true
+		}
+		parent := filepath.Dir(ancestor)
+		if parent == ancestor {
+			return "", false
+		}
+		rest = append([]string{filepath.Base(ancestor)}, rest...)
+		ancestor = parent
+	}
 }
 
 // within reports whether path is base or inside it (case-insensitively on
@@ -274,6 +292,30 @@ func (p *pathPolicy) inRoots(path string) bool {
 	}
 
 	return false
+}
+
+// checkTyped is the early check of a path as typed: the deny lists on the
+// path itself, then the deny lists and roots on its resolved spelling.
+// Roots are stored resolved, so /var/x/a.txt is inside the root
+// /private/var/x (macOS), and C:\Users\RUNNER~1\x inside the root
+// C:\Users\runneradmin\x (Windows). Whatever the path resolves to is checked
+// again by the caller.
+func (p *pathPolicy) checkTyped(path string, writing bool) error {
+	if err := p.checkDenied(path, writing); err != nil {
+		return err
+	}
+	if p.inRoots(path) {
+		return nil
+	}
+	if resolved, ok := resolveExisting(path); ok && resolved != path {
+		if err := p.checkDenied(resolved, writing); err != nil {
+			return err
+		}
+		if p.inRoots(resolved) {
+			return nil
+		}
+	}
+	return refused("%s is outside the allowed roots: %s", path, p.rootsDescription())
 }
 
 func (p *pathPolicy) rootsDescription() string {
@@ -349,7 +391,7 @@ func (p *pathPolicy) resolveRead(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := p.checkAllowed(abs, false); err != nil {
+	if err := p.checkTyped(abs, false); err != nil {
 		return "", err
 	}
 	real, err := filepath.EvalSymlinks(abs)
@@ -407,7 +449,7 @@ func (p *pathPolicy) resolveWrite(path string) (writeTarget, error) {
 	if err != nil {
 		return writeTarget{}, err
 	}
-	if err := p.checkAllowed(abs, true); err != nil {
+	if err := p.checkTyped(abs, true); err != nil {
 		return writeTarget{}, err
 	}
 

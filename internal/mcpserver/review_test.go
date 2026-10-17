@@ -49,7 +49,8 @@ func TestCaseInsensitiveRootContainment(t *testing.T) {
 		t.Fatal("case-insensitive file systems: different case is the same directory")
 	}
 	caseInsensitiveRoots = false
-	if within(base, other) {
+	// filepath.Rel itself ignores case on Windows.
+	if runtime.GOOS != "windows" && within(base, other) {
 		t.Fatal("case-sensitive file systems: different case is another directory")
 	}
 }
@@ -66,6 +67,43 @@ func TestReadReturnsCanonicalPath(t *testing.T) {
 	want, _ := filepath.EvalSymlinks(filepath.Join(root, "dir", "a.txt"))
 	if !strings.EqualFold(got, want) {
 		t.Fatalf("canonical = %q, want %q", got, want)
+	}
+}
+
+// A root reached through a symlink (macOS: /var is /private/var; Windows:
+// 8.3 short names) accepts paths spelled through the link, and credential
+// paths under a symlinked home are refused even when created after the
+// policy.
+func TestSymlinkedRootSpelling(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlinks need privileges on Windows; 8.3 names are covered by the temp dir")
+	}
+	isolate(t)
+	base := t.TempDir()
+	real := filepath.Join(base, "real")
+	link := filepath.Join(base, "link")
+	writeTestFile(t, filepath.Join(real, "project", "a.txt"), "a")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	home := filepath.Join(link, "project")
+	t.Setenv("HOME", home)
+	real, _ = filepath.EvalSymlinks(real) // the temp dir may be behind a link too
+
+	policy := newPathPolicy([]string{home}, nil, true)
+	got, err := policy.resolveRead(filepath.Join(home, "a.txt"))
+	if err != nil || got != filepath.Join(real, "project", "a.txt") {
+		t.Fatalf("read through the root's spelling = %q, %v", got, err)
+	}
+	if target, err := policy.resolveWrite(filepath.Join(home, "out.txt")); err != nil || target.path != filepath.Join(real, "project", "out.txt") {
+		t.Fatalf("write through the root's spelling = %+v, %v", target, err)
+	}
+	writeTestFile(t, filepath.Join(real, "project", ".codex", "auth.json"), "secret")
+	_, err = policy.resolveRead(".codex/auth.json")
+	refusedPath(t, err, "credential created after the policy, under a symlinked home")
+	_, err = policy.resolveRead(filepath.Join(link, "..", "real", "project", "a.txt"))
+	if err != nil {
+		t.Fatalf("resolved spelling: %v", err)
 	}
 }
 
