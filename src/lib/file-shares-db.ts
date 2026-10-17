@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client'
-import { getPrisma, resolveDatabaseProvider } from './db.js'
+import { getPrisma } from './db.js'
+import { ensureColumns, timestampType } from './schema-utils.js'
 
 interface FileShareRow {
   id: string
@@ -20,6 +21,11 @@ interface FileShareRow {
   download_grant_hash: string | null
   download_grant_expires_at: Date | string | null
   burned_at: Date | string | null
+  max_views: number | bigint | null
+  recipient_fingerprint: string | null
+  recipient_agent_id: string | null
+  recipient_user_id: string | null
+  wrapped_key: string | null
 }
 
 export interface FileShareRecord {
@@ -41,6 +47,11 @@ export interface FileShareRecord {
   download_grant_hash: string | null
   download_grant_expires_at: Date | null
   burned_at: Date | null
+  max_views: number | null
+  recipient_fingerprint: string | null
+  recipient_agent_id: string | null
+  recipient_user_id: string | null
+  wrapped_key: string | null
 }
 
 const FILE_SHARE_COLUMNS = Prisma.raw(`
@@ -61,7 +72,12 @@ const FILE_SHARE_COLUMNS = Prisma.raw(`
   "upload_token_hash",
   "download_grant_hash",
   "download_grant_expires_at",
-  "burned_at"
+  "burned_at",
+  "max_views",
+  "recipient_fingerprint",
+  "recipient_agent_id",
+  "recipient_user_id",
+  "wrapped_key"
 `)
 
 // Columns added after the initial release. Fresh tables get them from CREATE
@@ -69,8 +85,7 @@ const FILE_SHARE_COLUMNS = Prisma.raw(`
 // Postgres migration). Postgres uses TIMESTAMP(3) to match the Prisma schema,
 // so the IF NOT EXISTS migration finds an identical column and nothing drifts.
 function addedColumns(): Array<[name: string, definition: string]> {
-  const timestamp =
-    resolveDatabaseProvider() === 'postgresql' ? 'TIMESTAMP(3)' : 'TIMESTAMP'
+  const timestamp = timestampType()
 
   return [
     ['burn_after_read', 'BOOLEAN NOT NULL DEFAULT false'],
@@ -79,6 +94,11 @@ function addedColumns(): Array<[name: string, definition: string]> {
     ['download_grant_hash', 'TEXT'],
     ['download_grant_expires_at', timestamp],
     ['burned_at', timestamp],
+    ['max_views', 'INTEGER'],
+    ['recipient_fingerprint', 'TEXT'],
+    ['recipient_agent_id', 'TEXT'],
+    ['recipient_user_id', 'TEXT'],
+    ['wrapped_key', 'TEXT'],
   ]
 }
 
@@ -117,49 +137,11 @@ function normalizeRecord(row: FileShareRow): FileShareRecord {
     download_grant_hash: row.download_grant_hash,
     download_grant_expires_at: normalizeDate(row.download_grant_expires_at),
     burned_at: normalizeDate(row.burned_at),
-  }
-}
-
-async function listFileShareColumns() {
-  const prisma = getPrisma()
-
-  if (resolveDatabaseProvider() === 'postgresql') {
-    const rows = await prisma.$queryRaw<Array<{ column_name: string }>>`
-      SELECT "column_name"
-      FROM information_schema.columns
-      WHERE "table_schema" = current_schema() AND "table_name" = 'FileShare'
-    `
-    return new Set(rows.map((row) => row.column_name))
-  }
-
-  const rows = await prisma.$queryRawUnsafe<Array<{ name: string }>>(
-    'PRAGMA table_info("FileShare")'
-  )
-  return new Set(rows.map((row) => row.name))
-}
-
-// Only ALTER when a column is actually missing, so routine boots don't take
-// an ACCESS EXCLUSIVE lock on Postgres.
-async function ensureAddedColumns() {
-  const prisma = getPrisma()
-  const existing = await listFileShareColumns()
-  const isPostgres = resolveDatabaseProvider() === 'postgresql'
-
-  for (const [name, definition] of addedColumns()) {
-    if (existing.has(name)) {
-      continue
-    }
-
-    try {
-      await prisma.$executeRawUnsafe(
-        `ALTER TABLE "FileShare" ADD COLUMN ${isPostgres ? 'IF NOT EXISTS ' : ''}"${name}" ${definition}`
-      )
-    } catch (error: unknown) {
-      // Another instance booting at the same time may have added it first.
-      if (!(error instanceof Error && /duplicate column/i.test(error.message))) {
-        throw error
-      }
-    }
+    max_views: row.max_views === null ? null : Number(row.max_views),
+    recipient_fingerprint: row.recipient_fingerprint,
+    recipient_agent_id: row.recipient_agent_id,
+    recipient_user_id: row.recipient_user_id,
+    wrapped_key: row.wrapped_key,
   }
 }
 
@@ -190,7 +172,7 @@ export async function ensureFileShareSchema() {
     )
   `)
 
-  await ensureAddedColumns()
+  await ensureColumns('FileShare', addedColumns())
 
   await prisma.$executeRawUnsafe(
     'CREATE INDEX IF NOT EXISTS "FileShare_expires_at_idx" ON "FileShare"("expires_at")'
@@ -210,6 +192,13 @@ export async function createFileShareRecord(input: {
   file_count: number
   total_size_bytes: number
   burn_after_read: boolean
+  max_views: number | null
+  recipient: {
+    fingerprint: string
+    agent_id: string | null
+    user_id: string | null
+    wrapped_key: string
+  } | null
   upload_token_hash: string
 }) {
   await ensureFileShareSchema()
@@ -227,6 +216,11 @@ export async function createFileShareRecord(input: {
       "file_count",
       "total_size_bytes",
       "burn_after_read",
+      "max_views",
+      "recipient_fingerprint",
+      "recipient_agent_id",
+      "recipient_user_id",
+      "wrapped_key",
       "upload_token_hash"
     )
     VALUES (
@@ -238,6 +232,11 @@ export async function createFileShareRecord(input: {
       ${input.file_count},
       ${String(input.total_size_bytes)},
       ${burnAfterRead},
+      ${input.max_views},
+      ${input.recipient?.fingerprint ?? null},
+      ${input.recipient?.agent_id ?? null},
+      ${input.recipient?.user_id ?? null},
+      ${input.recipient?.wrapped_key ?? null},
       ${input.upload_token_hash}
     )
   `
@@ -270,36 +269,47 @@ export async function incrementFileShareViewCount(id: string) {
   `
 }
 
-// Atomically consumes a burn-after-read share: only one caller can flip
-// is_burned, and the manifest is wiped in the same statement. Returns false
-// when another reader already burned it.
-export async function burnFileShareRecord(
+// Atomically consumes one view of a view-limited share. The view that reaches
+// the limit burns the share: it wipes the manifest and key material and stores
+// the download grant in the same statement. Returns null when the share was
+// already used up (or burned) by other readers.
+export async function consumeFileShareView(
   id: string,
+  maxViews: number,
   downloadGrantHash: string,
   downloadGrantExpiresAt: Date,
   burnedAt: Date
 ) {
   await ensureFileShareSchema()
   const prisma = getPrisma()
+  const final = Prisma.sql`"view_count" + 1 >= ${maxViews}`
 
-  const updatedRows = await prisma.$executeRaw`
+  const rows = await prisma.$queryRaw<
+    Array<{ view_count: number | bigint; is_burned: boolean | number | bigint }>
+  >`
     UPDATE "FileShare"
     SET
-      "is_burned" = true,
       "view_count" = "view_count" + 1,
-      "manifest_ciphertext" = NULL,
-      "manifest_nonce" = NULL,
-      "salt" = NULL,
-      "kdf_params" = NULL,
-      "download_grant_hash" = ${downloadGrantHash},
-      "download_grant_expires_at" = ${downloadGrantExpiresAt},
-      "burned_at" = ${burnedAt}
+      "is_burned" = CASE WHEN ${final} THEN true ELSE false END,
+      "manifest_ciphertext" = CASE WHEN ${final} THEN NULL ELSE "manifest_ciphertext" END,
+      "manifest_nonce" = CASE WHEN ${final} THEN NULL ELSE "manifest_nonce" END,
+      "salt" = CASE WHEN ${final} THEN NULL ELSE "salt" END,
+      "kdf_params" = CASE WHEN ${final} THEN NULL ELSE "kdf_params" END,
+      "wrapped_key" = CASE WHEN ${final} THEN NULL ELSE "wrapped_key" END,
+      "download_grant_hash" = CASE WHEN ${final} THEN ${downloadGrantHash} ELSE "download_grant_hash" END,
+      "download_grant_expires_at" = CASE WHEN ${final} THEN ${downloadGrantExpiresAt} ELSE "download_grant_expires_at" END,
+      "burned_at" = CASE WHEN ${final} THEN ${burnedAt} ELSE "burned_at" END
     WHERE "id" = ${id}
       AND "is_complete" = true
       AND "is_burned" = false
+      AND "view_count" < ${maxViews}
+    RETURNING "view_count", "is_burned"
   `
 
-  return updatedRows > 0
+  const row = rows[0]
+  return row
+    ? { view_count: Number(row.view_count), is_burned: normalizeBoolean(row.is_burned) }
+    : null
 }
 
 // Slides a burned share's download grant forward. Never shortens it, so

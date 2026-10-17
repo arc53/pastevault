@@ -1,0 +1,25 @@
+{
+  "name": "pastevault",
+  "owner": {
+    "name": "Arc53",
+    "url": "https://github.com/arc53"
+  },
+  "description": "PasteVault for coding agents: end-to-end encrypted sharing, secret requests without secrets in the chat, and pv://secret handles for commands.",
+  "plugins": [
+    {
+      "name": "pastevault",
+      "source": "./integrations/pastevault",
+      "description": "MCP server (pastevault mcp) and skill: ask the user for secrets without them entering the chat, use them via pastevault run, and share text and files end-to-end encrypted with people or other agents.",
+      "version": "0.1.6",
+      "author": {
+        "name": "Arc53",
+        "url": "https://github.com/arc53"
+      },
+      "homepage": "https://pastevault.dev",
+      "repository": "https://github.com/arc53/pastevault",
+      "license": "GPL-3.0-only",
+      "keywords": ["secrets", "encryption", "e2ee", "sharing", "mcp", "agents"],
+      "category": "security"
+    }
+  ]
+}

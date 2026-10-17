@@ -1,5 +1,6 @@
 generator client {
-  provider      = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["partialIndexes"]
 }
 
 datasource db {
@@ -7,60 +8,74 @@ datasource db {
 }
 
 model Paste {
-  id              String   @id @default(cuid())
-  slug            String   @unique
-  ciphertext      String
-  nonce           String
-  salt            String?
-  kdf_params      String?
-  created_at      DateTime @default(now())
-  expires_at      DateTime?
-  burn_after_read Boolean  @default(false)
-  is_burned       Boolean  @default(false)
-  view_count      Int      @default(0)
+  id                    String    @id @default(cuid())
+  slug                  String    @unique
+  ciphertext            String
+  nonce                 String
+  salt                  String?
+  kdf_params            String?
+  created_at            DateTime  @default(now())
+  expires_at            DateTime?
+  burn_after_read       Boolean   @default(false)
+  is_burned             Boolean   @default(false)
+  view_count            Int       @default(0)
+  max_views             Int?
+  recipient_fingerprint String?
+  recipient_agent_id    String?
+  recipient_user_id     String?
+  wrapped_key           String?
 
   @@index([expires_at])
   @@index([slug])
 }
 
 model FileShare {
-  id                        String   @id @default(cuid())
-  slug                      String   @unique
+  id                        String    @id @default(cuid())
+  slug                      String    @unique
   manifest_ciphertext       String?
   manifest_nonce            String?
   salt                      String?
   kdf_params                String?
-  created_at                DateTime @default(now())
+  created_at                DateTime  @default(now())
   expires_at                DateTime?
-  is_complete               Boolean  @default(false)
-  view_count                Int      @default(0)
-  file_count                Int      @default(0)
-  total_size_bytes          String   @default("0")
-  burn_after_read           Boolean  @default(false)
-  is_burned                 Boolean  @default(false)
+  is_complete               Boolean   @default(false)
+  view_count                Int       @default(0)
+  file_count                Int       @default(0)
+  total_size_bytes          String    @default("0")
+  burn_after_read           Boolean   @default(false)
+  is_burned                 Boolean   @default(false)
   upload_token_hash         String?
   download_grant_hash       String?
   download_grant_expires_at DateTime?
   burned_at                 DateTime?
+  max_views                 Int?
+  recipient_fingerprint     String?
+  recipient_agent_id        String?
+  recipient_user_id         String?
+  wrapped_key               String?
 
   @@index([expires_at])
   @@index([slug])
 }
 
 model User {
-  id              String       @id
+  id              String          @id
   name            String
   email           String
-  emailVerified   Boolean      @default(false)
+  emailVerified   Boolean         @default(false)
   image           String?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
   username        String?
   displayUsername String?
   sessions        Session[]
   accounts        Account[]
   deviceCodes     DeviceCode[]
   ownedShares     OwnedShare[]
+  apiTokens       ApiToken[]
+  agents          AgentIdentity[]
+  secretRequests  SecretRequest[]
+  auditEvents     AuditEvent[]
 
   @@unique([email])
   @@unique([username])
@@ -152,6 +167,10 @@ model OwnedShare {
   file_count            Int?
   total_size_bytes      String?
   is_password_protected Boolean   @default(false)
+  max_views             Int?
+  recipient_fingerprint String?
+  recipient_agent_id    String?
+  created_via_token_id  String?
   user                  User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@unique([share_type, resource_id])
@@ -159,4 +178,92 @@ model OwnedShare {
   @@index([user_id, created_at])
   @@index([user_id, share_type])
   @@index([user_id, status])
+}
+
+// Personal access tokens ("pv_pat_..."). Only the SHA-256 of the token is stored.
+model ApiToken {
+  id           String    @id @default(cuid())
+  user_id      String
+  name         String
+  token_prefix String
+  token_hash   String    @unique
+  scopes       String
+  agent_id     String?
+  created_at   DateTime  @default(now())
+  expires_at   DateTime?
+  last_used_at DateTime?
+  revoked_at   DateTime?
+  user         User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, created_at])
+}
+
+model AgentIdentity {
+  id           String    @id @default(cuid())
+  user_id      String
+  kind         String    @default("agent")
+  name         String
+  public_key   String
+  fingerprint  String    @unique
+  created_at   DateTime  @default(now())
+  last_used_at DateTime?
+  revoked_at   DateTime?
+  user         User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, name], map: "AgentIdentity_user_id_name_active_key", where: raw("revoked_at IS NULL"))
+}
+
+model SecretRequest {
+  id                   String    @id @default(uuid())
+  code                 String    @unique
+  user_id              String
+  requester_agent_id   String
+  requester_token_id   String?
+  name                 String
+  reason               String?
+  accept               String
+  public_key           String
+  fingerprint          String
+  poll_token_hash      String
+  poll_interval        Int       @default(3)
+  last_polled_at       DateTime?
+  status               String
+  response_kind        String?
+  response_ciphertext  String?
+  response_nonce       String?
+  response_wrapped_key String?
+  response_size        Int?
+  fulfilled_by_user_id String?
+  created_at           DateTime  @default(now())
+  expires_at           DateTime
+  opened_at            DateTime?
+  fulfilled_at         DateTime?
+  delivered_at         DateTime?
+  acked_at             DateTime?
+  closed_at            DateTime?
+  user                 User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, created_at])
+  @@index([status, expires_at])
+}
+
+// Metadata-only activity log for an account's shares, requests, agents and tokens.
+model AuditEvent {
+  id             String   @id @default(cuid())
+  user_id        String
+  subject_type   String
+  subject_id     String?
+  slug           String?
+  event          String
+  actor_kind     String
+  actor_token_id String?
+  actor_agent_id String?
+  client         String?
+  ip_prefix      String?
+  details        String?
+  created_at     DateTime @default(now())
+  user           User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, created_at])
+  @@index([subject_id, created_at])
 }

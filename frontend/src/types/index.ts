@@ -13,6 +13,9 @@ export interface PasteMetadata {
   burn_after_read: boolean
   is_burned: boolean
   view_count: number
+  // Present on servers with capabilities.features.max_views.
+  max_views?: number | null
+  views_remaining?: number | null
   salt?: string
   kdf_params?: string
 }
@@ -25,11 +28,22 @@ export interface CreatePasteRequest {
   kdf_params?: string
   expires_in_hours?: number
   burn_after_read?: boolean
+  max_views?: number
+  recipient?: ShareRecipientRequest
+}
+
+// The content key sealed to an agent (PVWRAP1); see sealToRecipient in
+// lib/wrap.ts. A sealed share carries no salt.
+export interface ShareRecipientRequest {
+  agent_id?: string
+  fingerprint: string
+  wrapped_key: string
 }
 
 export interface CreatePasteResponse {
   slug: string
   expires_at: string | null
+  max_views?: number | null
 }
 
 export interface GetPasteResponse {
@@ -38,9 +52,24 @@ export interface GetPasteResponse {
   nonce: string
   salt?: string
   kdf_params?: string
+  // Shares sealed to a recipient key only.
+  wrapped_key?: string
+  recipient_fingerprint?: string
 }
 
-export interface PasteMetaResponse {
+export interface ShareRecipientMeta {
+  fingerprint: string
+}
+
+// Fields added with api_version 2; absent on older servers.
+export interface ShareLimitsMeta {
+  max_views?: number | null
+  views_remaining?: number | null
+  recipient?: ShareRecipientMeta | null
+  requires_recipient_auth?: boolean
+}
+
+export interface PasteMetaResponse extends ShareLimitsMeta {
   slug: string
   created_at: string
   expires_at: string | null
@@ -61,6 +90,8 @@ export interface FileShareMetadata {
   total_size_bytes: string
   burn_after_read: boolean
   is_burned: boolean
+  max_views?: number | null
+  views_remaining?: number | null
 }
 
 export interface CreateFileShareRequest {
@@ -71,12 +102,15 @@ export interface CreateFileShareRequest {
   file_count: number
   total_size_bytes: number
   burn_after_read?: boolean
+  max_views?: number
+  recipient?: ShareRecipientRequest
 }
 
 export interface CreateFileShareResponse {
   slug: string
   expires_at: string | null
   burn_after_read: boolean
+  max_views?: number | null
   upload_token: string
 }
 
@@ -93,9 +127,11 @@ export interface GetFileShareResponse {
   kdf_params?: string
   download_grant?: string
   download_grant_expires_at?: string
+  wrapped_key?: string
+  recipient_fingerprint?: string
 }
 
-export interface FileShareMetaResponse {
+export interface FileShareMetaResponse extends ShareLimitsMeta {
   slug: string
   created_at: string
   expires_at: string | null
@@ -116,12 +152,30 @@ export interface FileShareCapabilities {
   burn_after_read: boolean
 }
 
+export interface CapabilitiesFeatures {
+  expires_in_minutes: boolean
+  max_views: boolean
+  api_tokens: boolean
+  agents: boolean
+  sealed_shares: boolean
+  secret_requests: boolean
+  audit: boolean
+}
+
 export interface CapabilitiesResponse {
   auth: {
     enabled: boolean
     signup_enabled: boolean
   }
   file_shares: FileShareCapabilities
+  // api_version 2 and later.
+  api_version?: number
+  features?: CapabilitiesFeatures
+  limits?: {
+    max_views: number
+    max_secret_request_bytes: number
+    min_secret_request_ttl_seconds: number
+  }
 }
 
 export type OwnedShareType = 'paste' | 'file_share'
@@ -150,10 +204,107 @@ export interface AccountShare {
   total_size_bytes: string | null
   is_password_protected: boolean
   can_delete: boolean
+  max_views?: number | null
+  recipient_fingerprint?: string | null
+  recipient_agent_name?: string | null
 }
 
 export interface ListAccountSharesResponse {
   shares: AccountShare[]
+  next_cursor?: string | null
+}
+
+export type ApiScope =
+  | 'shares:create'
+  | 'shares:read'
+  | 'shares:revoke'
+  | 'shares:receive'
+  | 'agents:read'
+  | 'agents:write'
+  | 'requests:create'
+  | 'audit:read'
+
+export interface AgentSummary {
+  id: string
+  name: string
+  kind: string
+  // X25519 public key, unpadded base64url. Always recompute the fingerprint
+  // from it; never trust `fingerprint`.
+  public_key: string
+  fingerprint: string
+  created_at: string
+  last_used_at: string | null
+  revoked_at: string | null
+}
+
+export interface ListAgentsResponse {
+  agents: AgentSummary[]
+}
+
+export interface RevokeAgentResponse {
+  agent: AgentSummary
+  tokens_revoked: number
+}
+
+export interface ApiTokenSummary {
+  id: string
+  name: string
+  prefix: string
+  scopes: ApiScope[]
+  agent: { id: string; name: string } | null
+  created_at: string
+  expires_at: string | null
+  last_used_at: string | null
+  revoked_at: string | null
+}
+
+export interface ListApiTokensResponse {
+  tokens: ApiTokenSummary[]
+}
+
+export interface CreateApiTokenRequest {
+  name: string
+  scopes?: ApiScope[]
+  // 1..365; null for a token that never expires.
+  expires_in_days?: number | null
+  agent_id?: string
+}
+
+// The only response that ever carries the token itself.
+export interface CreateApiTokenResponse {
+  id: string
+  token: string
+  name: string
+  prefix: string
+  scopes: ApiScope[]
+  agent_id: string | null
+  expires_at: string | null
+}
+
+export type AuditActorKind = 'owner' | 'recipient' | 'anonymous' | 'system'
+
+export interface AuditEvent {
+  id: string
+  subject_type: string
+  subject_id: string | null
+  slug: string | null
+  event: string
+  actor_kind: AuditActorKind | string
+  actor_agent: { id: string; name: string | null } | null
+  actor_token_id: string | null
+  client: string | null
+  ip_prefix: string | null
+  created_at: string
+  details: Record<string, unknown> | null
+}
+
+export interface ListAuditEventsResponse {
+  events: AuditEvent[]
+  next_cursor: string | null
+}
+
+export interface ListShareEventsResponse {
+  events: AuditEvent[]
 }
 
 export interface EncryptionResult {
@@ -200,4 +351,75 @@ export interface FileShareManifest {
   version: 'v1'
   paste?: PasteContent
   files: FileShareManifestFile[]
+}
+
+// Secret requests (spec §2.6, §6). An agent asks for a secret; this browser
+// seals the answer to the request's ephemeral key (lib/secret-requests.ts).
+export type SecretRequestStatus =
+  | 'pending'
+  | 'fulfilled'
+  | 'delivered'
+  | 'declined'
+  | 'expired'
+  | 'cancelled'
+
+export type SecretRequestAccept = 'text' | 'file' | 'any'
+
+// GET /api/secret-requests/by-code/:code (a session of the same account).
+export interface SecretRequestDetails {
+  id: string
+  code: string
+  name: string
+  // Written by the agent: untrusted, plain text only.
+  reason: string | null
+  accept: SecretRequestAccept
+  // The request's ephemeral key. Recompute its fingerprint; compare with #fp=.
+  public_key: string
+  fingerprint: string
+  // Limit on the decoded ciphertext (payload JSON + 16-byte tag).
+  max_bytes: number
+  requester: {
+    // The agent's identity (not the request key).
+    agent: { id: string; name: string | null; fingerprint: string | null }
+    token_name: string | null
+  }
+  status: SecretRequestStatus
+  created_at: string
+  expires_at: string
+  opened_at: string | null
+  fulfilled_at: string | null
+  delivered_at: string | null
+  closed_at: string | null
+}
+
+export interface FulfillSecretRequestBody {
+  kind: 'text' | 'file'
+  ciphertext: string
+  nonce: string
+  wrapped_key: string
+}
+
+// GET /api/account/secret-requests: metadata only.
+export interface SecretRequestSummary {
+  id: string
+  code: string
+  name: string
+  reason: string | null
+  accept: SecretRequestAccept
+  fingerprint: string
+  status: SecretRequestStatus
+  requester: { agent: { id: string; name: string | null } }
+  response_kind: 'text' | 'file' | null
+  response_size: number | null
+  created_at: string
+  expires_at: string
+  opened_at: string | null
+  fulfilled_at: string | null
+  delivered_at: string | null
+  acked_at: string | null
+  closed_at: string | null
+}
+
+export interface ListSecretRequestsResponse {
+  requests: SecretRequestSummary[]
 }

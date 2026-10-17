@@ -1,16 +1,19 @@
 'use client'
 
-import { useEffect, useEffectEvent, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { useTranslations } from 'next-intl'
 import { nanoid } from 'nanoid'
 import QRCode from 'react-qr-code'
+import Link from 'next/link'
 import {
   AlertCircle,
+  Bot,
   Flame,
   Lock,
   Menu,
   Paperclip,
   Share,
+  ShieldCheck,
   Trash2,
   X,
 } from 'lucide-react'
@@ -23,6 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AccountLink } from '@/components/account-link'
 import { useLocale } from '@/components/i18n-provider'
 import { useCreateFileShare, useCreatePaste, useGetCapabilities } from '@/hooks/usePaste'
+import { useAgents, useSessionUser } from '@/hooks/useAgents'
 import { api } from '@/lib/api'
 import {
   createFileShareUrl,
@@ -45,9 +49,17 @@ import {
   saveDraft,
   serializeDraft,
 } from '@/lib/drafts'
-import { FileShareManifest, PasteContent } from '@/types'
+import { formatFingerprint, shortFingerprint } from '@/lib/fingerprint'
+import { AgentKeyCheck, checkAgentKey, localAgentFingerprint, pinsForAgent, savePin } from '@/lib/pins'
+import { sealToRecipient, wrapContext } from '@/lib/wrap'
+import { AgentSummary, FileShareManifest, PasteContent, ShareRecipientRequest } from '@/types'
 
 type ShareKind = 'paste' | 'files' | 'mixed'
+
+// Recipient select value for an ordinary #k= link.
+const ANYONE = 'anyone'
+
+type SealedFor = { name: string; fingerprint: string }
 
 const DEFAULT_EXPIRY_HOURS = 24
 const STALL_THRESHOLD_MS = 4000
@@ -151,6 +163,7 @@ export default function CreatePastePage() {
   const tShare = useTranslations('shareSuccess')
   const tFiles = useTranslations('fileShare')
   const tAccessibility = useTranslations('accessibility')
+  const tRecipient = useTranslations('recipient')
 
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
@@ -170,6 +183,11 @@ export default function CreatePastePage() {
   const [uploadTelemetry, setUploadTelemetry] = useState<UploadTelemetry>(
     () => createInitialUploadTelemetry()
   )
+  // Agent the next share is sealed to, or ANYONE. Not part of the draft.
+  const [recipientId, setRecipientId] = useState(ANYONE)
+  // Bumped after a pin is written, so the key check re-reads it.
+  const [pinVersion, setPinVersion] = useState(0)
+  const [sealedFor, setSealedFor] = useState<SealedFor | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   // Draft this page last restored or wrote to storage, or null if it owns none.
@@ -179,6 +197,35 @@ export default function CreatePastePage() {
   const createPaste = useCreatePaste()
   const createFileShare = useCreateFileShare()
   const { data: capabilities } = useGetCapabilities()
+  // "Share to agent" needs accounts, agents and sealed shares on the server,
+  // and a signed-in user with at least one active agent.
+  const agentsSupported = Boolean(
+    capabilities?.auth?.enabled && capabilities.features?.agents && capabilities.features?.sealed_shares
+  )
+  const sessionUserQuery = useSessionUser(agentsSupported)
+  const userId = agentsSupported ? (sessionUserQuery.data?.id ?? null) : null
+  const agentsQuery = useAgents({ enabled: Boolean(userId) })
+  const recipientAgents = useMemo(
+    () => (userId ? (agentsQuery.data?.agents ?? []).filter((agent) => !agent.revoked_at) : []),
+    [agentsQuery.data, userId]
+  )
+  const sealed = recipientId !== ANYONE
+  const recipientAgent = sealed
+    ? (recipientAgents.find((agent) => agent.id === recipientId) ?? null)
+    : null
+  const recipientCheck = useMemo<AgentKeyCheck | null>(
+    () => (recipientAgent && userId ? checkAgentKey(userId, recipientAgent) : null),
+    // pinVersion: re-read the pin after it was written.
+    [recipientAgent, userId, pinVersion]
+  )
+  // A missing agent, an unusable key or a pin mismatch blocks sending; it
+  // never falls back to an ordinary link.
+  const recipientBlocked =
+    sealed && (!recipientCheck || recipientCheck.state === 'mismatch' || recipientCheck.state === 'invalid')
+  // Sealed shares have no password and open exactly once. The draft keeps the
+  // user's own choices, which apply again for "Anyone with the link".
+  const effectivePassword = !sealed && passwordProtected
+  const effectiveBurn = sealed || burnAfterRead
 
   const resetUploadTelemetry = () => {
     uploadSpeedRef.current = 0
@@ -389,7 +436,39 @@ export default function CreatePastePage() {
     setBurnAfterRead(false)
     setPasswordProtected(false)
     setPassword('')
+    setRecipientId(ANYONE)
     forgetDraft()
+  }
+
+  // Re-checks the recipient right before sealing (another tab may have
+  // changed the pin) and returns the agent and its verified key. Throws a
+  // displayable error instead of ever falling back to an ordinary link.
+  const resolveSealTarget = () => {
+    if (!recipientAgent || !userId) {
+      throw new Error(tRecipient('missing'))
+    }
+    const check = checkAgentKey(userId, recipientAgent)
+    if (check.state === 'mismatch') {
+      throw new Error(tRecipient('mismatchShort', { name: recipientAgent.name }))
+    }
+    if (check.state === 'invalid') {
+      throw new Error(tRecipient('invalid'))
+    }
+    return { agent: recipientAgent, check }
+  }
+
+  // Trust on first use: pin only once the share was created.
+  const commitSeal = (
+    agent: AgentSummary,
+    check: Extract<AgentKeyCheck, { state: 'pinned' | 'unpinned' }>
+  ) => {
+    // Also record the agent id when only the name was pinned so far.
+    const pinnedById = pinsForAgent(agent).some((pin) => pin.agent_id === agent.id)
+    if ((check.state === 'unpinned' || !pinnedById) && userId) {
+      savePin(userId, agent, check.fingerprint, 'tofu')
+      setPinVersion((version) => version + 1)
+    }
+    setSealedFor({ name: agent.name, fingerprint: check.fingerprint })
   }
 
   const handleCreatePaste = async () => {
@@ -401,12 +480,16 @@ export default function CreatePastePage() {
 
     setIsCreating(true)
     setCreateError('')
+    // A stale "sealed for" from an earlier share must never label this one.
+    setSealedFor(null)
 
     try {
+      const sealTarget = sealed ? resolveSealTarget() : null
       const clientSlug = nanoid(12)
       let encryptionResult
+      let recipient: ShareRecipientRequest | undefined
 
-      if (passwordProtected && password) {
+      if (effectivePassword && password) {
         encryptionResult = await encryptPasteWithPassword(content, password, clientSlug)
       } else {
         const randomResult = await encryptPaste(content, clientSlug)
@@ -414,6 +497,14 @@ export default function CreatePastePage() {
           ciphertext: randomResult.ciphertext,
           nonce: randomResult.nonce,
           key: randomResult.key,
+        }
+        if (sealTarget) {
+          recipient = sealToRecipient(
+            randomResult.key,
+            sealTarget.check.publicKey,
+            wrapContext.paste(clientSlug),
+            sealTarget.agent.id
+          )
         }
       }
 
@@ -424,13 +515,18 @@ export default function CreatePastePage() {
         salt: 'salt' in encryptionResult ? encryptionResult.salt : undefined,
         kdf_params: 'kdf_params' in encryptionResult ? encryptionResult.kdf_params : undefined,
         expires_in_hours: expiresInHours,
-        burn_after_read: burnAfterRead,
+        burn_after_read: effectiveBurn,
+        recipient,
       })
 
+      if (sealTarget) {
+        commitSeal(sealTarget.agent, sealTarget.check)
+      }
+      // A sealed link never carries the key.
       setShareUrl(
         createShareUrl(
           response.slug,
-          'key' in encryptionResult ? encryptionResult.key : undefined
+          !sealTarget && 'key' in encryptionResult ? encryptionResult.key : undefined
         )
       )
       setLastShareKind('paste')
@@ -471,8 +567,11 @@ export default function CreatePastePage() {
 
     setIsCreating(true)
     setCreateError('')
+    // A stale "sealed for" from an earlier share must never label this one.
+    setSealedFor(null)
 
     try {
+      const sealTarget = sealed ? resolveSealTarget() : null
       const clientSlug = nanoid(12)
       uploadSpeedRef.current = 0
       setUploadTelemetry({
@@ -486,8 +585,16 @@ export default function CreatePastePage() {
         lastNetworkActivityAt: null,
       })
       const encryption = await prepareFileShareEncryption(
-        passwordProtected ? password : undefined
+        effectivePassword ? password : undefined
       )
+      const recipient = sealTarget
+        ? sealToRecipient(
+            encryption.key,
+            sealTarget.check.publicKey,
+            wrapContext.fileShare(clientSlug),
+            sealTarget.agent.id
+          )
+        : undefined
 
       const { upload_token: uploadToken } = await createFileShare.mutateAsync({
         slug: clientSlug,
@@ -496,7 +603,8 @@ export default function CreatePastePage() {
         kdf_params: encryption.kdf_params,
         file_count: selectedFiles.length,
         total_size_bytes: totalSelectedFileSize,
-        burn_after_read: burnAfterRead,
+        burn_after_read: effectiveBurn,
+        recipient,
       })
 
       const manifestFiles: FileShareManifest['files'] = []
@@ -613,10 +721,13 @@ export default function CreatePastePage() {
 
       await api.completeFileShare(clientSlug, uploadToken, encryptedManifest)
 
+      if (sealTarget) {
+        commitSeal(sealTarget.agent, sealTarget.check)
+      }
       setShareUrl(
         createFileShareUrl(
           clientSlug,
-          passwordProtected ? undefined : encryption.key
+          effectivePassword || sealTarget ? undefined : encryption.key
         )
       )
       setLastShareKind(optionalNoteContent ? 'mixed' : 'files')
@@ -661,6 +772,8 @@ export default function CreatePastePage() {
     resetUploadTelemetry()
     setShareUrl('')
     setLastShareKind('paste')
+    setRecipientId(ANYONE)
+    setSealedFor(null)
     forgetDraft()
 
     if (fileInputRef.current) {
@@ -702,7 +815,8 @@ export default function CreatePastePage() {
 
   const canSubmit =
     (Boolean(body.trim()) || hasAttachedFiles) &&
-    !(passwordProtected && !password) &&
+    !(effectivePassword && !password) &&
+    !recipientBlocked &&
     (!hasAttachedFiles || Boolean(fileShareCapabilities && fileSharesEnabled))
 
   const renderExpirySelect = (className = 'w-full') => (
@@ -755,6 +869,153 @@ export default function CreatePastePage() {
     </Select>
   )
 
+  const renderRecipientStatus = () => {
+    if (!sealed) {
+      return null
+    }
+
+    const alertClass =
+      'rounded-sm border border-red-500/30 bg-red-500/10 p-2.5 text-xs text-red-800 dark:text-red-200'
+
+    if (!recipientAgent || !recipientCheck) {
+      return (
+        <p className={alertClass} role="alert" data-testid="recipient-blocked">
+          {tRecipient('missing')}
+        </p>
+      )
+    }
+
+    if (recipientCheck.state === 'mismatch') {
+      return (
+        <div className={`${alertClass} space-y-1.5`} role="alert" data-testid="recipient-blocked">
+          <p className="flex items-start gap-1.5 font-medium">
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            {tRecipient('mismatchTitle')}
+          </p>
+          <p>
+            {tRecipient('mismatchBody', {
+              name: recipientAgent.name,
+              current: shortFingerprint(recipientCheck.fingerprint),
+              pinned: shortFingerprint(recipientCheck.pinnedFingerprint),
+            })}
+          </p>
+          <Link href="/account" className="inline-block font-medium underline underline-offset-2">
+            {tRecipient('manageAgents')}
+          </Link>
+        </div>
+      )
+    }
+
+    if (recipientCheck.state === 'invalid') {
+      return (
+        <p className={alertClass} role="alert" data-testid="recipient-blocked">
+          {tRecipient('invalid')}
+        </p>
+      )
+    }
+
+    return (
+      <div className="space-y-1 text-xs text-muted-foreground" data-testid="recipient-status">
+        {recipientCheck.state === 'pinned' ? (
+          <p className="flex items-start gap-1.5 text-emerald-700 dark:text-emerald-300">
+            <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            {tRecipient('pinned')}
+          </p>
+        ) : (
+          <p>{tRecipient('firstUse', { name: recipientAgent.name })}</p>
+        )}
+        <p className="break-all font-mono text-foreground">
+          {formatFingerprint(recipientCheck.fingerprint)}
+        </p>
+        <p>{tRecipient('sealedHint')}</p>
+      </div>
+    )
+  }
+
+  // Only offered to a signed-in user whose account has active agents.
+  const renderRecipientSelect = (idSuffix: string) => {
+    if (recipientAgents.length === 0 && !sealed) {
+      return null
+    }
+
+    return (
+      <div className="space-y-2">
+        <Label htmlFor={`recipient-${idSuffix}`}>{tRecipient('label')}</Label>
+        <Select value={recipientId} onValueChange={setRecipientId} disabled={isCreating}>
+          <SelectTrigger id={`recipient-${idSuffix}`} className="w-full" data-testid="recipient-select">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ANYONE}>{tRecipient('anyone')}</SelectItem>
+            {recipientAgents.map((agent) => {
+              const fingerprint = localAgentFingerprint(agent)
+              return (
+                <SelectItem key={agent.id} value={agent.id}>
+                  {tRecipient('agentOption', {
+                    name: agent.name,
+                    fingerprint: fingerprint ? `${shortFingerprint(fingerprint)}…` : '?',
+                  })}
+                </SelectItem>
+              )
+            })}
+          </SelectContent>
+        </Select>
+        {renderRecipientStatus()}
+      </div>
+    )
+  }
+
+  // While sealed to an agent, burn is forced on and password is off; the
+  // user's own choices are kept (and drafted) for ordinary links.
+  const renderBurnAndPassword = (mobile: boolean) => (
+    <>
+      <label
+        className="flex items-center justify-between rounded-sm border border-border/70 bg-muted/35 px-3 py-2 text-sm has-[:disabled]:opacity-70"
+        title={sealed ? tRecipient('burnForced') : undefined}
+      >
+        <span className="flex items-center gap-2">
+          <Flame className="h-4 w-4" />
+          {tCreate('burnAfterReading')}
+        </span>
+        <input
+          type="checkbox"
+          checked={effectiveBurn}
+          onChange={(event) => setBurnAfterRead(event.target.checked)}
+          disabled={isCreating || sealed}
+          className="h-4 w-4 rounded-sm border-border bg-background text-primary focus:ring-ring"
+        />
+      </label>
+
+      <div className="space-y-2">
+        <label
+          className="flex items-center justify-between rounded-sm border border-border/70 bg-muted/35 px-3 py-2 text-sm has-[:disabled]:opacity-70"
+          title={sealed ? tRecipient('passwordDisabled') : undefined}
+        >
+          <span className="flex items-center gap-2">
+            <Lock className="h-4 w-4" />
+            {t('password')}
+          </span>
+          <input
+            type="checkbox"
+            checked={effectivePassword}
+            onChange={(event) => setPasswordProtected(event.target.checked)}
+            disabled={isCreating || sealed}
+            className="h-4 w-4 rounded-sm border-border bg-background text-primary focus:ring-ring"
+          />
+        </label>
+        {effectivePassword && (
+          <Input
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder={tCreate('enterPassword')}
+            className={mobile ? 'h-9 w-full' : undefined}
+          />
+        )}
+      </div>
+    </>
+  )
+
   const renderAttachButton = (mobile = false) => (
     <Button
       type="button"
@@ -793,6 +1054,7 @@ export default function CreatePastePage() {
         : lastShareKind === 'files'
           ? tShare('createAnotherFile')
           : tShare('createAnotherPaste')
+    const sealedCommand = `pastevault get ${shareUrl}`
     const viewLabel =
       lastShareKind === 'mixed'
         ? tShare('viewShare')
@@ -836,26 +1098,57 @@ export default function CreatePastePage() {
 
               <div className="tool-panel-body space-y-4">
                 <div className="space-y-2">
-                  <Label>{tShare('shareUrl')}</Label>
+                  <Label htmlFor="share-url">{tShare('shareUrl')}</Label>
                   <div className="flex flex-col gap-2 sm:flex-row">
-                    <Input value={shareUrl} readOnly className="flex-1" />
+                    <Input id="share-url" value={shareUrl} readOnly className="flex-1" data-testid="share-url" />
                     <CopyButton value={shareUrl} variant="outline" />
                   </div>
                 </div>
 
-                <div className="rounded-sm border border-amber-500/25 bg-amber-500/10 p-4">
-                  <div className="flex items-start gap-2">
-                    <AlertCircle className="mt-0.5 h-4 w-4 text-amber-500" />
-                    <div className="text-sm">
-                      <p className="font-medium">{tShare('important')}</p>
-                      <p className="mt-1 text-muted-foreground">
-                        {passwordProtected
-                          ? tShare('passwordProtectedWarning')
-                          : tShare('urlWarning')}
-                      </p>
+                {sealedFor ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="share-command">{tShare('sealedCommandLabel')}</Label>
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <Input
+                          id="share-command"
+                          value={sealedCommand}
+                          readOnly
+                          className="flex-1 font-mono text-xs"
+                          data-testid="share-command"
+                        />
+                        <CopyButton value={sealedCommand} variant="outline" />
+                      </div>
+                    </div>
+
+                    <div className="rounded-sm border border-primary/25 bg-primary/5 p-4" data-testid="sealed-result">
+                      <div className="flex items-start gap-2">
+                        <Bot className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                        <div className="min-w-0 text-sm">
+                          <p className="font-medium">{tShare('sealedTitle', { name: sealedFor.name })}</p>
+                          <p className="mt-1 break-all font-mono text-xs text-foreground">
+                            {formatFingerprint(sealedFor.fingerprint)}
+                          </p>
+                          <p className="mt-2 text-muted-foreground">{tShare('sealedWarning')}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="rounded-sm border border-amber-500/25 bg-amber-500/10 p-4">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="mt-0.5 h-4 w-4 text-amber-500" />
+                      <div className="text-sm">
+                        <p className="font-medium">{tShare('important')}</p>
+                        <p className="mt-1 text-muted-foreground">
+                          {effectivePassword
+                            ? tShare('passwordProtectedWarning')
+                            : tShare('urlWarning')}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
 
               <div className="status-bar">
@@ -866,7 +1159,7 @@ export default function CreatePastePage() {
                 <span>
                   <Lock className="h-3 w-3" />
                   <span className="text-foreground">
-                    {passwordProtected ? t('password') : 'E2E'}
+                    {sealedFor ? tShare('sealedBadge') : effectivePassword ? t('password') : 'E2E'}
                   </span>
                 </span>
               </div>
@@ -981,44 +1274,8 @@ export default function CreatePastePage() {
                 {renderExpirySelect()}
               </div>
 
-              <label className="flex items-center justify-between rounded-sm border border-border/70 bg-muted/35 px-3 py-2 text-sm">
-                <span className="flex items-center gap-2">
-                  <Flame className="h-4 w-4" />
-                  {tCreate('burnAfterReading')}
-                </span>
-                <input
-                  type="checkbox"
-                  checked={burnAfterRead}
-                  onChange={(event) => setBurnAfterRead(event.target.checked)}
-                  disabled={isCreating}
-                  className="h-4 w-4 rounded-sm border-border bg-background text-primary focus:ring-ring"
-                />
-              </label>
-
-              <div className="space-y-2">
-                <label className="flex items-center justify-between rounded-sm border border-border/70 bg-muted/35 px-3 py-2 text-sm">
-                  <span className="flex items-center gap-2">
-                    <Lock className="h-4 w-4" />
-                    {t('password')}
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={passwordProtected}
-                    onChange={(event) => setPasswordProtected(event.target.checked)}
-                    disabled={isCreating}
-                    className="h-4 w-4 rounded-sm border-border bg-background text-primary focus:ring-ring"
-                  />
-                </label>
-                {passwordProtected && (
-                  <Input
-                    type="password"
-                    value={password}
-                    onChange={(event) => setPassword(event.target.value)}
-                    placeholder={tCreate('enterPassword')}
-                    className="h-9 w-full"
-                  />
-                )}
-              </div>
+              {renderRecipientSelect('mobile')}
+              {renderBurnAndPassword(true)}
 
               <Button
                 className="w-full"
@@ -1208,13 +1465,19 @@ export default function CreatePastePage() {
                 {tCreate('expiresIn')}
                 <span className="text-foreground">{expiresInHours}h</span>
               </span>
-              {passwordProtected && (
+              {effectivePassword && (
                 <span>
                   <Lock className="h-3 w-3" />
                   <span className="text-foreground">{t('password')}</span>
                 </span>
               )}
-              {burnAfterRead && (
+              {recipientAgent && (
+                <span data-testid="status-recipient">
+                  <Bot className="h-3 w-3" />
+                  <span className="text-foreground">{recipientAgent.name}</span>
+                </span>
+              )}
+              {effectiveBurn && (
                 <span className="text-orange-600 dark:text-orange-300">
                   <Flame className="h-3 w-3" />
                   {tCreate('burnAfterReading')}
@@ -1253,43 +1516,8 @@ export default function CreatePastePage() {
                   {renderExpirySelect()}
                 </div>
 
-                <label className="flex items-center justify-between rounded-sm border border-border/70 bg-muted/35 px-3 py-2 text-sm">
-                  <span className="flex items-center gap-2">
-                    <Flame className="h-4 w-4" />
-                    {tCreate('burnAfterReading')}
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={burnAfterRead}
-                    onChange={(event) => setBurnAfterRead(event.target.checked)}
-                    disabled={isCreating}
-                    className="h-4 w-4 rounded-sm border-border bg-background text-primary focus:ring-ring"
-                  />
-                </label>
-
-                <div className="space-y-2">
-                  <label className="flex items-center justify-between rounded-sm border border-border/70 bg-muted/35 px-3 py-2 text-sm">
-                    <span className="flex items-center gap-2">
-                      <Lock className="h-4 w-4" />
-                      {t('password')}
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={passwordProtected}
-                      onChange={(event) => setPasswordProtected(event.target.checked)}
-                      disabled={isCreating}
-                      className="h-4 w-4 rounded-sm border-border bg-background text-primary focus:ring-ring"
-                    />
-                  </label>
-                  {passwordProtected && (
-                    <Input
-                      type="password"
-                      value={password}
-                      onChange={(event) => setPassword(event.target.value)}
-                      placeholder={tCreate('enterPassword')}
-                    />
-                  )}
-                </div>
+                {renderRecipientSelect('desktop')}
+                {renderBurnAndPassword(false)}
               </div>
             </div>
 

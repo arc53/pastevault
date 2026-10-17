@@ -1,0 +1,328 @@
+{
+  "description": "PasteVault crypto test vectors, generated from the web app by scripts/crypto-vectors.mjs. Do not edit by hand.",
+  "version": 1,
+  "paste": [
+    {
+      "name": "paste-url-key-plain-language",
+      "mode": "url_key",
+      "slug": "Vb3kq9TQx_2Z",
+      "aad": "pastevault:Vb3kq9TQx_2Z:v1",
+      "content": {
+        "title": "deploy notes",
+        "body": "line 1\nline 2 with \"quotes\", a \\ backslash & <tags>\n",
+        "render_mode": "plain",
+        "language_hint": "bash"
+      },
+      "plaintext": "{\"title\":\"deploy notes\",\"body\":\"line 1\\nline 2 with \\\"quotes\\\", a \\\\ backslash & <tags>\\n\",\"render_mode\":\"plain\",\"language_hint\":\"bash\"}",
+      "key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o",
+      "nonce": "QEdOVVxjanF4f4aNlJuiqbC3vsXM09rh",
+      "ciphertext": "VthB8PPHezWOS6NCBYn3iF82Ew7ugJS5EeQep2S3Q9YeCB9CesVFjZbd_QnDRl6tY-z1F80MBVd-F8rmGNifWtSzO9lSfKRtdnVCHdIr-9wUUw4wK5W8vRJFZhF2vwLVJXt4eg13qDZp_05bAKp__5QbDfGQ0W7p2vzp6ro8dX4oGivqv0wxq2mYeLxaNHGw-hFkQ-0vHPg"
+    },
+    {
+      "name": "paste-url-key-markdown-unicode",
+      "mode": "url_key",
+      "slug": "mD-unic0de42",
+      "aad": "pastevault:mD-unic0de42:v1",
+      "content": {
+        "title": "",
+        "body": "# Héllo 👋\n\n- ünïcödé\n- tab\there\n",
+        "render_mode": "markdown"
+      },
+      "plaintext": "{\"title\":\"\",\"body\":\"# Héllo 👋\\n\\n- ünïcödé\\n- tab\\there\\n\",\"render_mode\":\"markdown\"}",
+      "key": "AgkQFx4lLDM6QUhPVl1ka3J5gIeOlZyjqrG4v8bN1Ns",
+      "nonce": "QUhPVl1ka3J5gIeOlZyjqrG4v8bN1Nvi",
+      "ciphertext": "p9TSUJNo8-nLv8IST-YJeyOGdeUVjdY6kDF9irIK0IaPRiFd0U7hXTM0Cxy0wUNlaHFrbFsrmWRQadZY_vwl_bWxPGJhHFJh2k6CRu5AC79HIGwKXhqkZcmuoUwMCrP-lxheGevfaAV4-gLF"
+    },
+    {
+      "name": "paste-password",
+      "mode": "password",
+      "slug": "pW-protected",
+      "aad": "pastevault:pW-protected:v1",
+      "content": {
+        "title": ".env",
+        "body": "API_KEY=sk-test-123\nDATABASE_URL=postgres://u:p@db/app\n",
+        "render_mode": "plain",
+        "language_hint": "bash"
+      },
+      "plaintext": "{\"title\":\".env\",\"body\":\"API_KEY=sk-test-123\\nDATABASE_URL=postgres://u:p@db/app\\n\",\"render_mode\":\"plain\",\"language_hint\":\"bash\"}",
+      "password": "correct horse battery staple",
+      "salt": "kJeepayzusHIz9bd5Ovy-Q",
+      "kdf_params": "{\"iterations\":600000,\"algorithm\":\"PBKDF2\",\"hash\":\"SHA-256\",\"keyLen\":32}",
+      "key": "uc33E1sFlU1FE05uVu-87O96oVfqzCq3CyTiBx0PLHs",
+      "nonce": "YGdudXyDipGYn6attLvCydDX3uXs8_oB",
+      "ciphertext": "YJLc1gZY3FkHzJJnqMxr6s9i75N_Z_KbwHb5LluZwap7P5sxh9Db1quZfTopSWP4xJ1HMiTsTotl-JXDn63SoKIxMXQLLdV9RdIdHlkAaItWhu0z_zCceSEJsl-kYrP9DJuB2mpPtYM7MZ0inAKYM03hOIDXdXoH6uf4FLEVm8PMeCqFVBfIu1QokidBy2AY"
+    }
+  ],
+  "chunk": [
+    {
+      "name": "chunk-text",
+      "slug": "fileslug1234",
+      "file_id": "file_id_0001",
+      "index": 0,
+      "aad": "pastevault:file-share:chunk:fileslug1234:file_id_0001:0:v1",
+      "key": "ICcuNTxDSlFYX2ZtdHuCiZCXnqWss7rByM_W3eTr8vk",
+      "nonce": "MDc-RUxTWmFob3Z9hIuSmaCnrrW8w8rR",
+      "plaintext": "aGVsbG8gY2h1bmsK",
+      "ciphertext": "wUJY6qww35H-SOTWK0fwEmSDu8n2Tm82lOsSJA"
+    },
+    {
+      "name": "chunk-binary-index-3",
+      "slug": "fileslug1234",
+      "file_id": "file_id_0002",
+      "index": 3,
+      "aad": "pastevault:file-share:chunk:fileslug1234:file_id_0002:3:v1",
+      "key": "ISgvNj1ES1JZYGdudXyDipGYn6attLvCydDX3uXs8_o",
+      "nonce": "MTg_Rk1UW2JpcHd-hYyTmqGor7a9xMvS",
+      "plaintext": "8Pf-BQwTGiEoLzY9REtSWWBnbnV8g4qRmJ-mrbS7wsnQ197l7PP6AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqQ",
+      "ciphertext": "4P0Kv3sanM7ykS2oL5sR8AREFtJFbi_lAaI8dbhMOQHm5PQh4TGDT2Szptdde2qP4S_bCBToES276JhUtKsXDYzZqjOCtTLkv5Gl0PuKXoA"
+    }
+  ],
+  "manifest": [
+    {
+      "name": "manifest-with-note",
+      "slug": "fileslug1234",
+      "aad": "pastevault:file-share:manifest:fileslug1234:v1",
+      "manifest": {
+        "version": "v1",
+        "paste": {
+          "title": "Read me",
+          "body": "Two files attached.",
+          "render_mode": "plain"
+        },
+        "files": [
+          {
+            "id": "file_id_0001",
+            "name": "notes.txt",
+            "size": 12,
+            "type": "text/plain",
+            "last_modified": 1760000000000,
+            "chunks": [
+              {
+                "index": 0,
+                "nonce": "MDc-RUxTWmFob3Z9hIuSmaCnrrW8w8rR",
+                "plaintext_size": 12
+              }
+            ]
+          }
+        ]
+      },
+      "plaintext": "{\"version\":\"v1\",\"paste\":{\"title\":\"Read me\",\"body\":\"Two files attached.\",\"render_mode\":\"plain\"},\"files\":[{\"id\":\"file_id_0001\",\"name\":\"notes.txt\",\"size\":12,\"type\":\"text/plain\",\"last_modified\":1760000000000,\"chunks\":[{\"index\":0,\"nonce\":\"MDc-RUxTWmFob3Z9hIuSmaCnrrW8w8rR\",\"plaintext_size\":12}]}]}",
+      "key": "UFdeZWxzeoGIj5adpKuyucDHztXc4-rx-P8GDRQbIik",
+      "nonce": "cHd-hYyTmqGor7a9xMvS2eDn7vX8AwoR",
+      "ciphertext": "Zqz9pCTYUJZYrTp1aU9p7Tpvt5iAS71n2pQNPUBadtvSMw574NfyzaT4GOsNk8MJ5xo2MCA5J71mlAFEsSUsJWkRyE9NA9zk2DonM6y62a9GMcStPjzd4Pkbj8eJ-0HWYwSlHUa-qFIW3Gw0UhCdyyW4JVuRuSWNP6D_a_nQqDwDMNCiVvm33fovS-UFYf1l1Vgqt6ol0aPFvfLhCJkGHbw-gfV8wylCM2apPqgd4Rxf9GoSLwskujZ9EyA0V7AxtzkKjDOxpJU3k2BWVMRD7AMEnFZ53E2Fc5B8P6IxLH8VNBucPhKV_8i-VVLENb3IFS53Yl5J8btrq9cDXDW1Us4eMQ5iJp6bNx819zuiwdouaxV9l0mqpmBvEOt80zzWT8-LYyX5SxAlBv6--Ev5a-1b2dQ"
+    }
+  ],
+  "fingerprint": [
+    {
+      "name": "fingerprint-from-secret-a",
+      "secret_key": "oKeutbzDytHY3-bt9PsCCRAXHiUsMzpBSE9WXWRrcnk",
+      "public_key": "PkXO4Od6KPwV6XHFkojF-hulYuZjDPpjfyZ4PCDUdjE",
+      "fingerprint": "pvk1_aiivyxasa4ht7regqlslgd3otsxvw3st",
+      "short": "pvk1_aiivyxas",
+      "display": "pvk1_aiiv yxas a4ht 7reg qlsl gd3o tsxv w3st"
+    },
+    {
+      "name": "fingerprint-from-secret-b",
+      "secret_key": "ERgfJi00O0JJUFdeZWxzeoGIj5adpKuyucDHztXc4-o",
+      "public_key": "5SuUCtGCz-1ZViTaqqiS9o8U1SxJrpAWtquHDggOgwA",
+      "fingerprint": "pvk1_g56qglowu4f7a7kukwckymwcr6txs4f5",
+      "short": "pvk1_g56qglow",
+      "display": "pvk1_g56q glow u4f7 a7ku kwck ymwc r6tx s4f5"
+    },
+    {
+      "name": "fingerprint-base-point",
+      "public_key": "CQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "fingerprint": "pvk1_nhhpcpckp776iqs3x7sucrn3ghfaublg",
+      "short": "pvk1_nhhpcpck",
+      "display": "pvk1_nhhp cpck p776 iqs3 x7su crn3 ghfa ublg"
+    }
+  ],
+  "wrap": [
+    {
+      "name": "wrap-paste",
+      "context": "paste:Vb3kq9TQx_2Z",
+      "content_key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o",
+      "recipient_secret_key": "oKeutbzDytHY3-bt9PsCCRAXHiUsMzpBSE9WXWRrcnk",
+      "recipient_public_key": "PkXO4Od6KPwV6XHFkojF-hulYuZjDPpjfyZ4PCDUdjE",
+      "recipient_fingerprint": "pvk1_aiivyxasa4ht7regqlslgd3otsxvw3st",
+      "ephemeral_secret_key": "w8rR2N_m7fT7AgkQFx4lLDM6QUhPVl1ka3J5gIeOlZw",
+      "ephemeral_public_key": "tQ6tSjSbCdiP1h9KHmzANccrx0rK-UiWndTDNf9QtjI",
+      "nonce": "WmFob3Z9hIuSmaCnrrW8w8rR2N_m7fT7",
+      "shared_secret": "jSoHV_WedivjGzVB7vggT43Xu9fQTz5AXSHMGPubYQA",
+      "wrap_key": "RTVzMo_z6HnOw0AeoqVI4ovWt5hm24zsTztH5PVjf6c",
+      "aad": "pastevault:wrap:v1:paste:Vb3kq9TQx_2Z:pvk1_aiivyxasa4ht7regqlslgd3otsxvw3st",
+      "envelope": "AbUOrUo0mwnYj9YfSh5swDXHK8dKyvlIlp3UwzX_ULYyWmFob3Z9hIuSmaCnrrW8w8rR2N_m7fT7jjLt4XbozgMYKsQ0v17LKqxJ3SLwiZ5gw1y5qSswseO-VzKhoGy23cA4cP5EXZg-"
+    },
+    {
+      "name": "wrap-file-share",
+      "context": "file-share:fileslug1234",
+      "content_key": "ICcuNTxDSlFYX2ZtdHuCiZCXnqWss7rByM_W3eTr8vk",
+      "recipient_secret_key": "ERgfJi00O0JJUFdeZWxzeoGIj5adpKuyucDHztXc4-o",
+      "recipient_public_key": "5SuUCtGCz-1ZViTaqqiS9o8U1SxJrpAWtquHDggOgwA",
+      "recipient_fingerprint": "pvk1_g56qglowu4f7a7kukwckymwcr6txs4f5",
+      "ephemeral_secret_key": "d36FjJOaoaivtr3Ey9LZ4Ofu9fwDChEYHyYtNDtCSVA",
+      "ephemeral_public_key": "KRfXQblgIeJDAsU1nI5tlafRHeFqv2DTVF32zajy0Eo",
+      "nonce": "BQwTGiEoLzY9REtSWWBnbnV8g4qRmJ-m",
+      "shared_secret": "lxn-_0aTtyVS_2z_d5HETtyZORMGFPPuC6awibqe8Vo",
+      "wrap_key": "5WWTjZ9fAlxhUGsZLxm-e5u7j6EnPZD09thfLVAPchc",
+      "aad": "pastevault:wrap:v1:file-share:fileslug1234:pvk1_g56qglowu4f7a7kukwckymwcr6txs4f5",
+      "envelope": "ASkX10G5YCHiQwLFNZyObZWn0R3har9g01Rd9s2o8tBKBQwTGiEoLzY9REtSWWBnbnV8g4qRmJ-mJtP1-tesTlrNMxeboPB5K_jR3YLGmzQAlU-D57_lOEN9GQhESSY_SnmMhYuerX7i"
+    }
+  ],
+  "wrap_negative": [
+    {
+      "name": "unwrap-wrong-context",
+      "operation": "unwrap",
+      "reason": "the envelope was made for another paste",
+      "envelope": "AbUOrUo0mwnYj9YfSh5swDXHK8dKyvlIlp3UwzX_ULYyWmFob3Z9hIuSmaCnrrW8w8rR2N_m7fT7jjLt4XbozgMYKsQ0v17LKqxJ3SLwiZ5gw1y5qSswseO-VzKhoGy23cA4cP5EXZg-",
+      "recipient_secret_key": "oKeutbzDytHY3-bt9PsCCRAXHiUsMzpBSE9WXWRrcnk",
+      "context": "paste:another-slug"
+    },
+    {
+      "name": "unwrap-wrong-context-kind",
+      "operation": "unwrap",
+      "reason": "a paste envelope used for a file share with the same slug",
+      "envelope": "AbUOrUo0mwnYj9YfSh5swDXHK8dKyvlIlp3UwzX_ULYyWmFob3Z9hIuSmaCnrrW8w8rR2N_m7fT7jjLt4XbozgMYKsQ0v17LKqxJ3SLwiZ5gw1y5qSswseO-VzKhoGy23cA4cP5EXZg-",
+      "recipient_secret_key": "oKeutbzDytHY3-bt9PsCCRAXHiUsMzpBSE9WXWRrcnk",
+      "context": "file-share:Vb3kq9TQx_2Z"
+    },
+    {
+      "name": "unwrap-wrong-recipient",
+      "operation": "unwrap",
+      "reason": "opened with another agent key",
+      "envelope": "AbUOrUo0mwnYj9YfSh5swDXHK8dKyvlIlp3UwzX_ULYyWmFob3Z9hIuSmaCnrrW8w8rR2N_m7fT7jjLt4XbozgMYKsQ0v17LKqxJ3SLwiZ5gw1y5qSswseO-VzKhoGy23cA4cP5EXZg-",
+      "recipient_secret_key": "ERgfJi00O0JJUFdeZWxzeoGIj5adpKuyucDHztXc4-o",
+      "context": "paste:Vb3kq9TQx_2Z"
+    },
+    {
+      "name": "unwrap-wrong-fingerprint",
+      "operation": "unwrap",
+      "reason": "the AAD binds another recipient fingerprint",
+      "envelope": "AbUOrUo0mwnYj9YfSh5swDXHK8dKyvlIlp3UwzX_ULYyWmFob3Z9hIuSmaCnrrW8w8rR2N_m7fT7jjLt4XbozgMYKsQ0v17LKqxJ3SLwiZ5gw1y5qSswseMG91T9qPemdjLKRLDIk6Jo",
+      "recipient_secret_key": "oKeutbzDytHY3-bt9PsCCRAXHiUsMzpBSE9WXWRrcnk",
+      "context": "paste:Vb3kq9TQx_2Z"
+    },
+    {
+      "name": "unwrap-tampered",
+      "operation": "unwrap",
+      "reason": "one ciphertext bit flipped",
+      "envelope": "AbUOrUo0mwnYj9YfSh5swDXHK8dKyvlIlp3UwzX_ULYyWmFob3Z9hIuSmaCnrrW8w8rR2N_m7fT7jjLt4XbozgMYKsQ0v17LKqxJ3SLwiZ5gw1y5qSswseO-VzKhoGy23cA4cP5EXZg_",
+      "recipient_secret_key": "oKeutbzDytHY3-bt9PsCCRAXHiUsMzpBSE9WXWRrcnk",
+      "context": "paste:Vb3kq9TQx_2Z"
+    },
+    {
+      "name": "unwrap-bad-version",
+      "operation": "unwrap",
+      "reason": "unknown envelope version byte",
+      "envelope": "ArUOrUo0mwnYj9YfSh5swDXHK8dKyvlIlp3UwzX_ULYyWmFob3Z9hIuSmaCnrrW8w8rR2N_m7fT7jjLt4XbozgMYKsQ0v17LKqxJ3SLwiZ5gw1y5qSswseO-VzKhoGy23cA4cP5EXZg-",
+      "recipient_secret_key": "oKeutbzDytHY3-bt9PsCCRAXHiUsMzpBSE9WXWRrcnk",
+      "context": "paste:Vb3kq9TQx_2Z"
+    },
+    {
+      "name": "unwrap-truncated",
+      "operation": "unwrap",
+      "reason": "envelope shorter than 105 bytes",
+      "envelope": "AbUOrUo0mwnYj9YfSh5swDXHK8dKyvlIlp3UwzX_ULYyWmFob3Z9hIuSmaCnrrW8w8rR2N_m7fT7jjLt4XbozgMYKsQ0v17LKqxJ3SLwiZ5gw1y5qSswseO-VzKhoGy23cA4cP5EXZg",
+      "recipient_secret_key": "oKeutbzDytHY3-bt9PsCCRAXHiUsMzpBSE9WXWRrcnk",
+      "context": "paste:Vb3kq9TQx_2Z"
+    },
+    {
+      "name": "unwrap-zero-ephemeral",
+      "operation": "unwrap",
+      "reason": "low-order ephemeral key gives an all-zero shared secret",
+      "envelope": "AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWmFob3Z9hIuSmaCnrrW8w8rR2N_m7fT7jjLt4XbozgMYKsQ0v17LKqxJ3SLwiZ5gw1y5qSswseO-VzKhoGy23cA4cP5EXZg-",
+      "recipient_secret_key": "oKeutbzDytHY3-bt9PsCCRAXHiUsMzpBSE9WXWRrcnk",
+      "context": "paste:Vb3kq9TQx_2Z"
+    },
+    {
+      "name": "unwrap-noncanonical-ephemeral",
+      "operation": "unwrap",
+      "reason": "ephemeral key with the top bit set",
+      "envelope": "AbUOrUo0mwnYj9YfSh5swDXHK8dKyvlIlp3UwzX_ULayWmFob3Z9hIuSmaCnrrW8w8rR2N_m7fT7jjLt4XbozgMYKsQ0v17LKqxJ3SLwiZ5gw1y5qSswseO-VzKhoGy23cA4cP5EXZg-",
+      "recipient_secret_key": "oKeutbzDytHY3-bt9PsCCRAXHiUsMzpBSE9WXWRrcnk",
+      "context": "paste:Vb3kq9TQx_2Z"
+    },
+    {
+      "name": "wrap-zero-public-key",
+      "operation": "wrap",
+      "reason": "all-zero shared secret",
+      "recipient_public_key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "content_key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o",
+      "context": "paste:Vb3kq9TQx_2Z"
+    },
+    {
+      "name": "wrap-low-order-public-key",
+      "operation": "wrap",
+      "reason": "point of order 8 gives an all-zero shared secret",
+      "recipient_public_key": "4Ot6fDtBuK4WVuP68Z_EatoJjeucMrH9hmIFFl9JuAA",
+      "content_key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o",
+      "context": "paste:Vb3kq9TQx_2Z"
+    },
+    {
+      "name": "wrap-noncanonical-top-bit",
+      "operation": "wrap",
+      "reason": "public key with the top bit set (not a canonical encoding)",
+      "recipient_public_key": "PkXO4Od6KPwV6XHFkojF-hulYuZjDPpjfyZ4PCDUdrE",
+      "content_key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o",
+      "context": "paste:Vb3kq9TQx_2Z"
+    },
+    {
+      "name": "wrap-noncanonical-u-ge-p",
+      "operation": "wrap",
+      "reason": "public key u >= 2^255-19 (p + 9, the base point encoded twice)",
+      "recipient_public_key": "9v_______________________________________38",
+      "content_key": "AQgPFh0kKzI5QEdOVVxjanF4f4aNlJuiqbC3vsXM09o",
+      "context": "paste:Vb3kq9TQx_2Z"
+    }
+  ],
+  "request_payload": [
+    {
+      "name": "request-payload-text",
+      "request_id": "3f2c8a4e-7b1d-4c9e-8f60-2a5b9d0e1c73",
+      "request_secret_key": "MzpBSE9WXWRrcnmAh46VnKOqsbi_xs3U2-Lp8Pf-BQw",
+      "request_public_key": "c5A0ykfbeRrSUnfGGWAf6_qsYRnFrNFjAQF-594FglU",
+      "request_fingerprint": "pvk1_ykmsasnpxfcbiozxskgzxzepq4tkaf2m",
+      "aad": "pastevault:request:3f2c8a4e-7b1d-4c9e-8f60-2a5b9d0e1c73:v1",
+      "wrap_context": "request:3f2c8a4e-7b1d-4c9e-8f60-2a5b9d0e1c73",
+      "payload": {
+        "v": 1,
+        "name": "OPENAI_API_KEY",
+        "kind": "text",
+        "value": "sk-test-Ünïcödé \"quoted\" <b>&amp;</b>\n2nd line"
+      },
+      "plaintext": "{\"v\":1,\"name\":\"OPENAI_API_KEY\",\"kind\":\"text\",\"value\":\"sk-test-Ünïcödé \\\"quoted\\\" <b>&amp;</b>\\n2nd line\"}",
+      "kind": "text",
+      "content_key": "REtSWWBnbnV8g4qRmJ-mrbS7wsnQ197l7PP6AQgPFh0",
+      "nonce": "VVxjanF4f4aNlJuiqbC3vsXM09rh6O_2",
+      "ephemeral_secret_key": "Zm10e4KJkJeepayzusHIz9bd5Ovy-QAHDhUcIyoxOD8",
+      "wrap_nonce": "d36FjJOaoaivtr3Ey9LZ4Ofu9fwDChEY",
+      "ciphertext": "PeXnhIn87KGYpwHSWC8FM_FKwvbLMZLeUcxIa2G89D-y790xgVdiiF6-0F3HVAHvQOGx16Ws5dsiBNn6aWlMSmjOE7ppyqaWeFFDN11SSD6t310RM9egjVIfCc_fVpuitZQnnr3P1wJY0cWlcAB1QaUp1-E4XsXiQQzIm_M",
+      "wrapped_key": "AejQ6tRFilOrNpmNZdoHjaEqcTu8tw9vLbR1oRPLCxczd36FjJOaoaivtr3Ey9LZ4Ofu9fwDChEYuVnYWKifuqCGFd5ZgmBfaqvxFkaYmGKpEgPnqxNvz6o-ShC6UzfgMrjaaI_Nzd7K"
+    },
+    {
+      "name": "request-payload-file",
+      "request_id": "9a0b1c2d-3e4f-4a5b-8c6d-7e8f90a1b2c3",
+      "request_secret_key": "iI-WnaSrsrnAx87V3OPq8fj_Bg0UGyIpMDc-RUxTWmE",
+      "request_public_key": "ixZRXN0UEWDQBIQwoWuw2yXu8V5rnPYFmSiNYbbhSWk",
+      "request_fingerprint": "pvk1_uauzpzqz6qaohaxfijebbid4ft6onv5h",
+      "aad": "pastevault:request:9a0b1c2d-3e4f-4a5b-8c6d-7e8f90a1b2c3:v1",
+      "wrap_context": "request:9a0b1c2d-3e4f-4a5b-8c6d-7e8f90a1b2c3",
+      "payload": {
+        "v": 1,
+        "name": "TLS_KEY",
+        "kind": "file",
+        "filename": "server.key",
+        "content_type": "application/x-pem-file",
+        "data": "-gEIDxYdJCsyOUBHTlVcY2pxeH-GjZSboqmwt77FzNPa4ejv9v0ECxIZICcuNTxDSlFYX2ZtdHuCiZCXnqWss7rByM_W3Q"
+      },
+      "plaintext": "{\"v\":1,\"name\":\"TLS_KEY\",\"kind\":\"file\",\"filename\":\"server.key\",\"content_type\":\"application/x-pem-file\",\"data\":\"-gEIDxYdJCsyOUBHTlVcY2pxeH-GjZSboqmwt77FzNPa4ejv9v0ECxIZICcuNTxDSlFYX2ZtdHuCiZCXnqWss7rByM_W3Q\"}",
+      "kind": "file",
+      "content_key": "maCnrrW8w8rR2N_m7fT7AgkQFx4lLDM6QUhPVl1ka3I",
+      "nonce": "qrG4v8bN1Nvi6fD3_gUMExohKC82PURL",
+      "ephemeral_secret_key": "u8LJ0Nfe5ezz-gEIDxYdJCsyOUBHTlVcY2pxeH-GjZQ",
+      "wrap_nonce": "zNPa4ejv9v0ECxIZICcuNTxDSlFYX2Zt",
+      "ciphertext": "cVtXFIccyA_O4CLYpQCSIsZgYz_pxUWBEiG80xOOLkm8jzEd1weF3pOw9xNxOXEao6Ep4Y5LphchJf9e27BOJEL9LRCVwxCkM15A4Uq8J8or8T6OcVvt8xERUmeRsJfzNGheveXA-RFInnzhDg4mX8Uz2LW2SPP7mlx0HbksYyIQO1Jnq005oLEc3USPbTfCVNLlRtXkEf2MsrYSWHZ7VZQRBYGq9wLYE5LsEk_rKimPnDS41LOtNefxEOCpDE0WATctrWtW9s6Ml0cMoc0mA90Ed4YUFRyKN0hdxiaF",
+      "wrapped_key": "AfmiezquWjq0Evy_iqqfZwtPixiA-2bJtO9TqA4HVGN5zNPa4ejv9v0ECxIZICcuNTxDSlFYX2ZtzF7unryLVFE30b_sd_xytp3ZeKliRtjNnQJDEFpvVGfN0BXuVN1o5IGWEkG02aWk"
+    }
+  ]
+}

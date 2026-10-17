@@ -1,186 +1,21 @@
 import assert from 'node:assert/strict'
-import { execFile, spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { mkdtemp, rm } from 'node:fs/promises'
-import { createServer } from 'node:net'
-import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
-import { promisify } from 'node:util'
-import { DatabaseSync } from 'node:sqlite'
+import {
+  jsonRequest,
+  nonce,
+  readDatabaseRow,
+  request,
+  runSuite,
+  sleep,
+  uploadChunk,
+} from './lib/harness.mjs'
 
-const projectRoot = fileURLToPath(new URL('..', import.meta.url))
-const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'pastevault-e2e-'))
-const databasePath = path.join(temporaryRoot, 'pastevault.db')
-const dataDirectory = path.join(temporaryRoot, 'data')
-const nonce = Buffer.alloc(24, 7).toString('base64url')
-const serverOutput = []
-const execFileAsync = promisify(execFile)
-
-function reservePort() {
-  return new Promise((resolve, reject) => {
-    const server = createServer()
-    server.unref()
-    server.once('error', reject)
-    server.listen(0, '127.0.0.1', () => {
-      const address = server.address()
-      assert(address && typeof address === 'object')
-      const { port } = address
-      server.close((error) => (error ? reject(error) : resolve(port)))
-    })
-  })
-}
-
-function startTestServer({ port, databasePath, dataDirectory, environment = {} }) {
-  const child = spawn(
-    process.execPath,
-    [
-      'dist/cli.js',
-      'up',
-      '--port',
-      String(port),
-      '--host',
-      '127.0.0.1',
-      '--database-url',
-      `file:${databasePath}`,
-      '--data-dir',
-      dataDirectory,
-      '--log-level',
-      'warn',
-      '--no-migrations',
-    ],
-    {
-      cwd: projectRoot,
-      env: {
-        ...process.env,
-        DATABASE_PROVIDER: 'sqlite',
-        NODE_ENV: 'test',
-        DISABLE_AUTH: 'false',
-        DISABLE_SIGNUP: 'false',
-        ...environment,
-      },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    }
-  )
-
-  child.stdout.on('data', (chunk) => serverOutput.push(chunk.toString()))
-  child.stderr.on('data', (chunk) => serverOutput.push(chunk.toString()))
-
-  return child
-}
-
-async function waitForServer(baseUrl, child) {
-  const deadline = Date.now() + 30_000
-
-  while (Date.now() < deadline) {
-    if (child.exitCode !== null) {
-      throw new Error(`PasteVault exited before becoming ready (code ${child.exitCode})`)
-    }
-
-    try {
-      const response = await fetch(`${baseUrl}/health`)
-      if (response.ok) {
-        return
-      }
-    } catch {
-      // The listener may not be ready yet.
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 100))
-  }
-
-  throw new Error('Timed out waiting for PasteVault to start')
-}
-
-async function readResponse(response) {
-  const text = await response.text()
-  let body = text
-
-  try {
-    body = JSON.parse(text)
-  } catch {
-    // HTML and binary responses are asserted as their original text.
-  }
-
-  return { response, body }
-}
-
-async function request(baseUrl, pathname, options) {
-  return readResponse(await fetch(`${baseUrl}${pathname}`, options))
-}
-
-function jsonRequest(baseUrl, pathname, body, headers = {}) {
-  return request(baseUrl, pathname, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', ...headers },
-    body: JSON.stringify(body),
-  })
-}
-
-function uploadChunk(baseUrl, slug, fileId, index, body, uploadToken) {
-  return request(baseUrl, `/api/file-shares/${slug}/chunks/${fileId}/${index}`, {
-    method: 'PUT',
-    headers: {
-      'content-type': 'application/octet-stream',
-      ...(uploadToken ? { 'x-upload-token': uploadToken } : {}),
-    },
-    body,
-  })
-}
-
-function readDatabaseRow(databasePath, sql, ...params) {
-  const database = new DatabaseSync(databasePath, { readOnly: true })
-  try {
-    return database.prepare(sql).get(...params)
-  } finally {
-    database.close()
-  }
-}
-
-async function stopServer(child) {
-  if (child.exitCode !== null) {
-    return
-  }
-
-  child.kill('SIGTERM')
-  await Promise.race([
-    new Promise((resolve) => child.once('exit', resolve)),
-    new Promise((resolve) => setTimeout(resolve, 5_000)),
-  ])
-
-  if (child.exitCode === null) {
-    child.kill('SIGKILL')
-  }
-}
-
-async function generatePrismaClient(environment = process.env) {
-  await execFileAsync(
-    process.execPath,
-    ['scripts/prisma-runner.mjs', 'generate'],
-    {
-      cwd: projectRoot,
-      env: environment,
-    }
-  )
-}
-
-let child
-let shouldRestorePrisma = false
-
-try {
-  shouldRestorePrisma = true
-  await generatePrismaClient({
-    ...process.env,
-    DATABASE_PROVIDER: 'sqlite',
-    DATABASE_URL: `file:${databasePath}`,
-  })
-
-  const port = await reservePort()
-  const baseUrl = `http://127.0.0.1:${port}`
-  child = startTestServer({ port, databasePath, dataDirectory })
-
-  await waitForServer(baseUrl, child)
+await runSuite('e2e-smoke', {}, async ({ startServer }) => {
+  let server = await startServer({ label: 'main' })
+  const baseUrl = server.baseUrl
+  const databasePath = server.database.path
 
   const health = await request(baseUrl, '/health')
   assert.equal(health.response.status, 200)
@@ -634,23 +469,17 @@ try {
   assert.equal(missingApiRoute.response.status, 404)
   assert.equal(missingApiRoute.body.error, 'Not Found')
 
-  await stopServer(child)
-  child = undefined
+  await server.stop()
 
   // Download grants: a short idle window makes sliding extension, lazy purge
   // on expiry and the background purge observable within a few seconds.
-  const grantPort = await reservePort()
-  const grantBaseUrl = `http://127.0.0.1:${grantPort}`
-  const grantDataDirectory = path.join(temporaryRoot, 'grant-data')
-  child = startTestServer({
-    port: grantPort,
-    databasePath: path.join(temporaryRoot, 'grant.db'),
-    dataDirectory: grantDataDirectory,
+  server = await startServer({
+    label: 'grant',
     environment: { FILE_SHARE_DOWNLOAD_GRANT_SECONDS: '2' },
   })
-  await waitForServer(grantBaseUrl, child)
-  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-  const grantDatabasePath = path.join(temporaryRoot, 'grant.db')
+  const grantBaseUrl = server.baseUrl
+  const grantDataDirectory = server.dataDirectory
+  const grantDatabasePath = server.database.path
   const shareRowCount = (slug) =>
     readDatabaseRow(
       grantDatabasePath,
@@ -704,20 +533,15 @@ try {
   assert.equal(shareRowCount(idleSlug), 0)
   assert.equal(shareChunksExist(idleSlug), false)
 
-  await stopServer(child)
-  child = undefined
+  await server.stop()
 
-  const anonymousPort = await reservePort()
-  const anonymousBaseUrl = `http://127.0.0.1:${anonymousPort}`
-  child = startTestServer({
-    port: anonymousPort,
-    databasePath: path.join(temporaryRoot, 'anonymous.db'),
-    dataDirectory: path.join(temporaryRoot, 'anonymous-data'),
+  server = await startServer({
+    label: 'anonymous',
     environment: {
       DISABLE_AUTH: 'true',
     },
   })
-  await waitForServer(anonymousBaseUrl, child)
+  const anonymousBaseUrl = server.baseUrl
 
   const anonymousCapabilities = await request(anonymousBaseUrl, '/api/capabilities')
   assert.equal(anonymousCapabilities.response.status, 200)
@@ -742,20 +566,15 @@ try {
   })
   assert.equal(anonymousPaste.response.status, 201)
 
-  await stopServer(child)
-  child = undefined
+  await server.stop()
 
-  const signupDisabledPort = await reservePort()
-  const signupDisabledBaseUrl = `http://127.0.0.1:${signupDisabledPort}`
-  child = startTestServer({
-    port: signupDisabledPort,
-    databasePath: path.join(temporaryRoot, 'signup-disabled.db'),
-    dataDirectory: path.join(temporaryRoot, 'signup-disabled-data'),
+  server = await startServer({
+    label: 'signup-disabled',
     environment: {
       DISABLE_SIGNUP: 'true',
     },
   })
-  await waitForServer(signupDisabledBaseUrl, child)
+  const signupDisabledBaseUrl = server.baseUrl
 
   const signupDisabledCapabilities = await request(
     signupDisabledBaseUrl,
@@ -796,17 +615,4 @@ try {
   console.log(
     'E2E smoke test passed: UI, shares, burn-after-read, upload tokens, anonymous mode, and sign-up controls'
   )
-} catch (error) {
-  if (serverOutput.length > 0) {
-    console.error(serverOutput.join(''))
-  }
-  throw error
-} finally {
-  if (child) {
-    await stopServer(child)
-  }
-  await rm(temporaryRoot, { recursive: true, force: true })
-  if (shouldRestorePrisma) {
-    await generatePrismaClient()
-  }
-}
+})

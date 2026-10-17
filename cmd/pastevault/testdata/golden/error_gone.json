@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "gone",
+    "exit_code": 5,
+    "message": "GET /api/pastes/<slug>/meta failed: Paste has been burned"
+  }
+}

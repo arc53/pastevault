@@ -1,0 +1,12 @@
+{
+  "burn_after_read": false,
+  "expires_at": "2026-10-17T12:00:00.000Z",
+  "key_file": "<key-file>",
+  "key_in_url": false,
+  "kind": "paste",
+  "max_views": null,
+  "password_protected": false,
+  "recipient": null,
+  "slug": "<slug>",
+  "url": "<server>/p/<slug>"
+}

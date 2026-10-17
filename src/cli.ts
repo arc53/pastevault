@@ -45,7 +45,9 @@ program
   .option('--database-url <string>', 'Database connection URL')
   .option('--data-dir <string>', 'Data directory path')
   .option('--log-level <level>', 'Log level', 'info')
-  .option('--no-migrations', 'Skip running database migrations', false)
+  // No explicit default: commander then sets `migrations` to true unless the
+  // flag is given (an explicit `false` default would disable migrations).
+  .option('--no-migrations', 'Skip running database migrations')
   .action(async (options) => {
     const args = cliArgsSchema.parse({
       port: parseInt(options.port),
@@ -53,7 +55,7 @@ program
       databaseUrl: options.databaseUrl,
       dataDir: options.dataDir,
       logLevel: options.logLevel,
-      noMigrations: options.noMigrations,
+      noMigrations: options.migrations === false,
     })
 
     await startServer(args)
@@ -87,14 +89,14 @@ async function startServer(args: CliArgs) {
 
     const [
       { config },
-      { pastesRoute },
-      { fileSharesRoute },
+      { registerApiRoutes },
       { cleanupExpiredPastes },
+      { corsOptionsDelegator },
     ] = await Promise.all([
       import('./lib/config.js'),
-      import('./routes/pastes.js'),
-      import('./routes/file-shares.js'),
+      import('./routes/register.js'),
       import('./lib/cleanup.js'),
+      import('./lib/origins.js'),
     ])
 
     if (!process.env.DATABASE_URL) {
@@ -104,30 +106,35 @@ async function startServer(args: CliArgs) {
     process.env.DATABASE_PROVIDER = process.env.DATABASE_PROVIDER || config.DATABASE_PROVIDER
 
     const fastify = Fastify({
+      trustProxy: config.TRUST_PROXY,
       logger: {
         level: args.logLevel,
       },
     })
 
-    // Register CORS with unrestricted access for CLI
-    await fastify.register(cors, {
-      origin: true,
-      credentials: true,
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-      allowedHeaders: [
-        'Content-Type',
-        'Authorization',
-        'X-Requested-With',
-        'Accept',
-        'Origin',
-        'Referer',
-        'X-Upload-Token',
-        'X-Download-Grant',
-      ],
-      exposedHeaders: ['*'],
-      preflightContinue: false,
-      optionsSuccessStatus: 200,
-    })
+    // Migrations run before any route loads: routes create missing tables and
+    // columns at startup, and a fresh Postgres database must get them from
+    // the migrations instead. The migrations are Postgres-only; SQLite's
+    // schema is maintained entirely at startup.
+    if (args.noMigrations) {
+      fastify.log.info('Skipping database migrations (--no-migrations)')
+    } else if (process.env.DATABASE_PROVIDER !== 'postgresql') {
+      fastify.log.info('SQLite schema is managed at startup; no migrations to run')
+    } else {
+      try {
+        fastify.log.info('Running database migrations...')
+        await execAsync('node scripts/prisma-runner.mjs migrate deploy', {
+          cwd: packageRoot,
+        })
+        fastify.log.info('Database migrations completed')
+      } catch (error) {
+        fastify.log.warn('Migration failed, continuing anyway:')
+        fastify.log.warn(error)
+      }
+    }
+
+    // CORS only for the server's own origin and configured trusted origins.
+    await fastify.register(cors, { delegator: corsOptionsDelegator })
 
     // Register rate limiting
     await fastify.register(rateLimit, {
@@ -136,16 +143,7 @@ async function startServer(args: CliArgs) {
     })
 
     // Register API routes
-    if (!config.DISABLE_AUTH) {
-      const [{ authRoute }, { accountRoute }] = await Promise.all([
-        import('./routes/auth.js'),
-        import('./routes/account.js'),
-      ])
-      await fastify.register(authRoute, { prefix: '/api' })
-      await fastify.register(accountRoute, { prefix: '/api' })
-    }
-    await fastify.register(pastesRoute, { prefix: '/api' })
-    await fastify.register(fileSharesRoute, { prefix: '/api' })
+    await registerApiRoutes(fastify)
 
     // Health check endpoint
     fastify.get('/health', async () => {
@@ -192,20 +190,6 @@ async function startServer(args: CliArgs) {
         reply.sent = true
       })
     })
-
-    // Run database migrations if not disabled
-    if (!args.noMigrations) {
-      try {
-        fastify.log.info('Running database migrations...')
-        await execAsync('node scripts/prisma-runner.mjs migrate deploy', {
-          cwd: packageRoot,
-        })
-        fastify.log.info('Database migrations completed')
-      } catch (error) {
-        fastify.log.warn('Migration failed, continuing anyway:')
-        fastify.log.warn(error)
-      }
-    }
 
     // Setup cleanup cron job
     cron.schedule(`*/${config.CLEANUP_INTERVAL_MINUTES} * * * *`, () => {

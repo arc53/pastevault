@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { CopyButton } from '@/components/copy-button'
+import { SealedShareCard } from '@/components/sealed-share-card'
 import { MarkdownRenderer } from '@/components/markdown-renderer'
 import { AccountLink } from '@/components/account-link'
 import { useGetFileShare, useGetFileShareMeta } from '@/hooks/usePaste'
@@ -79,9 +80,12 @@ export default function ViewFileSharePage() {
   const { data: meta, isLoading: isMetaLoading, error: metaError } = useGetFileShareMeta(slug)
   // Without a URL key a passwordless share cannot be decrypted, so don't
   // spend a view (or the only read) on it.
+  // A share sealed to an agent key is opened by that agent's CLI only; the
+  // page never takes a view of it, even if a #k= fragment was added.
+  const isSealed = Boolean(meta?.recipient)
   const hasDecryptionKey = Boolean(meta?.password_protected || extractKeyFromFragment())
   const shouldFetchShare = Boolean(
-    meta && hasDecryptionKey && (!meta.burn_after_read || revealRequested)
+    meta && !isSealed && hasDecryptionKey && (!meta.burn_after_read || revealRequested)
   )
   const {
     data: share,
@@ -434,6 +438,17 @@ export default function ViewFileSharePage() {
       tFiles('createNew'),
       () => router.push('/'),
       <AlertCircle className="h-4 w-4 text-red-500" />
+    )
+  }
+
+  if (meta?.recipient) {
+    return (
+      <SealedShareCard
+        slug={slug}
+        kind="file_share"
+        fingerprint={meta.recipient.fingerprint}
+        requiresRecipientAuth={Boolean(meta.requires_recipient_auth)}
+      />
     )
   }
 

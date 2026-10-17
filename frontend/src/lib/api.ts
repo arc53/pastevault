@@ -1,6 +1,17 @@
 import {
   AccountShare,
   CapabilitiesResponse,
+  CreateApiTokenRequest,
+  CreateApiTokenResponse,
+  ListAgentsResponse,
+  ListApiTokensResponse,
+  ListAuditEventsResponse,
+  ListShareEventsResponse,
+  RevokeAgentResponse,
+  ApiTokenSummary,
+  FulfillSecretRequestBody,
+  ListSecretRequestsResponse,
+  SecretRequestDetails,
   CompleteFileShareRequest,
   CreateFileShareRequest,
   CreateFileShareResponse,
@@ -26,10 +37,71 @@ function getApiBaseUrl() {
 }
 
 class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  // Machine-readable `code` from the error body, when the server sends one
+  // (e.g. "recipient_fingerprint_mismatch"), and the Retry-After delay in
+  // seconds on 429/503 responses that carry one.
+  constructor(
+    public status: number,
+    message: string,
+    public code?: string,
+    public retryAfterSeconds?: number
+  ) {
     super(message)
     this.name = 'ApiError'
   }
+}
+
+// Server clock minus this browser's clock, from the Date header of API
+// responses. Only offsets beyond the header's one-second resolution (plus
+// latency) are applied, so a correct clock isn't made to jitter.
+let serverClockOffsetMs = 0
+const CLOCK_OFFSET_THRESHOLD_MS = 2_000
+
+function recordServerClock(response: Response) {
+  const header = response.headers.get('date')
+  const serverTime = header ? Date.parse(header) : NaN
+  if (Number.isNaN(serverTime)) {
+    return
+  }
+  // The header is truncated to whole seconds: assume the middle.
+  const offset = serverTime + 500 - Date.now()
+  serverClockOffsetMs = Math.abs(offset) > CLOCK_OFFSET_THRESHOLD_MS ? offset : 0
+}
+
+// "Now" on the server's clock, for countdowns against server timestamps.
+export function serverNow() {
+  return Date.now() + serverClockOffsetMs
+}
+
+function parseRetryAfter(response: Response): number | undefined {
+  const header = response.headers.get('retry-after')
+  if (!header) {
+    return undefined
+  }
+  const seconds = Number(header)
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return seconds
+  }
+  const date = Date.parse(header)
+  return Number.isNaN(date) ? undefined : Math.max(0, Math.ceil((date - Date.now()) / 1000))
+}
+
+function toApiError(status: number, errorText: string, retryAfterSeconds?: number) {
+  let errorMessage = `HTTP ${status}`
+  let code: string | undefined
+
+  try {
+    const errorJson = JSON.parse(errorText)
+    errorMessage = errorJson.message || errorJson.error || errorMessage
+    code = typeof errorJson.code === 'string' ? errorJson.code : undefined
+    if (!code && typeof errorJson.error === 'string' && /^[a-z_]+$/.test(errorJson.error)) {
+      code = errorJson.error
+    }
+  } catch {
+    errorMessage = errorText || errorMessage
+  }
+
+  return new ApiError(status, errorMessage, code, retryAfterSeconds)
 }
 
 async function apiRequest<T>(
@@ -40,25 +112,18 @@ async function apiRequest<T>(
   
   const response = await fetch(url, {
     credentials: 'include',
+    ...options,
     headers: {
-      'Content-Type': 'application/json',
+      // Only requests with a body are JSON: Fastify rejects an empty body
+      // sent as application/json (e.g. DELETE) with 400.
+      ...(options?.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
       ...options?.headers,
     },
-    ...options,
   })
 
+  recordServerClock(response)
   if (!response.ok) {
-    const errorText = await response.text()
-    let errorMessage = `HTTP ${response.status}`
-    
-    try {
-      const errorJson = JSON.parse(errorText)
-      errorMessage = errorJson.error || errorMessage
-    } catch {
-      errorMessage = errorText || errorMessage
-    }
-    
-    throw new ApiError(response.status, errorMessage)
+    throw toApiError(response.status, await response.text(), parseRetryAfter(response))
   }
 
   return response.json()
@@ -75,17 +140,7 @@ async function rawRequest(
   })
 
   if (!response.ok) {
-    const errorText = await response.text()
-    let errorMessage = `HTTP ${response.status}`
-
-    try {
-      const errorJson = JSON.parse(errorText)
-      errorMessage = errorJson.error || errorMessage
-    } catch {
-      errorMessage = errorText || errorMessage
-    }
-
-    throw new ApiError(response.status, errorMessage)
+    throw toApiError(response.status, await response.text())
   }
 
   return response
@@ -185,6 +240,71 @@ export const api = {
     return apiRequest(`/account/shares/${shareId}`, {
       method: 'DELETE',
     })
+  },
+
+  async getShareEvents(shareId: string): Promise<ListShareEventsResponse> {
+    return apiRequest(`/account/shares/${encodeURIComponent(shareId)}/events`)
+  },
+
+  async getAuditEvents(params: { cursor?: string; limit?: number } = {}): Promise<ListAuditEventsResponse> {
+    const query = new URLSearchParams()
+    if (params.limit) {
+      query.set('limit', String(params.limit))
+    }
+    if (params.cursor) {
+      query.set('cursor', params.cursor)
+    }
+    const suffix = query.toString() ? `?${query.toString()}` : ''
+    return apiRequest(`/account/audit${suffix}`)
+  },
+
+  async getAgents(includeRevoked = false): Promise<ListAgentsResponse> {
+    return apiRequest(`/agents${includeRevoked ? '?include_revoked=1' : ''}`)
+  },
+
+  async revokeAgent(agentId: string): Promise<RevokeAgentResponse> {
+    return apiRequest(`/agents/${encodeURIComponent(agentId)}`, {
+      method: 'DELETE',
+    })
+  },
+
+  async getApiTokens(): Promise<ListApiTokensResponse> {
+    return apiRequest('/account/tokens')
+  },
+
+  async createApiToken(data: CreateApiTokenRequest): Promise<CreateApiTokenResponse> {
+    return apiRequest('/account/tokens', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  async revokeApiToken(tokenId: string): Promise<{ token: ApiTokenSummary }> {
+    return apiRequest(`/account/tokens/${encodeURIComponent(tokenId)}`, {
+      method: 'DELETE',
+    })
+  },
+
+  // The first lookup marks the request as opened. Session only.
+  async getSecretRequestByCode(code: string): Promise<SecretRequestDetails> {
+    return apiRequest(`/secret-requests/by-code/${encodeURIComponent(code)}`)
+  },
+
+  async fulfillSecretRequest(requestId: string, body: FulfillSecretRequestBody): Promise<{ status: string }> {
+    return apiRequest(`/secret-requests/${encodeURIComponent(requestId)}/fulfill`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  },
+
+  async declineSecretRequest(requestId: string): Promise<{ status: string }> {
+    return apiRequest(`/secret-requests/${encodeURIComponent(requestId)}/decline`, {
+      method: 'POST',
+    })
+  },
+
+  async getSecretRequests(): Promise<ListSecretRequestsResponse> {
+    return apiRequest('/account/secret-requests')
   },
 
   async downloadFileShareChunk(
