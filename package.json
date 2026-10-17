@@ -8,7 +8,9 @@
     "pastevault": "dist/cli.js"
   },
   "files": [
-    "dist/",
+    "dist/**/*.js",
+    "dist/**/*.js.map",
+    "dist/**/*.d.ts",
     "frontend/.next/",
     "!frontend/.next/cache/",
     "!frontend/.next/dev/",
